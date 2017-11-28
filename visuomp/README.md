@@ -5,8 +5,12 @@
  * It requires to use data-driven analysis of tracecompass to visualize the OpenMP tracing data (http://help.eclipse.org/).
  * Tracecompass developer and user guide (https://wiki.eclipse.org/Trace_Compass)
  * Research project from Polytechnique Montreal: http://hsdm.dorsal.polymtl.ca/
+ * Geneviève Bastien's tracing blog: http://versatic.net/
+ * https://github.com/efficios that has https://github.com/efficios/babeltrace and other interesting code repo
+ * LTTng Scope is a trace viewer and analyzer for CTF traces, with a focus on LTTng kernel and user space traces: https://github.com/lttng/lttng-scope
  
- ### Tracecompass development. Tracecompass is an Eclipse plugin and framework. Follow the steps from the wiki page for the development:
+ ### Tracecompass development. 
+ Tracecompass is an Eclipse plugin and framework. Follow the steps from the wiki page for the development:
  * Set up Eclipse development environment
  * Clone tracecompass repo (https://git.eclipse.org/c/tracecompass/org.eclipse.tracecompass.git/about/)
  * Study the developer guide and browse source code for the development
