@@ -18,5 +18,6 @@
 
  ### Screenshot
  #### Lulesh tracing and visualization with Tracecompass
- ![Lulesh tracing and visualization with Tracecompass](OMPT_LTTng_TraceCompass.png)
+ ![Lulesh tracing and visualization with Tracecompass](OMPT_LTTng_TraceCompass.png). The picture was created in Tracecompass using [Data driven analysis](
+ http://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis). You need to load visuomp-analysis.xml description file (which describe how to visulize the trace data) in Tracecompass and select the review for that. 
  
