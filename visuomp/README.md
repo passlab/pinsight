@@ -21,3 +21,13 @@
  ![Lulesh tracing and visualization with Tracecompass](OMPT_LTTng_TraceCompass.png). The picture was created in Tracecompass using [Data driven analysis](
  http://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis). You need to load visuomp-analysis.xml description file (which describe how to visulize the trace data) in Tracecompass and select the review for that. 
  
+ ### Analysis considered
+ 1. overhead analysis
+ 1. load balance analysis
+ 1. Offline analysis for configuring power usage and frequency, binary-based
+ 
+### Related work
+1. Graingraph for OpenMP (https://dl.acm.org/citation.cfm?id=2851156)
+1. TAU instrument tool (http://www.cs.uoregon.edu/research/tau/home.php)
+1. HPCToolkit/Perf (sampling) (http://hpctoolkit.org/)
+1. https://www.vi-hps.org/projects/score-p/
