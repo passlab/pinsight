@@ -1,7 +1,7 @@
 # OpenMP OMPT Event Tracing and Visualization
 
  * lttng tracing framework (http://lttng.org/) for tracing OpenMP runtime using lttng-ust library
- * eclipse-based tracecompass GUI (http://tracecompass.org/) for visualize the tracing results. 
+ * eclipse-based tracecompass GUI (http://tracecompass.org/) for visualize the tracing results. https://github.com/lttng/lttng-scope and https://github.com/lttng/lttng-analyses, http://diamon.org/babeltrace/
  * It requires to use data-driven analysis of tracecompass to visualize the OpenMP tracing data (http://help.eclipse.org/).
  * Tracecompass developer and user guide (https://wiki.eclipse.org/Trace_Compass)
  * Research project from Polytechnique Montreal: http://hsdm.dorsal.polymtl.ca/
