@@ -43,7 +43,7 @@ static const char* ompt_task_status_t_values[] = {
 static const char* ompt_cancel_flag_t_values[] = {
   "ompt_cancel_parallel",
   "ompt_cancel_sections",
-  "ompt_cancel_do",
+  "ompt_cancel_loop",
   "ompt_cancel_taskgroup",
   "ompt_cancel_activated",
   "ompt_cancel_detected",
@@ -63,15 +63,15 @@ static ompt_get_proc_id_t ompt_get_proc_id;
 
 static void print_ids(int level)
 {
-  ompt_frame_t* frame ;
+  omp_frame_t* frame ;
   ompt_data_t* parallel_data;
   ompt_data_t* task_data;
 //  int exists_parallel = ompt_get_parallel_info(level, &parallel_data, NULL);
   int exists_task = ompt_get_task_info(level, NULL, &task_data, &frame, &parallel_data, NULL);
   if (frame)
   {
-    printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_runtime_frame, frame->reenter_runtime_frame);
-//    printf("%" PRIu64 ": parallel level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_parallel ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_runtime_frame, frame->reenter_runtime_frame);
+    printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, enter_frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame, frame->enter_frame);
+//    printf("%" PRIu64 ": parallel level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_parallel ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_runtime_frame, frame->enter_frame);
   }
   else
     printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame);
@@ -123,10 +123,10 @@ static void print_current_address()
 
 static void
 on_ompt_callback_mutex_acquire(
-  ompt_mutex_kind_t kind,
+  ompt_mutex_t kind,
   unsigned int hint,
   unsigned int impl,
-  ompt_wait_id_t wait_id,
+  omp_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -153,8 +153,8 @@ on_ompt_callback_mutex_acquire(
 
 static void
 on_ompt_callback_mutex_acquired(
-  ompt_mutex_kind_t kind,
-  ompt_wait_id_t wait_id,
+  ompt_mutex_t kind,
+  omp_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -181,8 +181,8 @@ on_ompt_callback_mutex_acquired(
 
 static void
 on_ompt_callback_mutex_released(
-  ompt_mutex_kind_t kind,
-  ompt_wait_id_t wait_id,
+  ompt_mutex_t kind,
+  omp_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -210,7 +210,7 @@ on_ompt_callback_mutex_released(
 static void
 on_ompt_callback_nest_lock(
     ompt_scope_endpoint_t endpoint,
-    ompt_wait_id_t wait_id,
+    omp_wait_id_t wait_id,
     const void *codeptr_ra)
 {
   switch(endpoint)
@@ -226,7 +226,7 @@ on_ompt_callback_nest_lock(
 
 static void
 on_ompt_callback_sync_region(
-  ompt_sync_region_kind_t kind,
+  ompt_sync_region_t kind,
   ompt_scope_endpoint_t endpoint,
   ompt_data_t *parallel_data,
   ompt_data_t *task_data,
@@ -271,7 +271,7 @@ on_ompt_callback_sync_region(
 
 static void
 on_ompt_callback_sync_region_wait(
-  ompt_sync_region_kind_t kind,
+  ompt_sync_region_t kind,
   ompt_scope_endpoint_t endpoint,
   ompt_data_t *parallel_data,
   ompt_data_t *task_data,
@@ -341,7 +341,7 @@ on_ompt_callback_cancel(
     first_flag_value = ompt_cancel_flag_t_values[0];
   else if(flags & ompt_cancel_sections)
     first_flag_value = ompt_cancel_flag_t_values[1];
-  else if(flags & ompt_cancel_do)
+  else if(flags & ompt_cancel_loop)
     first_flag_value = ompt_cancel_flag_t_values[2];
   else if(flags & ompt_cancel_taskgroup)
     first_flag_value = ompt_cancel_flag_t_values[3];
@@ -356,25 +356,26 @@ on_ompt_callback_cancel(
   printf("%" PRIu64 ": ompt_event_cancel: task_data=%" PRIu64 ", flags=%s|%s=%" PRIu32 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, first_flag_value, second_flag_value, flags,  codeptr_ra);
 }
 
-static void
-on_ompt_callback_idle(
-  ompt_scope_endpoint_t endpoint)
-{
-  int thread_id = get_global_thread_num();
-  switch(endpoint)
-  {
-    case ompt_scope_begin:
-      tracepoint(lttng_visuomp, thread_idle_begin, thread_id, ompt_get_thread_data());
-      //printf("%" PRIu64 ": ompt_event_idle_begin:\n", ompt_get_thread_data()->value);
-      //printf("%" PRIu64 ": ompt_event_idle_begin: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data.value);
-      break;
-    case ompt_scope_end:
-      tracepoint(lttng_visuomp, thread_idle_end, thread_id, ompt_get_thread_data());
-      //printf("%" PRIu64 ": ompt_event_idle_end:\n", ompt_get_thread_data()->value);
-      //printf("%" PRIu64 ": ompt_event_idle_end: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data.value);
-      break;
-  }
-}
+// Note: Obsoleted in TR7, as it was weird/impossible to implement correctly.
+//static void
+//on_ompt_callback_idle(
+//  ompt_scope_endpoint_t endpoint)
+//{
+//  int thread_id = get_global_thread_num();
+//  switch(endpoint)
+//  {
+//    case ompt_scope_begin:
+//      tracepoint(lttng_visuomp, thread_idle_begin, thread_id, ompt_get_thread_data());
+//      //printf("%" PRIu64 ": ompt_event_idle_begin:\n", ompt_get_thread_data()->value);
+//      //printf("%" PRIu64 ": ompt_event_idle_begin: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data.value);
+//      break;
+//    case ompt_scope_end:
+//      tracepoint(lttng_visuomp, thread_idle_end, thread_id, ompt_get_thread_data());
+//      //printf("%" PRIu64 ": ompt_event_idle_end:\n", ompt_get_thread_data()->value);
+//      //printf("%" PRIu64 ": ompt_event_idle_end: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data.value);
+//      break;
+//  }
+//}
 
 static void
 on_ompt_callback_implicit_task(
@@ -403,10 +404,10 @@ on_ompt_callback_implicit_task(
 
 static void
 on_ompt_callback_lock_init(
-  ompt_mutex_kind_t kind,
+  ompt_mutex_t kind,
   unsigned int hint,
   unsigned int impl,
-  ompt_wait_id_t wait_id,
+  omp_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -424,8 +425,8 @@ on_ompt_callback_lock_init(
 
 static void
 on_ompt_callback_lock_destroy(
-  ompt_mutex_kind_t kind,
-  ompt_wait_id_t wait_id,
+  ompt_mutex_t kind,
+  omp_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -443,7 +444,7 @@ on_ompt_callback_lock_destroy(
 
 static void
 on_ompt_callback_work(
-  ompt_work_type_t wstype,
+  ompt_work_t wstype,
   ompt_scope_endpoint_t endpoint,
   ompt_data_t *parallel_data,
   ompt_data_t *task_data,
@@ -543,45 +544,48 @@ on_ompt_callback_master(
   }
 }
 
+// TODO: Add printf for `flag` parameter.
 static void
 on_ompt_callback_parallel_begin(
   ompt_data_t *parent_task_data,
-  const ompt_frame_t *parent_task_frame,
+  const omp_frame_t *parent_task_frame,
   ompt_data_t* parallel_data,
-  uint32_t requested_team_size,
+  uint32_t requested_parallelism,
+  int32_t flag,
 //  uint32_t actual_team_size,
-  ompt_invoker_t invoker,
   const void *codeptr_ra)
 {
   parallel_data->value = ompt_get_unique_id();
   int thread_id = get_global_thread_num();
-  tracepoint(lttng_visuomp, parallel_begin, thread_id, parent_task_frame, parallel_data, requested_team_size, codeptr_ra);
-  //printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_team_size=%" PRIu32 ", parallel_function=%p, invoker=%d\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_runtime_frame, parent_task_frame->reenter_runtime_frame, parallel_data->value, requested_team_size, codeptr_ra, invoker);
+  tracepoint(lttng_visuomp, parallel_begin, thread_id, parent_task_frame, parallel_data, requested_parallelism, codeptr_ra);
+  //printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_parallelism=%" PRIu32 ", parallel_function=%p\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_runtime_frame, parent_task_frame->reenter_runtime_frame, parallel_data->value, requested_parallelism, codeptr_ra);
 }
 
+// TODO: Add printf for `flag` parameter.
 static void
 on_ompt_callback_parallel_end(
   ompt_data_t *parallel_data,
   ompt_data_t *task_data,
-  ompt_invoker_t invoker,
+  int32_t flag,
   const void *codeptr_ra)
 {
   int thread_id = get_global_thread_num();
   tracepoint(lttng_visuomp, parallel_end, thread_id, parallel_data, task_data, codeptr_ra);
-  //printf("%" PRIu64 ": ompt_event_parallel_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", invoker=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, invoker, codeptr_ra);
+  //printf("%" PRIu64 ": ompt_event_parallel_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
 }
 
+// TODO: Add printf for `flag` parameter.
 static void
 on_ompt_callback_task_create(
     ompt_data_t *parent_task_data,    /* id of parent task            */
-    const ompt_frame_t *parent_frame,  /* frame data for parent task   */
+    const omp_frame_t *parent_frame,  /* frame data for parent task   */
     ompt_data_t* new_task_data,      /* id of created task           */
-    ompt_task_type_t type,
+    int flag,
     int has_dependences,
     const void *codeptr_ra)               /* pointer to outlined function */
 {
   new_task_data->value = ompt_get_unique_id();
-  printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, new_task_id=%" PRIu64 ", parallel_function=%p, task_type=%s=%d, has_dependences=%s\n", ompt_get_thread_data()->value, parent_task_data ? parent_task_data->value : 0, parent_frame ? parent_frame->exit_runtime_frame : NULL, parent_frame ? parent_frame->reenter_runtime_frame : NULL, new_task_data->value, codeptr_ra, ompt_task_type_t_values[type], type, has_dependences ? "yes" : "no");
+  printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.enter=%p, new_task_id=%" PRIu64 ", parallel_function=%p, has_dependences=%s\n", ompt_get_thread_data()->value, parent_task_data ? parent_task_data->value : 0, parent_frame ? parent_frame->exit_frame : NULL, parent_frame ? parent_frame->enter_frame : NULL, new_task_data->value, codeptr_ra, has_dependences ? "yes" : "no");
 }
 
 static void
@@ -616,7 +620,7 @@ on_ompt_callback_task_dependence(
 
 static void
 on_ompt_callback_thread_begin(
-  ompt_thread_type_t thread_type,
+  ompt_thread_t thread_type,
   ompt_data_t *thread_data)
 {
   int thread_id = get_global_thread_num();
@@ -647,18 +651,18 @@ on_ompt_callback_control_tool(
 }
 
 #define register_callback_t(name, type)                       \
-do{                                                           \
+do {                                                          \
   type f_##name = &on_##name;                                 \
   if (ompt_set_callback(name, (ompt_callback_t)f_##name) ==   \
       ompt_set_never)                                         \
     printf("0: Could not register callback '" #name "'\n");   \
-}while(0)
+} while(0)
 
 #define register_callback(name) register_callback_t(name, name##_t)
 
 int ompt_initialize(
   ompt_function_lookup_t lookup,
-  ompt_fns_t* fns)
+  ompt_data_t *tool_data)
 {
   ompt_set_callback = (ompt_set_callback_t) lookup("ompt_set_callback");
   ompt_get_task_info = (ompt_get_task_info_t) lookup("ompt_get_task_info");
@@ -681,7 +685,7 @@ int ompt_initialize(
   register_callback(ompt_callback_control_tool);
   register_callback(ompt_callback_flush);
   register_callback(ompt_callback_cancel);
-  register_callback(ompt_callback_idle);
+  //register_callback(ompt_callback_idle);  // Note: Obsoleted in TR7, as it was weird/impossible to implement correctly.
   register_callback(ompt_callback_implicit_task);
   register_callback_t(ompt_callback_lock_init, ompt_callback_mutex_acquire_t);
   register_callback_t(ompt_callback_lock_destroy, ompt_callback_mutex_t);
@@ -699,15 +703,15 @@ int ompt_initialize(
   return 1; //success
 }
 
-void ompt_finalize(ompt_fns_t* fns)
+void ompt_finalize()
 {
   //printf("%d: ompt_event_runtime_shutdown\n", omp_get_thread_num());
 }
 
-ompt_fns_t* ompt_start_tool(
+ompt_start_tool_result_t* ompt_start_tool(
   unsigned int omp_version,
   const char *runtime_version)
 {
-  static ompt_fns_t ompt_fns = {&ompt_initialize,&ompt_finalize};
+  static ompt_start_tool_result_t ompt_fns = {&ompt_initialize, &ompt_finalize, 0};
   return &ompt_fns;
 }
