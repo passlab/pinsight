@@ -9,10 +9,15 @@ RUN apt-get update && apt-get dist-upgrade -y
 WORKDIR /opt
 
 # Install needed tools.
-RUN apt-get update && apt-get install -y \
+RUN apt-add-repository -y ppa:lttng/stable-2.10 && \
+    apt-get update && \
+    apt-get install -y \
     build-essential \
     cmake \
     git \
+    lttng-tools \
+    lttng-modules-dkms \
+    liblttng-ust-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Build OpenMP runtime.
