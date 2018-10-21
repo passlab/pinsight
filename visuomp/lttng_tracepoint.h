@@ -14,15 +14,15 @@ extern "C" {
 
 TRACEPOINT_EVENT(lttng_visuomp, parallel_begin,
 	TP_ARGS(int, gtid,
-		const ompt_frame_t*, parent_task_frame,
+		const omp_frame_t*, parent_task_frame,
 		ompt_data_t*, parallel_data,
   		uint32_t, requested_team_size,
   		const void *, codeptr_ra
 	),
 	TP_FIELDS(
 		ctf_integer(int, gtid, gtid)
-//		ctf_integer_hex(long int, frame, parent_task_frame->exit_runtime_frame)
-		ctf_integer_hex(long int, frame, parent_task_frame->reenter_runtime_frame)
+//		ctf_integer_hex(long int, frame, parent_task_frame->exit_frame)
+		ctf_integer_hex(long int, frame, parent_task_frame->enter_frame)
 		ctf_integer_hex(long int, parallel_id, parallel_data->value)
 		ctf_integer(int, team_size, requested_team_size)
 		ctf_integer_hex(long int, codeptr_ra, codeptr_ra)
