@@ -10,7 +10,8 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 # sudo is tricky and you have to change to root and change LD_LIBRARY_PATH for root
 #
 # on yan's vm setup
-set(OMP_LIB_PATH /home/yanyh/tools/llvm-openmp/BUILD/runtime/src)
+set(OMP_BASE_PATH /opt/llvm-openmp-install)
+set(OMP_LIB_PATH /opt/llvm-openmp-install/lib)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g ")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g ")
@@ -22,7 +23,7 @@ set(SOURCE_FILES
 )
 
 add_library(visuomp SHARED ${SOURCE_FILES})
-include_directories(. ${OMP_LIB_PATH})
-link_directories(${OMP_LIB_PATH} ${PAPI_INSTALL}/lib)
+include_directories(. ${OMP_BASE_PATH}/include)
+#link_directories(${OMP_LIB_PATH} ${PAPI_INSTALL}/lib)
 target_link_libraries(visuomp dl lttng-ust ${OMP_LIB_PATH}/libomp.so m)
 
