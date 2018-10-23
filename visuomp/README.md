@@ -8,6 +8,9 @@
  * Geneviève Bastien's tracing blog: http://versatic.net/
  * https://github.com/efficios that has https://github.com/efficios/babeltrace and other interesting code repo
  * LTTng Scope is a trace viewer and analyzer for CTF traces, with a focus on LTTng kernel and user space traces: https://github.com/lttng/lttng-scope
+
+# Update to the latest OMPT implemetation in LLVM
+ * Use https://github.com/llvm-mirror/openmp/blob/master/runtime/test/ompt/callback.h as reference to make sure the use of OMPT is updated to the latest OMPT support in LLVM OpenMP
  
  ### Tracecompass development
  Tracecompass is an Eclipse plugin and framework. Follow the steps from the wiki page for the development:
