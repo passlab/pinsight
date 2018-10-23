@@ -38,3 +38,6 @@ RUN git clone https://github.com/llvm-mirror/openmp.git && \
 RUN cd openmp-build && \
     make && \
     make install
+
+# Clone this repo into the container.
+RUN git clone https://github.com/passlab/pinsight.git
