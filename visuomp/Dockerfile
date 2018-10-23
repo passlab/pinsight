@@ -21,21 +21,20 @@ RUN apt-add-repository -y ppa:lttng/stable-2.10 && \
     && rm -rf /var/lib/apt/lists/*
 
 # Build OpenMP runtime.
-RUN git clone https://github.com/passlab/llvm-openmp.git && \
-    cd llvm-openmp && \
+RUN git clone https://github.com/llvm-mirror/openmp.git && \
+    cd openmp && \
     git remote update && \
     cd .. && \
-    mkdir -p llvm-openmp-build && \
-    mkdir -p llvm-openmp-install && \
-    cd llvm-openmp-build && \
+    mkdir -p openmp-build && \
+    mkdir -p openmp-install && \
+    cd openmp-build && \
     cmake -G "Unix Makefiles" \
       -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_INSTALL_PREFIX=../llvm-openmp-install \
+      -DCMAKE_INSTALL_PREFIX=../openmp-install \
       -DOPENMP_ENABLE_LIBOMPTARGET=off \
-      -DLIBOMP_REX_KMPAPI_SUPPORT=on \
       -DLIBOMP_OMPT_SUPPORT=on \
-      ../llvm-openmp
+      ../openmp
 
-RUN cd llvm-openmp-build && \
+RUN cd openmp-build && \
     make && \
     make install
