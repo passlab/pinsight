@@ -47,16 +47,11 @@ An example of that build process (taken from our `Dockerfile`), building to `/op
 
 ### Build
 
-To build the main `visuomp` shared library, you will need to run CMake in the top-level directory of this repo:
+To build the main `visuomp` shared library, use the GNU `Makefile` provided in the top-level directory of this repo:
 
-    cmake build  # Creates a build tree in a folder named `build/`.
-    cd build
-    make         # Actually builds everything.
+    make
 
-The instructions above will result in `libvisuomp.so` being located at `build/lib/libvisuomp.so`.
-You can relocate or copy `libvisuomp.so` elsewhere if desired (It does not depend on anything outside itself).
-
-To copy `libvisuomp.so` up to the base of the repo, just run something like `cp build/lib/libvisuomp.so libvisuomp.so`.
+The instructions above will result in `libvisuomp.so` being located at `lib/libvisuomp.so`.
 
 
 ### Run
