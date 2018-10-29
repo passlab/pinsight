@@ -78,7 +78,7 @@ We also need to specify which OpenMP runtime to use.
 In order to ensure the 2 shared libraries are loaded correctly, we use the `LD_PRELOAD` environment variable, like so:
 
     # Run an OpenMP application with our shared libraries.
-    LD_PRELOAD=/opt/openmp-install/lib/libomp.so:/opt/pinsight/libvisuomp.so ./your_application
+    LD_PRELOAD=/opt/openmp-install/lib/libomp.so:/opt/pinsight/lib/libvisuomp.so ./your_application
 
 Once the application has run, we can tell LTTng to stop tracing:
 
