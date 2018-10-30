@@ -56,6 +56,21 @@ The instructions above will result in `libvisuomp.so` being located at `lib/libv
 
 ### Run
 
+#### Tracing script
+
+In the `scripts/` directory, a script called `trace.sh` is provided.
+This script helps make generating LTTng traces for OpenMP programs easier.
+
+Example using the `jacobi` application:
+
+    trace.sh /tmp/ompt-jacobi \
+      /opt/openmp-install/lib/libomp.so \
+      /opt/pinsight/lib/libvisuomp.so \
+      ./jacobi 2048 2048
+
+
+#### Manual LTTng tracing session
+
 Since we're using LTTng, we have to set up a [tracing session][lttng-tracing-session], and enable some [event rules][lttng-event-rules] before starting tracing:
 
    [lttng-tracing-session]: https://lttng.org/docs/v2.10/#doc-tracing-session
