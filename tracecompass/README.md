@@ -17,8 +17,11 @@ To be able to view the state changes in a reasonable way in TraceCompass, we hav
  1. Select `Apply and Close`.
  1. You're done!
 
+-----
 
 ### Tracecompass development
+
+*For those interested in further development with TraceCompass, the following resources may be useful.*
 
  Tracecompass is an Eclipse plugin and framework. Follow the steps from the wiki page for developing with it:
  * Set up Eclipse development environment.
