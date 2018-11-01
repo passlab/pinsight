@@ -10,6 +10,10 @@
  * Geneviève Bastien's tracing blog: http://versatic.net/
  * https://github.com/efficios that has https://github.com/efficios/babeltrace and other interesting code repo
  * LTTng Scope is a trace viewer and analyzer for CTF traces, with a focus on LTTng kernel and user space traces: https://github.com/lttng/lttng-scope
+ * Vampir :: Vampir is a visualization framework for visualizing OTF format traces collected by the VampirTrace tool.
+   [ [LLNL User docs] ](https://hpc.llnl.gov/software/development-environment-software/vampir-vampir-server)
+   [ [Vampir low-level docs] ](https://computing.llnl.gov/code/vgv.html)
+   [ [SC'17 Presentation] ](https://www.openmp.org/wp-content/uploads/SC17-Tschueter_openmp_booth_talk.pdf)
 
 
 ## Implementation notes
