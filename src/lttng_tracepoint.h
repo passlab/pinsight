@@ -1,5 +1,5 @@
 #undef TRACEPOINT_PROVIDER
-#define TRACEPOINT_PROVIDER lttng_visuomp
+#define TRACEPOINT_PROVIDER lttng_pinsight
 
 #if !defined(_TRACEPOINT_LTTNG_TRACEPOINT_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
 #define _TRACEPOINT_LTTNG_TRACEPOINT_H
@@ -12,7 +12,7 @@ extern "C" {
 #include <stdbool.h>
 #include <ompt.h>
 
-TRACEPOINT_EVENT(lttng_visuomp, parallel_begin,
+TRACEPOINT_EVENT(lttng_pinsight, parallel_begin,
 	TP_ARGS(int, gtid,
 		const omp_frame_t*, parent_task_frame,
 		ompt_data_t*, parallel_data,
@@ -29,7 +29,7 @@ TRACEPOINT_EVENT(lttng_visuomp, parallel_begin,
 	)
 )
 
-TRACEPOINT_EVENT(lttng_visuomp, parallel_end,
+TRACEPOINT_EVENT(lttng_pinsight, parallel_end,
 	TP_ARGS(int, gtid,
 		ompt_data_t*, parallel_data,
 		ompt_data_t*, task_data,
@@ -47,7 +47,7 @@ TRACEPOINT_EVENT(lttng_visuomp, parallel_end,
  * thread work
  */
 #define TRACEPOINT_EVENT_WORK(event_name)								\
-TRACEPOINT_EVENT(lttng_visuomp, event_name,								\
+TRACEPOINT_EVENT(lttng_pinsight, event_name,								\
 	TP_ARGS(int, gtid,													\
 		ompt_data_t*, parallel_data,									\
    		ompt_data_t*, task_data,										\
@@ -82,7 +82,7 @@ TRACEPOINT_EVENT_WORK(work_taskloop_end)
  * master
  */
 #define TRACEPOINT_EVENT_MASTER(event_name)								\
-TRACEPOINT_EVENT(lttng_visuomp, event_name,								\
+TRACEPOINT_EVENT(lttng_pinsight, event_name,								\
 	TP_ARGS(int, gtid,													\
 		ompt_data_t*, parallel_data,									\
    		ompt_data_t*, task_data,										\
@@ -103,7 +103,7 @@ TRACEPOINT_EVENT_MASTER(master_end)
  * implicit task begin and end
  */
 #define TRACEPOINT_EVENT_IMPLICIT_TASK(event_name)						\
-TRACEPOINT_EVENT(lttng_visuomp, event_name,								\
+TRACEPOINT_EVENT(lttng_pinsight, event_name,								\
 	TP_ARGS(int, gtid,													\
 		ompt_data_t*, parallel_data,									\
     	ompt_data_t*, task_data,									\
@@ -124,7 +124,7 @@ TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_end)
 
 /* synchronization, e.g. barrier, taskwait, taskgroup, related tracepoint */
 #define TRACEPOINT_EVENT_SYNC(event_name) 								\
-TRACEPOINT_EVENT(lttng_visuomp, event_name,								\
+TRACEPOINT_EVENT(lttng_pinsight, event_name,								\
 	 TP_ARGS(int, gtid,													\
          ompt_data_t*, parallel_data,									\
 		 ompt_data_t*, task_data,										\
@@ -155,7 +155,7 @@ TRACEPOINT_EVENT_SYNC(taskgroup_wait_end)
  * thread-related events
  */
 #define TRACEPOINT_EVENT_THREAD(event_name)								\
-TRACEPOINT_EVENT(lttng_visuomp, event_name,							    \
+TRACEPOINT_EVENT(lttng_pinsight, event_name,							    \
 	TP_ARGS(int, gtid,													\
 		ompt_data_t*, thread_data										\
 	),																	\

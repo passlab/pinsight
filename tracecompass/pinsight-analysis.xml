@@ -3,10 +3,10 @@
 	xsi:noNamespaceSchemaLocation="xmldefinition.xsd">
 
 	<!-- The state provider assigns states from events -->
-	<stateProvider id="edu.oakland.visuomp.stateProvider" version="0">
+	<stateProvider id="edu.oakland.pinsight.stateProvider" version="0">
 		<head>
 			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
-			<label value="VISUOMP OpenMP Trace Analysis" />
+			<label value="PInsight OpenMP Trace Analysis" />
 		</head>
 
 		<!-- Convenience names for the state values -->
@@ -35,224 +35,224 @@
 		<definedValue name="STATE_THREAD_TERMINATED" value="100" />
 
 		<!-- Event handlers -->
-		<eventHandler eventName="lttng_visuomp:parallel_begin">
+		<eventHandler eventName="lttng_pinsight:parallel_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_PARALLEL" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:parallel_end">
+		<eventHandler eventName="lttng_pinsight:parallel_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:implicit_task_begin">
+		<eventHandler eventName="lttng_pinsight:implicit_task_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:implicit_task_end">
+		<eventHandler eventName="lttng_pinsight:implicit_task_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_loop_begin">
+		<eventHandler eventName="lttng_pinsight:work_loop_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_WORK_LOOP" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_loop_end">
+		<eventHandler eventName="lttng_pinsight:work_loop_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_sections_begin">
+		<eventHandler eventName="lttng_pinsight:work_sections_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_WORK_SECTIONS" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_sections_end">
+		<eventHandler eventName="lttng_pinsight:work_sections_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_single_executor_begin">
+		<eventHandler eventName="lttng_pinsight:work_single_executor_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_WORK_SINGLE_EXECUTOR" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_single_executor_end">
+		<eventHandler eventName="lttng_pinsight:work_single_executor_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_single_other_begin">
+		<eventHandler eventName="lttng_pinsight:work_single_other_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_WORK_SINGLE_OTHER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_single_other_end">
+		<eventHandler eventName="lttng_pinsight:work_single_other_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_workshare_begin">
+		<eventHandler eventName="lttng_pinsight:work_workshare_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_WORK_WORKSHARE" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:work_workshare_end">
+		<eventHandler eventName="lttng_pinsight:work_workshare_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:master_begin">
+		<eventHandler eventName="lttng_pinsight:master_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:master_end">
+		<eventHandler eventName="lttng_pinsight:master_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:thread_begin">
+		<eventHandler eventName="lttng_pinsight:thread_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_THREAD_STARTED" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:thread_end">
+		<eventHandler eventName="lttng_pinsight:thread_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_THREAD_TERMINATED" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:thread_idle_begin">
+		<eventHandler eventName="lttng_pinsight:thread_idle_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_THREAD_IDLE" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:thread_idle_end">
+		<eventHandler eventName="lttng_pinsight:thread_idle_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:barrier_begin">
+		<eventHandler eventName="lttng_pinsight:barrier_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_SYNC_BARRIER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:barrier_end">
+		<eventHandler eventName="lttng_pinsight:barrier_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskwait_begin">
+		<eventHandler eventName="lttng_pinsight:taskwait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_SYNC_TASKWAIT" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskwait_end">
+		<eventHandler eventName="lttng_pinsight:taskwait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskgroup_begin">
+		<eventHandler eventName="lttng_pinsight:taskgroup_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_SYNC_TASKGROUP" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskgroup_end">
+		<eventHandler eventName="lttng_pinsight:taskgroup_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:barrier_wait_begin">
+		<eventHandler eventName="lttng_pinsight:barrier_wait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_SYNC_BARRIER_WAIT" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:barrier_wait_end">
+		<eventHandler eventName="lttng_pinsight:barrier_wait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskwait_wait_begin">
+		<eventHandler eventName="lttng_pinsight:taskwait_wait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_SYNC_TASKWAIT_WAIT" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskwait_wait_end">
+		<eventHandler eventName="lttng_pinsight:taskwait_wait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskgroup_wait_begin">
+		<eventHandler eventName="lttng_pinsight:taskgroup_wait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
 				<stateValue type="int" value="$STATE_SYNC_TASKGROUP_WAIT" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_visuomp:taskgroup_wait_end">
+		<eventHandler eventName="lttng_pinsight:taskgroup_wait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Threads" />
 				<stateAttribute type="eventField" value="gtid" />
@@ -265,8 +265,8 @@
 	<!-- This is the definition of the time-graph view -->
 	<timeGraphView id="org.eclipse.linuxtools.tmf.analysis.xml.sstimeview">
 		<head>
-			<analysis id="edu.oakland.visuomp.stateProvider" />
-			<label value="VISUOMP OpenMP Trace View" />
+			<analysis id="edu.oakland.pinsight.stateProvider" />
+			<label value="PInsight OpenMP Trace View" />
 		</head>
 	
 		<!-- Colors assigned to the state values, see http://www.rapidtables.com/web/color/ -->
