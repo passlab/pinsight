@@ -7,9 +7,9 @@ LDFLAGS += -L$(OMP_LIB_PATH) -lm -ldl -llttng-ust -lomp
 
 .PHONY: clean test
 
-libvisuomp.so:
+libpinsight.so:
 	mkdir -p lib/
-	$(CC) $(CFLAGS) -shared -o lib/$@ src/callback.h src/lttng_tracepoint.h src/visuomp.c  $(LDFLAGS)
+	$(CC) $(CFLAGS) -shared -o lib/$@ src/callback.h src/lttng_tracepoint.h src/pinsight.c  $(LDFLAGS)
 
 test:
 	$(MAKE) -C test

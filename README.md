@@ -1,8 +1,8 @@
 # OpenMP OMPT Event Tracing and Visualization
 
-## Visuomp shared library
+## PInsight shared library
 
-The core of this project is a shared library called `visuomp`, which generates [LTTng][lttng] trace data for OpenMP [OMPT][ompt] events.
+The core of this project is a shared library called `pinsight`, which generates [LTTng][lttng] trace data for OpenMP [OMPT][ompt] events.
 
    [lttng]: https://lttng.org
    [ompt]: https://www.openmp.org/wp-content/uploads/ompt-tr.pdf
@@ -47,11 +47,11 @@ An example of that build process (taken from our `Dockerfile`), building to `/op
 
 ### Build
 
-To build the main `visuomp` shared library, use the GNU `Makefile` provided in the top-level directory of this repo:
+To build the main `pinsight` shared library, use the GNU `Makefile` provided in the top-level directory of this repo:
 
     make
 
-The instructions above will result in `libvisuomp.so` being located at `lib/libvisuomp.so`.
+The instructions above will result in `libpinsight.so` being located at `lib/libpinsight.so`.
 
 
 ### Run
@@ -65,7 +65,7 @@ Example using the `jacobi` application:
 
     trace.sh /tmp/ompt-jacobi \
       /opt/openmp-install/lib/libomp.so \
-      /opt/pinsight/lib/libvisuomp.so \
+      /opt/pinsight/lib/libpinsight.so \
       ./jacobi 2048 2048
 
 
@@ -80,20 +80,20 @@ Since we're using LTTng, we have to set up a [tracing session][lttng-tracing-ses
     lttng create ompt-tracing-session --output=/tmp/ompt-trace
 
     # Create and enable event rules.
-    lttng enable-event --userspace lttng_visuomp:'*'
+    lttng enable-event --userspace lttng_pinsight:'*'
 
     # Start LTTng tracing.
     lttng start
 
 Once the session has started, LTTng's daemon will be ready to accept the traces our application generates.
 
-In order to generate traces about OMPT events, our `libvisuomp.so` library needs to be preloaded by the application.
+In order to generate traces about OMPT events, our `libpinsight.so` library needs to be preloaded by the application.
 We also need to specify which OpenMP runtime to use.
 
 In order to ensure the 2 shared libraries are loaded correctly, we use the `LD_PRELOAD` environment variable, like so:
 
     # Run an OpenMP application with our shared libraries.
-    LD_PRELOAD=/opt/openmp-install/lib/libomp.so:/opt/pinsight/lib/libvisuomp.so ./your_application
+    LD_PRELOAD=/opt/openmp-install/lib/libomp.so:/opt/pinsight/lib/libpinsight.so ./your_application
 
 Once the application has run, we can tell LTTng to stop tracing:
 
