@@ -12,7 +12,7 @@ To be able to view the state changes in a reasonable way in TraceCompass, we hav
  1. Open TraceCompass. Reset the perspective to defaults, if needed.
  1. Right click on `Project Explorer > Traces`
  1. Select `Manage XML Analyses`.
- 1. Select `Import`, and find the `visuomp-analysis.xml` file.
+ 1. Select `Import`, and find the `pinsight-analysis.xml` file.
  1. Make sure the box is checked next to the new analysis.
  1. Select `Apply and Close`.
  1. You're done!

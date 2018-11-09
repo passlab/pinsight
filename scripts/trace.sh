@@ -4,14 +4,14 @@
 # Shell script prelude
 
 USAGE=$(cat <<EOF
-Tracing script for use with Visuomp.
+Tracing script for use with PInsight.
 Usage:
-    trace.sh TRACEFILE_DEST OMP_LIB VISUOMP_LIB ARGS...
+    trace.sh TRACEFILE_DEST OMP_LIB PINSIGHT_LIB ARGS...
 
 Arguments:
   TRACEFILE_DEST    Where to write the LTTng traces.
   OMP_LIB           OpenMP shared library to use with user application.
-  VISUOMP_LIB       Visuomp shared library to use with user application.
+  PINSIGHT_LIB      PInsight shared library to use with user application.
 
 Examples:
     trace.sh /tmp/ompt-jacobi \\ 
@@ -33,7 +33,7 @@ fi
 # This leaves only the program command line in `$@`.
 TRACING_OUTPUT_DEST=$1
 OMP_LIB_PATH=$2
-VISUOMP_LIB_PATH=$3
+PINSIGHT_LIB_PATH=$3
 shift 3
 
 
@@ -44,13 +44,13 @@ shift 3
 lttng create ompt-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
 # Create and enable event rules.
-lttng enable-event --userspace lttng_visuomp:'*'
+lttng enable-event --userspace lttng_pinsight:'*'
 
 # Start LTTng tracing.
 lttng start
 
 # Run instrumented code.
-LD_PRELOAD=${OMP_LIB_PATH}:${VISUOMP_LIB_PATH} "$@"
+LD_PRELOAD=${OMP_LIB_PATH}:${PINSIGHT_LIB_PATH} "$@"
 
 # Stop LTTng tracing.
 lttng stop
