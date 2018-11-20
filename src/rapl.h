@@ -27,7 +27,7 @@
 #define MAX_PACKAGES 16
 #define NUM_RAPL_DOMAINS 5
 
-char rapl_domain_names[NUM_RAPL_DOMAINS][30] = {
+static char rapl_domain_names[NUM_RAPL_DOMAINS][30] = {
     "energy-cores",
     "energy-gpu",
     "energy-pkg",
