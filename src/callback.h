@@ -9,6 +9,7 @@
 #endif
 #include "ompt-signal.h"
 #include "env_config.h"
+#include "rapl.h"
 
 // --------------------------------------------------------
 // Environment config variable names and default values.
@@ -297,23 +298,27 @@ on_ompt_callback_sync_region(
   const void *codeptr_ra)
 {
   int thread_id = get_global_thread_num();
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
   switch(endpoint)
   {
     case ompt_scope_begin:
       switch(kind)
       {
         case ompt_sync_region_barrier:
-          tracepoint(lttng_pinsight, barrier_begin, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, barrier_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
 	  }
           //print_ids(0);
           break;
         case ompt_sync_region_taskwait:
-          tracepoint(lttng_pinsight, taskwait_begin, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskwait_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
         case ompt_sync_region_taskgroup:
-          tracepoint(lttng_pinsight, taskgroup_begin, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskgroup_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
       }
       break;
@@ -321,16 +326,16 @@ on_ompt_callback_sync_region(
       switch(kind)
       {
         case ompt_sync_region_barrier:
-          tracepoint(lttng_pinsight, barrier_end, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, barrier_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
 	  }
           break;
         case ompt_sync_region_taskwait:
-          tracepoint(lttng_pinsight, taskwait_end, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskwait_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
         case ompt_sync_region_taskgroup:
-          tracepoint(lttng_pinsight, taskgroup_end, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskgroup_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
       }
       break;
@@ -346,22 +351,26 @@ on_ompt_callback_sync_region_wait(
   const void *codeptr_ra)
 {
   int thread_id = get_global_thread_num();
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
   switch(endpoint)
   {
     case ompt_scope_begin:
       switch(kind)
       {
         case ompt_sync_region_barrier:
-          tracepoint(lttng_pinsight, barrier_wait_begin, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, barrier_wait_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_wait_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
 	  }
           break;
         case ompt_sync_region_taskwait:
-          tracepoint(lttng_pinsight, taskwait_wait_begin, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskwait_wait_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
         case ompt_sync_region_taskgroup:
-          tracepoint(lttng_pinsight, taskgroup_wait_begin, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskgroup_wait_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
       }
       break;
@@ -369,16 +378,16 @@ on_ompt_callback_sync_region_wait(
       switch(kind)
       {
         case ompt_sync_region_barrier:
-          tracepoint(lttng_pinsight, barrier_wait_end, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, barrier_wait_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_wait_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
 	  }
           break;
         case ompt_sync_region_taskwait:
-          tracepoint(lttng_pinsight, taskwait_wait_end, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskwait_wait_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
         case ompt_sync_region_taskgroup:
-          tracepoint(lttng_pinsight, taskgroup_wait_end, thread_id, parallel_data, task_data, codeptr_ra);
+          tracepoint(lttng_pinsight, taskgroup_wait_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
           break;
       }
       break;
@@ -466,17 +475,21 @@ on_ompt_callback_implicit_task(
   /* in this call back, parallel_data is NULL for ompt_scope_end endpoint, thus to know the parallel_data at the end,
    * we need to pass the needed fields of parallel_data in the scope_begin to the task_data */
   int thread_id = get_global_thread_num();
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
   switch(endpoint)
   {
     case ompt_scope_begin:
       task_data->value = ompt_get_unique_id();
-      tracepoint(lttng_pinsight, implicit_task_begin, thread_id, parallel_data, task_data, team_size, thread_num);
+      tracepoint(lttng_pinsight, implicit_task_begin, thread_id, parallel_data, task_data, team_size, thread_num, energy);
       if (debug_on) {
         printf("%" PRIu64 ": ompt_event_implicit_task_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", team_size=%" PRIu32 ", thread_num=%" PRIu32 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, team_size, thread_num);
       }
       break;
     case ompt_scope_end:
-      tracepoint(lttng_pinsight, implicit_task_end, thread_id, parallel_data, task_data, team_size, thread_num);
+      tracepoint(lttng_pinsight, implicit_task_end, thread_id, parallel_data, task_data, team_size, thread_num, energy);
       if (debug_on) {
 	printf("%" PRIu64 ": ompt_event_implicit_task_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", team_size=%" PRIu32 ", thread_num=%" PRIu32 "\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, team_size, thread_num);
       }
@@ -542,43 +555,47 @@ on_ompt_callback_work(
   const void *codeptr_ra)
 {
   int thread_id = get_global_thread_num();
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
   switch(endpoint)
   {
     case ompt_scope_begin:
       switch(wstype)
       {
         case ompt_work_loop:
-          tracepoint(lttng_pinsight, work_loop_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_loop_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_loop_begin: parallel_id=%" PRIu64 ", parent_task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
 	  }
           break;
         case ompt_work_sections:
-          tracepoint(lttng_pinsight, work_sections_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_sections_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
         case ompt_work_single_executor:
-          tracepoint(lttng_pinsight, work_single_executor_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_single_executor_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_single_in_block_begin: parallel_id=%" PRIu64 ", parent_task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
 	  }
           break;
         case ompt_work_single_other:
-          tracepoint(lttng_pinsight, work_single_other_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_single_other_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_single_others_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
 	  }
           break;
         case ompt_work_workshare:
-          tracepoint(lttng_pinsight, work_workshare_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_workshare_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
         case ompt_work_distribute:
-          tracepoint(lttng_pinsight, work_distribute_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_distribute_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
         case ompt_work_taskloop:
-          tracepoint(lttng_pinsight, work_taskloop_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_taskloop_begin, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
       }
@@ -587,37 +604,37 @@ on_ompt_callback_work(
       switch(wstype)
       {
         case ompt_work_loop:
-          tracepoint(lttng_pinsight, work_loop_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_loop_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_loop_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
 	  }
           break;
         case ompt_work_sections:
-          tracepoint(lttng_pinsight, work_sections_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_sections_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
         case ompt_work_single_executor:
-          tracepoint(lttng_pinsight, work_single_executor_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_single_executor_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_single_in_block_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
 	  }
           break;
         case ompt_work_single_other:
-          tracepoint(lttng_pinsight, work_single_other_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_single_other_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           if (debug_on) {
             printf("%" PRIu64 ": ompt_event_single_others_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
 	  }
           break;
         case ompt_work_workshare:
-          tracepoint(lttng_pinsight, work_workshare_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_workshare_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
         case ompt_work_distribute:
-          tracepoint(lttng_pinsight, work_distribute_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_distribute_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
         case ompt_work_taskloop:
-          tracepoint(lttng_pinsight, work_taskloop_end, thread_id, parallel_data, task_data, count, codeptr_ra);
+          tracepoint(lttng_pinsight, work_taskloop_end, thread_id, parallel_data, task_data, count, codeptr_ra, energy);
           //impl
           break;
       }
@@ -633,16 +650,20 @@ on_ompt_callback_master(
   const void *codeptr_ra)
 {
   int thread_id = get_global_thread_num();
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
   switch(endpoint)
   {
     case ompt_scope_begin:
-      tracepoint(lttng_pinsight, master_begin, thread_id, parallel_data, task_data, codeptr_ra);
+      tracepoint(lttng_pinsight, master_begin, thread_id, parallel_data, task_data, codeptr_ra, energy);
       if (debug_on) {
         printf("%" PRIu64 ": ompt_event_master_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
       }
       break;
     case ompt_scope_end:
-      tracepoint(lttng_pinsight, master_end, thread_id, parallel_data, task_data, codeptr_ra);
+      tracepoint(lttng_pinsight, master_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
       if (debug_on) {
         printf("%" PRIu64 ": ompt_event_master_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
       }
@@ -663,7 +684,11 @@ on_ompt_callback_parallel_begin(
 {
   parallel_data->value = ompt_get_unique_id();
   int thread_id = get_global_thread_num();
-  tracepoint(lttng_pinsight, parallel_begin, thread_id, parent_task_frame, parallel_data, requested_parallelism, codeptr_ra);
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
+  tracepoint(lttng_pinsight, parallel_begin, thread_id, parent_task_frame, parallel_data, requested_parallelism, codeptr_ra, energy);
   if (debug_on) {
     printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_parallelism=%" PRIu32 ", parallel_function=%p\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_frame, parent_task_frame->enter_frame, parallel_data->value, requested_parallelism, codeptr_ra);
   }
@@ -678,7 +703,11 @@ on_ompt_callback_parallel_end(
   const void *codeptr_ra)
 {
   int thread_id = get_global_thread_num();
-  tracepoint(lttng_pinsight, parallel_end, thread_id, parallel_data, task_data, codeptr_ra);
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
+  tracepoint(lttng_pinsight, parallel_end, thread_id, parallel_data, task_data, codeptr_ra, energy);
   if (debug_on) {
     printf("%" PRIu64 ": ompt_event_parallel_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
   }
@@ -746,7 +775,11 @@ on_ompt_callback_thread_begin(
 {
   int thread_id = get_global_thread_num();
   thread_data->value = ompt_get_unique_id();
-  tracepoint(lttng_pinsight, thread_begin, thread_id, thread_data);
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
+  tracepoint(lttng_pinsight, thread_begin, thread_id, thread_data, energy);
   if (debug_on) {
     printf("%" PRIu64 ": ompt_event_thread_begin: thread_type=%s=%d, thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, ompt_thread_type_t_values[thread_type], thread_type, thread_data->value);
   }
@@ -757,7 +790,11 @@ on_ompt_callback_thread_end(
   ompt_data_t *thread_data)
 {
   int thread_id = get_global_thread_num();
-  tracepoint(lttng_pinsight, thread_end, thread_id, thread_data);
+  long long int energy = 0;
+  if (thread_id == 0) {
+    rapl_sysfs_read_energy(&energy, 0, -1); // Read package 0's energy counter.
+  }
+  tracepoint(lttng_pinsight, thread_end, thread_id, thread_data, energy);
   if (debug_on) {
     printf("%" PRIu64 ": ompt_event_thread_end: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data->value);
     //printf("%" PRIu64 ": ompt_event_thread_end: thread_type=%s=%d, thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, ompt_thread_type_t_values[thread_type], thread_type, thread_data->value);
