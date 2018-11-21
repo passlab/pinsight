@@ -55,7 +55,7 @@ lulesh: $(OBJECTS2.0)
 	$(CXX) $(OBJECTS2.0) $(LDFLAGS) -lm -o $@
 
 test: lulesh
-	LD_PRELOAD=$(OMP_LIB_PATH)/libomp.so:$(VISUOMP_LIB_PATH)/libpinsight.so ./lulesh
+	LD_PRELOAD=$(OMP_LIB_PATH)/libomp.so:$(PINSIGHT_LIB_PATH)/libpinsight.so ./lulesh
 
 clean:
 	/bin/rm -f *.o *~ $(OBJECTS) $(LULESH_EXEC)

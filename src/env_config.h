@@ -18,7 +18,7 @@
 // --------------------------------------------------------
 // Safe environment variable query functions
 
-long env_get_long(const char* str, long default_value);
-unsigned long env_get_ulong(const char* str, unsigned long default_value);
+long env_get_long(const char* varname, long default_value);
+unsigned long env_get_ulong(const char* varname, unsigned long default_value);
 
 #endif // ENV_CONFIG_H
