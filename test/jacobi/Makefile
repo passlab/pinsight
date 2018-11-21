@@ -7,7 +7,7 @@ objdump:
 	objdump -d jacobi > jacobi.objdump
 
 test:
-	LD_PRELOAD=$(OMP_LIB_PATH)/libomp.so:$(VISUOMP_LIB_PATH)/libpinsight.so ./jacobi 2048 2048
+	LD_PRELOAD=$(OMP_LIB_PATH)/libomp.so:$(PINSIGHT_LIB_PATH)/libpinsight.so ./jacobi 2048 2048
 
 clean:
 	rm jacobi
