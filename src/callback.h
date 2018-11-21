@@ -8,6 +8,17 @@
 #include <libunwind.h>
 #endif
 #include "ompt-signal.h"
+#include "env_config.h"
+
+// --------------------------------------------------------
+// Environment config variable names and default values.
+
+#define PINSIGHT_DEBUG_ENABLE "PINSIGHT_DEBUG_ENABLE"
+#define PINSIGHT_DEBUG_ENABLE_DEFAULT 0
+
+// Configuration settings.
+static int debug_on;
+
 
 #define TRACEPOINT_CREATE_PROBES
 #define TRACEPOINT_DEFINE
@@ -70,11 +81,16 @@ static void print_ids(int level)
   int exists_task = ompt_get_task_info(level, NULL, &task_data, &frame, &parallel_data, NULL);
   if (frame)
   {
-    printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, enter_frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame, frame->enter_frame);
-//    printf("%" PRIu64 ": parallel level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_parallel ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_runtime_frame, frame->enter_frame);
+    if (debug_on) {
+      printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, enter_frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame, frame->enter_frame);
+    }
+//    printf("%" PRIu64 ": parallel level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_parallel ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame, frame->enter_frame);
   }
-  else
-    printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame);
+  else {
+    if (debug_on) {
+      printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame);
+    }
+  }
 }
 
 /*
@@ -87,23 +103,34 @@ do {\
   unw_init_local(&cursor, &uc);\
   int tmp_level = level;\
   unw_get_reg(&cursor, UNW_REG_SP, &fp);\
-  printf("callback %p\n", (void*)fp);\
+  if (debug_on) {\
+    printf("callback %p\n", (void*)fp);\
+  }\
   while (tmp_level > 0 && unw_step(&cursor) > 0)\
   {\
     unw_get_reg(&cursor, UNW_REG_SP, &fp);\
-    printf("callback %p\n", (void*)fp);\
+    if (debug_on) {\
+      printf("callback %p\n", (void*)fp);\
+    }\
     tmp_level--;\
   }\
   if(tmp_level == 0)\
-    printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n", ompt_get_thread_data()->value, level, (void*)fp);\
-  else\
-    printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n", ompt_get_thread_data()->value, level, NULL);\
+    if (debug_on) {\
+      printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n", ompt_get_thread_data()->value, level, (void*)fp);\
+    }\
+  elsei {\
+    if (debug_on) {\
+      printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n", ompt_get_thread_data()->value, level, NULL);\
+    }\
+  }\
 } while(0)
 */
 
 #define print_frame(level)\
 do {\
-  printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n", ompt_get_thread_data()->value, level, __builtin_frame_address(level));\
+  if (debug_on) {\
+    printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n", ompt_get_thread_data()->value, level, __builtin_frame_address(level));\
+  }\
 } while(0)
 
 static void print_current_address()
@@ -118,7 +145,10 @@ static void print_current_address()
       address = array[real_level-1]-5;
     else
       address = NULL;
-  printf("%" PRIu64 ": current_address=%p\n", ompt_get_thread_data()->value, address);
+
+  if (debug_on) {
+    printf("%" PRIu64 ": current_address=%p\n", ompt_get_thread_data()->value, address);
+  }
 }
 
 static void
@@ -132,19 +162,29 @@ on_ompt_callback_mutex_acquire(
   switch(kind)
   {
     case ompt_mutex_lock:
-      printf("%" PRIu64 ": ompt_event_wait_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_wait_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     case ompt_mutex_nest_lock:
-      printf("%" PRIu64 ": ompt_event_wait_nest_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_wait_nest_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     case ompt_mutex_critical:
-      printf("%" PRIu64 ": ompt_event_wait_critical: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_wait_critical: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     case ompt_mutex_atomic:
-      printf("%" PRIu64 ": ompt_event_wait_atomic: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_wait_atomic: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     case ompt_mutex_ordered:
-      printf("%" PRIu64 ": ompt_event_wait_ordered: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_wait_ordered: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     default:
       break;
@@ -160,19 +200,29 @@ on_ompt_callback_mutex_acquired(
   switch(kind)
   {
     case ompt_mutex_lock:
-      printf("%" PRIu64 ": ompt_event_acquired_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_acquired_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_nest_lock:
-      printf("%" PRIu64 ": ompt_event_acquired_nest_lock_first: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_acquired_nest_lock_first: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_critical:
-      printf("%" PRIu64 ": ompt_event_acquired_critical: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_acquired_critical: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_atomic:
-      printf("%" PRIu64 ": ompt_event_acquired_atomic: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_acquired_atomic: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_ordered:
-      printf("%" PRIu64 ": ompt_event_acquired_ordered: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_acquired_ordered: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     default:
       break;
@@ -188,19 +238,29 @@ on_ompt_callback_mutex_released(
   switch(kind)
   {
     case ompt_mutex_lock:
-      printf("%" PRIu64 ": ompt_event_release_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_release_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_nest_lock:
-      printf("%" PRIu64 ": ompt_event_release_nest_lock_last: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_release_nest_lock_last: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_critical:
-      printf("%" PRIu64 ": ompt_event_release_critical: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_release_critical: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_atomic:
-      printf("%" PRIu64 ": ompt_event_release_atomic: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_release_atomic: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_ordered:
-      printf("%" PRIu64 ": ompt_event_release_ordered: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_release_ordered: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     default:
       break;
@@ -216,10 +276,14 @@ on_ompt_callback_nest_lock(
   switch(endpoint)
   {
     case ompt_scope_begin:
-      printf("%" PRIu64 ": ompt_event_acquired_nest_lock_next: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_acquired_nest_lock_next: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_scope_end:
-      printf("%" PRIu64 ": ompt_event_release_nest_lock_prev: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_release_nest_lock_prev: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
   }
 }
@@ -240,7 +304,9 @@ on_ompt_callback_sync_region(
       {
         case ompt_sync_region_barrier:
           tracepoint(lttng_pinsight, barrier_begin, thread_id, parallel_data, task_data, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+	  }
           //print_ids(0);
           break;
         case ompt_sync_region_taskwait:
@@ -256,7 +322,9 @@ on_ompt_callback_sync_region(
       {
         case ompt_sync_region_barrier:
           tracepoint(lttng_pinsight, barrier_end, thread_id, parallel_data, task_data, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
+	  }
           break;
         case ompt_sync_region_taskwait:
           tracepoint(lttng_pinsight, taskwait_end, thread_id, parallel_data, task_data, codeptr_ra);
@@ -285,7 +353,9 @@ on_ompt_callback_sync_region_wait(
       {
         case ompt_sync_region_barrier:
           tracepoint(lttng_pinsight, barrier_wait_begin, thread_id, parallel_data, task_data, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_wait_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_wait_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+	  }
           break;
         case ompt_sync_region_taskwait:
           tracepoint(lttng_pinsight, taskwait_wait_begin, thread_id, parallel_data, task_data, codeptr_ra);
@@ -300,7 +370,9 @@ on_ompt_callback_sync_region_wait(
       {
         case ompt_sync_region_barrier:
           tracepoint(lttng_pinsight, barrier_wait_end, thread_id, parallel_data, task_data, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_wait_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_wait_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", return_address=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
+	  }
           break;
         case ompt_sync_region_taskwait:
           tracepoint(lttng_pinsight, taskwait_wait_end, thread_id, parallel_data, task_data, codeptr_ra);
@@ -318,7 +390,9 @@ on_ompt_event_control(
   uint64_t command,
   uint64_t modifier)
 {
-  printf("%" PRIu64 ": ompt_event_control: command=%" PRIu64 ", modifier=%" PRIu64 "\n", ompt_get_thread_data()->value, command, modifier);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_control: command=%" PRIu64 ", modifier=%" PRIu64 "\n", ompt_get_thread_data()->value, command, modifier);
+  }
 }
 
 static void
@@ -326,7 +400,9 @@ on_ompt_callback_flush(
     ompt_data_t *thread_data,
     const void *codeptr_ra)
 {
-  printf("%" PRIu64 ": ompt_event_flush: codeptr_ra=%p\n", thread_data->value, codeptr_ra);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_flush: codeptr_ra=%p\n", thread_data->value, codeptr_ra);
+  }
 }
 
 static void
@@ -353,7 +429,9 @@ on_ompt_callback_cancel(
   else if(flags & ompt_cancel_discarded_task)
     second_flag_value = ompt_cancel_flag_t_values[6];
     
-  printf("%" PRIu64 ": ompt_event_cancel: task_data=%" PRIu64 ", flags=%s|%s=%" PRIu32 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, first_flag_value, second_flag_value, flags,  codeptr_ra);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_cancel: task_data=%" PRIu64 ", flags=%s|%s=%" PRIu32 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, first_flag_value, second_flag_value, flags,  codeptr_ra);
+  }
 }
 
 // Note: Obsoleted in TR7, as it was weird/impossible to implement correctly.
@@ -393,11 +471,15 @@ on_ompt_callback_implicit_task(
     case ompt_scope_begin:
       task_data->value = ompt_get_unique_id();
       tracepoint(lttng_pinsight, implicit_task_begin, thread_id, parallel_data, task_data, team_size, thread_num);
-      //printf("%" PRIu64 ": ompt_event_implicit_task_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", team_size=%" PRIu32 ", thread_num=%" PRIu32 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, team_size, thread_num);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_implicit_task_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", team_size=%" PRIu32 ", thread_num=%" PRIu32 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, team_size, thread_num);
+      }
       break;
     case ompt_scope_end:
       tracepoint(lttng_pinsight, implicit_task_end, thread_id, parallel_data, task_data, team_size, thread_num);
-      //printf("%" PRIu64 ": ompt_event_implicit_task_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", team_size=%" PRIu32 ", thread_num=%" PRIu32 "\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, team_size, thread_num);
+      if (debug_on) {
+	printf("%" PRIu64 ": ompt_event_implicit_task_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", team_size=%" PRIu32 ", thread_num=%" PRIu32 "\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, team_size, thread_num);
+      }
       break;
   }
 }
@@ -413,10 +495,14 @@ on_ompt_callback_lock_init(
   switch(kind)
   {
     case ompt_mutex_lock:
-      printf("%" PRIu64 ": ompt_event_init_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_init_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     case ompt_mutex_nest_lock:
-      printf("%" PRIu64 ": ompt_event_init_nest_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_init_nest_lock: wait_id=%" PRIu64 ", hint=%" PRIu32 ", impl=%" PRIu32 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, hint, impl, codeptr_ra);
+      }
       break;
     default:
       break;
@@ -432,10 +518,14 @@ on_ompt_callback_lock_destroy(
   switch(kind)
   {
     case ompt_mutex_lock:
-      printf("%" PRIu64 ": ompt_event_destroy_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_destroy_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     case ompt_mutex_nest_lock:
-      printf("%" PRIu64 ": ompt_event_destroy_nest_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_destroy_nest_lock: wait_id=%" PRIu64 ", return_address=%p \n", ompt_get_thread_data()->value, wait_id, codeptr_ra);
+      }
       break;
     default:
       break;
@@ -459,7 +549,9 @@ on_ompt_callback_work(
       {
         case ompt_work_loop:
           tracepoint(lttng_pinsight, work_loop_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_loop_begin: parallel_id=%" PRIu64 ", parent_task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_loop_begin: parallel_id=%" PRIu64 ", parent_task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+	  }
           break;
         case ompt_work_sections:
           tracepoint(lttng_pinsight, work_sections_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
@@ -467,11 +559,15 @@ on_ompt_callback_work(
           break;
         case ompt_work_single_executor:
           tracepoint(lttng_pinsight, work_single_executor_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_single_in_block_begin: parallel_id=%" PRIu64 ", parent_task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_single_in_block_begin: parallel_id=%" PRIu64 ", parent_task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+	  }
           break;
         case ompt_work_single_other:
           tracepoint(lttng_pinsight, work_single_other_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_single_others_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_single_others_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+	  }
           break;
         case ompt_work_workshare:
           tracepoint(lttng_pinsight, work_workshare_begin, thread_id, parallel_data, task_data, count, codeptr_ra);
@@ -492,7 +588,9 @@ on_ompt_callback_work(
       {
         case ompt_work_loop:
           tracepoint(lttng_pinsight, work_loop_end, thread_id, parallel_data, task_data, count, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_loop_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_loop_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+	  }
           break;
         case ompt_work_sections:
           tracepoint(lttng_pinsight, work_sections_end, thread_id, parallel_data, task_data, count, codeptr_ra);
@@ -500,11 +598,15 @@ on_ompt_callback_work(
           break;
         case ompt_work_single_executor:
           tracepoint(lttng_pinsight, work_single_executor_end, thread_id, parallel_data, task_data, count, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_single_in_block_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_single_in_block_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+	  }
           break;
         case ompt_work_single_other:
           tracepoint(lttng_pinsight, work_single_other_end, thread_id, parallel_data, task_data, count, codeptr_ra);
-          //printf("%" PRIu64 ": ompt_event_single_others_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+          if (debug_on) {
+            printf("%" PRIu64 ": ompt_event_single_others_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", workshare_function=%p, count=%" PRIu64 "\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra, count);
+	  }
           break;
         case ompt_work_workshare:
           tracepoint(lttng_pinsight, work_workshare_end, thread_id, parallel_data, task_data, count, codeptr_ra);
@@ -535,11 +637,15 @@ on_ompt_callback_master(
   {
     case ompt_scope_begin:
       tracepoint(lttng_pinsight, master_begin, thread_id, parallel_data, task_data, codeptr_ra);
-      //printf("%" PRIu64 ": ompt_event_master_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_master_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+      }
       break;
     case ompt_scope_end:
       tracepoint(lttng_pinsight, master_end, thread_id, parallel_data, task_data, codeptr_ra);
-      //printf("%" PRIu64 ": ompt_event_master_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+      if (debug_on) {
+        printf("%" PRIu64 ": ompt_event_master_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+      }
       break;
   }
 }
@@ -558,7 +664,9 @@ on_ompt_callback_parallel_begin(
   parallel_data->value = ompt_get_unique_id();
   int thread_id = get_global_thread_num();
   tracepoint(lttng_pinsight, parallel_begin, thread_id, parent_task_frame, parallel_data, requested_parallelism, codeptr_ra);
-  //printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_parallelism=%" PRIu32 ", parallel_function=%p\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_runtime_frame, parent_task_frame->reenter_runtime_frame, parallel_data->value, requested_parallelism, codeptr_ra);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_parallelism=%" PRIu32 ", parallel_function=%p\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_frame, parent_task_frame->enter_frame, parallel_data->value, requested_parallelism, codeptr_ra);
+  }
 }
 
 // TODO: Add printf for `flag` parameter.
@@ -571,7 +679,9 @@ on_ompt_callback_parallel_end(
 {
   int thread_id = get_global_thread_num();
   tracepoint(lttng_pinsight, parallel_end, thread_id, parallel_data, task_data, codeptr_ra);
-  //printf("%" PRIu64 ": ompt_event_parallel_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_parallel_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+  }
 }
 
 // TODO: Add printf for `flag` parameter.
@@ -585,7 +695,9 @@ on_ompt_callback_task_create(
     const void *codeptr_ra)               /* pointer to outlined function */
 {
   new_task_data->value = ompt_get_unique_id();
-  printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.enter=%p, new_task_id=%" PRIu64 ", parallel_function=%p, has_dependences=%s\n", ompt_get_thread_data()->value, parent_task_data ? parent_task_data->value : 0, parent_frame ? parent_frame->exit_frame : NULL, parent_frame ? parent_frame->enter_frame : NULL, new_task_data->value, codeptr_ra, has_dependences ? "yes" : "no");
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.enter=%p, new_task_id=%" PRIu64 ", parallel_function=%p, has_dependences=%s\n", ompt_get_thread_data()->value, parent_task_data ? parent_task_data->value : 0, parent_frame ? parent_frame->exit_frame : NULL, parent_frame ? parent_frame->enter_frame : NULL, new_task_data->value, codeptr_ra, has_dependences ? "yes" : "no");
+  }
 }
 
 static void
@@ -594,10 +706,14 @@ on_ompt_callback_task_schedule(
     ompt_task_status_t prior_task_status,
     ompt_data_t *second_task_data)
 {
-  printf("%" PRIu64 ": ompt_event_task_schedule: first_task_id=%" PRIu64 ", second_task_id=%" PRIu64 ", prior_task_status=%s=%d\n", ompt_get_thread_data()->value, first_task_data->value, second_task_data->value, ompt_task_status_t_values[prior_task_status], prior_task_status);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_task_schedule: first_task_id=%" PRIu64 ", second_task_id=%" PRIu64 ", prior_task_status=%s=%d\n", ompt_get_thread_data()->value, first_task_data->value, second_task_data->value, ompt_task_status_t_values[prior_task_status], prior_task_status);
+  }
   if(prior_task_status == ompt_task_complete)
   {
-    printf("%" PRIu64 ": ompt_event_task_end: task_id=%" PRIu64 "\n", ompt_get_thread_data()->value, first_task_data->value);
+    if (debug_on) {
+      printf("%" PRIu64 ": ompt_event_task_end: task_id=%" PRIu64 "\n", ompt_get_thread_data()->value, first_task_data->value);
+    }
   }
 }
 
@@ -607,7 +723,10 @@ on_ompt_callback_task_dependences(
   const ompt_task_dependence_t *deps,
   int ndeps)
 {
-  printf("%" PRIu64 ": ompt_event_task_dependences: task_id=%" PRIu64 ", deps=%p, ndeps=%d\n", ompt_get_thread_data()->value, task_data->value, (void *)deps, ndeps);
+
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_task_dependences: task_id=%" PRIu64 ", deps=%p, ndeps=%d\n", ompt_get_thread_data()->value, task_data->value, (void *)deps, ndeps);
+  }
 }
 
 static void
@@ -615,7 +734,9 @@ on_ompt_callback_task_dependence(
   ompt_data_t *first_task_data,
   ompt_data_t *second_task_data)
 {
-  printf("%" PRIu64 ": ompt_event_task_dependence_pair: first_task_id=%" PRIu64 ", second_task_id=%" PRIu64 "\n", ompt_get_thread_data()->value, first_task_data->value, second_task_data->value);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_task_dependence_pair: first_task_id=%" PRIu64 ", second_task_id=%" PRIu64 "\n", ompt_get_thread_data()->value, first_task_data->value, second_task_data->value);
+  }
 }
 
 static void
@@ -626,7 +747,9 @@ on_ompt_callback_thread_begin(
   int thread_id = get_global_thread_num();
   thread_data->value = ompt_get_unique_id();
   tracepoint(lttng_pinsight, thread_begin, thread_id, thread_data);
-  //printf("%" PRIu64 ": ompt_event_thread_begin: thread_type=%s=%d, thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, ompt_thread_type_t_values[thread_type], thread_type, thread_data->value);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_thread_begin: thread_type=%s=%d, thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, ompt_thread_type_t_values[thread_type], thread_type, thread_data->value);
+  }
 }
 
 static void
@@ -635,8 +758,10 @@ on_ompt_callback_thread_end(
 {
   int thread_id = get_global_thread_num();
   tracepoint(lttng_pinsight, thread_end, thread_id, thread_data);
-  //printf("%" PRIu64 ": ompt_event_thread_end: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data->value);
-  //printf("%" PRIu64 ": ompt_event_thread_end: thread_type=%s=%d, thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, ompt_thread_type_t_values[thread_type], thread_type, thread_data->value);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_thread_end: thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, thread_data->value);
+    //printf("%" PRIu64 ": ompt_event_thread_end: thread_type=%s=%d, thread_id=%" PRIu64 "\n", ompt_get_thread_data()->value, ompt_thread_type_t_values[thread_type], thread_type, thread_data->value);
+  }
 }
 
 static int
@@ -646,7 +771,9 @@ on_ompt_callback_control_tool(
   void *arg,
   const void *codeptr_ra)
 {
-  printf("%" PRIu64 ": ompt_event_control_tool: command=%" PRIu64 ", modifier=%" PRIu64 ", arg=%p, codeptr_ra=%p\n", ompt_get_thread_data()->value, command, modifier, arg, codeptr_ra);
+  if (debug_on) {
+    printf("%" PRIu64 ": ompt_event_control_tool: command=%" PRIu64 ", modifier=%" PRIu64 ", arg=%p, codeptr_ra=%p\n", ompt_get_thread_data()->value, command, modifier, arg, codeptr_ra);
+  }
   return 0; //success
 }
 
@@ -654,8 +781,11 @@ on_ompt_callback_control_tool(
 do {                                                          \
   type f_##name = &on_##name;                                 \
   if (ompt_set_callback(name, (ompt_callback_t)f_##name) ==   \
-      ompt_set_never)                                         \
-    printf("0: Could not register callback '" #name "'\n");   \
+      ompt_set_never) {                                       \
+    if (debug_on) {                                           \
+      printf("0: Could not register callback '" #name "'\n"); \
+    }                                                         \
+  }                                                           \
 } while(0)
 
 #define register_callback(name) register_callback_t(name, name##_t)
@@ -699,7 +829,13 @@ int ompt_initialize(
   register_callback(ompt_callback_task_dependence);
   register_callback(ompt_callback_thread_begin);
   register_callback(ompt_callback_thread_end);
-  printf("0: NULL_POINTER=%p\n", NULL);
+  if (debug_on) {
+    printf("0: NULL_POINTER=%p\n", NULL);
+  }
+
+  // Query environment variables to enable/dsiable debug printouts.
+  debug_on = env_get_long(PINSIGHT_DEBUG_ENABLE, PINSIGHT_DEBUG_ENABLE_DEFAULT);
+
   return 1; //success
 }
 
