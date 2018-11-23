@@ -113,6 +113,11 @@ int rapl_sysfs_read_energy(long long *dest, int package, int subdomain) {
   return 0;
 }
 
+// Read across all RAPL subdomains.
+int rapl_sysfs_discover_valid(void) {
+  detect_packages();  // Only really need to do this for now.
+  return 0;
+}
 
 // 0th index is for package validity.
 // 1th index onward is for subdomain validity.
