@@ -52,6 +52,11 @@ int rapl_sysfs_read_energy(long long *dest, int package, int subdomain);
 //   int valid[MAX_PACKAGES][NUM_RAPL_DOMAINS];
 int rapl_sysfs_enumerate_valid(int valid[][NUM_RAPL_DOMAINS]);
 
+// Reads across all RAPL packages on the system.
+// Requires "dest" 1D array to take the form:
+//   long long energy_values[MAX_PACKAGES];
+int rapl_sysfs_read_packages(long long dest[]);
+
 // 0th index is for package energy.
 // 1th index onward is for subdomain energy.
 // Read across all RAPL subdomains efficiently.
