@@ -35,6 +35,9 @@ static char rapl_domain_names[NUM_RAPL_DOMAINS][30] = {
     "energy-psys",
 };
 
+static int valid[MAX_PACKAGES][NUM_RAPL_DOMAINS];
+
+
 // Attempts a read of a single Sysfs RAPL domain name.
 // If the top-level package is to be accessed, use -1 for subdomain.
 // Returns: 0 for success, -1 for failure.
@@ -44,6 +47,9 @@ int rapl_sysfs_read_name(char* dest, int package, int subdomain);
 // If the top-level package is to be accessed, use -1 for subdomain.
 // Returns: 0 for success, -1 for failure.
 int rapl_sysfs_read_energy(long long *dest, int package, int subdomain);
+
+// Read across all RAPL subdomains, and record which are valid.
+int rapl_sysfs_discover_valid(void);
 
 // 0th index is for package validity.
 // 1th index onward is for subdomain validity.
