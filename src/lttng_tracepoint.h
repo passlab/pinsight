@@ -22,7 +22,10 @@ TRACEPOINT_EVENT(
         ompt_data_t *,        parallel_data,
         uint32_t,             requested_team_size,
         const void *,         codeptr_ra,
-        long long int,        energy
+        long long int,        pkg_energy0,
+        long long int,        pkg_energy1,
+        long long int,        pkg_energy2,
+        long long int,        pkg_energy3
     ),
     TP_FIELDS(
         ctf_integer(int, gtid, gtid)
@@ -32,7 +35,10 @@ TRACEPOINT_EVENT(
         ctf_integer_hex(long int, parallel_id, parallel_data->value)
         ctf_integer(int, team_size, requested_team_size)
         ctf_integer_hex(long int, codeptr_ra, codeptr_ra)
-        ctf_integer(long long int, pkg_energy, energy)
+        ctf_integer(long long int, pkg_energy0, pkg_energy0)
+        ctf_integer(long long int, pkg_energy1, pkg_energy1)
+        ctf_integer(long long int, pkg_energy2, pkg_energy2)
+        ctf_integer(long long int, pkg_energy3, pkg_energy3)
     )
 )
 
@@ -44,14 +50,20 @@ TRACEPOINT_EVENT(
         ompt_data_t *, parallel_data,
         ompt_data_t *, task_data,
         const void *,  codeptr_ra,
-        long long int, energy
+        long long int, pkg_energy0,
+        long long int, pkg_energy1,
+        long long int, pkg_energy2,
+        long long int, pkg_energy3
     ),
     TP_FIELDS(
         ctf_integer(int, gtid, gtid)
         ctf_integer_hex(long int, parallel_id, parallel_data->value)
         ctf_integer_hex(long int, task_id, task_data->value)
         ctf_integer_hex(long int, codeptr_ra, codeptr_ra)
-        ctf_integer(long long int, pkg_energy, energy)
+        ctf_integer(long long int, pkg_energy0, pkg_energy0)
+        ctf_integer(long long int, pkg_energy1, pkg_energy1)
+        ctf_integer(long long int, pkg_energy2, pkg_energy2)
+        ctf_integer(long long int, pkg_energy3, pkg_energy3)
     )
 )
 
@@ -67,7 +79,10 @@ TRACEPOINT_EVENT(
             ompt_data_t *,     task_data,                                      \
             unsigned long int, count,                                          \
             const void *,      codeptr_ra,                                     \
-            long long int,     energy                                          \
+            long long int,     pkg_energy0,                                    \
+            long long int,     pkg_energy1,                                    \
+            long long int,     pkg_energy2,                                    \
+            long long int,     pkg_energy3                                     \
         ),                                                                     \
         TP_FIELDS(                                                             \
             ctf_integer(int, gtid, gtid)                                       \
@@ -75,7 +90,10 @@ TRACEPOINT_EVENT(
             ctf_integer_hex(long int, task_id, task_data->value)               \
             ctf_integer(unsigned long int, count, count)                       \
             ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-            ctf_integer(long long int, pkg_energy, energy)                     \
+            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
+            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
+            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
+            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
         )                                                                      \
     )
 
@@ -105,14 +123,20 @@ TRACEPOINT_EVENT_WORK(work_taskloop_end)
             ompt_data_t *, parallel_data,                                      \
             ompt_data_t *, task_data,                                          \
             const void *,  codeptr_ra,                                         \
-            long long int, energy                                              \
+            long long int, pkg_energy0,                                        \
+            long long int, pkg_energy1,                                        \
+            long long int, pkg_energy2,                                        \
+            long long int, pkg_energy3                                         \
         ),                                                                     \
         TP_FIELDS(                                                             \
             ctf_integer(int, gtid, gtid)                                       \
             ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
             ctf_integer_hex(long int, task_id, task_data->value)               \
             ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-            ctf_integer(long long int, pkg_energy, energy)                     \
+            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
+            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
+            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
+            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
         )                                                                      \
     )
 
@@ -131,7 +155,10 @@ TRACEPOINT_EVENT_MASTER(master_end)
             ompt_data_t *, task_data,                                          \
             unsigned int,  team_size,                                          \
             unsigned int,  thread_num,                                         \
-            long long int, energy                                              \
+            long long int, pkg_energy0,                                        \
+            long long int, pkg_energy1,                                        \
+            long long int, pkg_energy2,                                        \
+            long long int, pkg_energy3                                         \
         ),                                                                     \
         TP_FIELDS(                                                             \
             ctf_integer(int, gtid, gtid)                                       \
@@ -139,7 +166,10 @@ TRACEPOINT_EVENT_MASTER(master_end)
             ctf_integer_hex(long int, task_id, task_data->value)               \
             ctf_integer(int, team_size, team_size)                             \
             ctf_integer_hex(int, thread_num, thread_num)                       \
-            ctf_integer(long long int, pkg_energy, energy)                     \
+            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
+            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
+            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
+            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
         )                                                                      \
     )
 
@@ -155,14 +185,20 @@ TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_end)
             ompt_data_t *, parallel_data,                                      \
             ompt_data_t *, task_data,                                          \
             const void *,  codeptr_ra,                                         \
-            long long int, energy                                              \
+            long long int, pkg_energy0,                                        \
+            long long int, pkg_energy1,                                        \
+            long long int, pkg_energy2,                                        \
+            long long int, pkg_energy3                                         \
         ),                                                                     \
         TP_FIELDS(                                                             \
             ctf_integer(int, gtid, gtid)                                       \
             ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
             ctf_integer_hex(long int, task_id, task_data->value)               \
             ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-            ctf_integer(long long int, pkg_energy, energy)                     \
+            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
+            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
+            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
+            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
         )                                                                      \
     )
 
@@ -188,12 +224,18 @@ TRACEPOINT_EVENT_SYNC(taskgroup_wait_end)
         TP_ARGS(                                                               \
             int, gtid,                                                         \
             ompt_data_t *, thread_data,                                        \
-            long long int, energy                                              \
+            long long int, pkg_energy0,                                        \
+            long long int, pkg_energy1,                                        \
+            long long int, pkg_energy2,                                        \
+            long long int, pkg_energy3                                         \
         ),                                                                     \
         TP_FIELDS(                                                             \
             ctf_integer(int, gtid, gtid)                                       \
             ctf_integer_hex(long int, thread_data_id, thread_data->value)      \
-            ctf_integer(long long int, pkg_energy, energy)                     \
+            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
+            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
+            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
+            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
         )                                                                      \
     )
 
