@@ -108,11 +108,11 @@ The resulting trace files will be located at `/tmp/ompt-trace`, and can be loade
 
 This repo comes with a few Python scripts which can dump program statistics into CSV format for analysis.
 
-### Per-thread per-region
+#### Per-thread per-region
 
     python3 python/per_thread_per_region.py /tmp/ompt-jacobi/ust/uid/0/64-bit/ 0 > per-region.csv
 
-### Whole-program per-thread
+#### Whole-program per-thread
 
     python3 python/per_thread.py /tmp/ompt-jacobi/ust/uid/0/64-bit/ 0 > per-thread.csv
 
