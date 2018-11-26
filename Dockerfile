@@ -38,3 +38,9 @@ RUN git clone https://github.com/llvm-mirror/openmp.git && \
 RUN cd openmp-build && \
     make && \
     make install
+
+COPY . pinsight
+
+RUN cd pinsight && \
+    make && \
+    make test
