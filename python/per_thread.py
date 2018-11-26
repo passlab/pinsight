@@ -116,9 +116,9 @@ if __name__ == "__main__":
     # Output CSV column headers.
     header = [
         "thread_id",
-        "total execute time",
-        "total overhead",
-        "total energy",
+        "total_execute_time",
+        "total_overhead",
+        "total_energy",
     ]
 
     # Write results to stdout.

@@ -186,10 +186,10 @@ if __name__ == "__main__":
     header = [
         "thread_id",
         "codeptr_ra",
-        "number of runs",
-        "total execute time",
-        "total overhead",
-        "total energy",
+        "num_runs",
+        "total_execute_time",
+        "total_overhead",
+        "total_energy",
     ]
 
     # Write results to stdout.
