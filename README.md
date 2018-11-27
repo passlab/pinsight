@@ -9,6 +9,27 @@ The core of this project is a shared library called `pinsight`, which generates 
 
 ### Install
 
+#### Docker install
+
+Docker makes it easy to build the project and its dependencies, and incurs only minimal overheads.
+The commands below show how to create the image, and then get a container up and running.
+
+    sudo docker build -f Dockerfile -t passlab-pinsight
+    sudo docker create --name AAA --privileged passlab-pinsight
+
+The `docker build` command creates an *image* called `passlab-pinsight`.
+The `docker create` command creates a *container* named `AAA`, based on the `passlab-pinsight` image.
+
+We need a privileged container to ensure that access to the underlying hardware isn't an issue.
+(If this requirement can be dropped at a later time, we will drop it.)
+
+To get a terminal open on the example container (for experimentation), try:
+
+    sudo docker exect -it AAA /bin/bash
+
+
+#### Manual install
+
 To be able to build/run the OMPT event tracing library, you will need to install several dependencies.
 
 For Ubuntu 16.04 systems:
