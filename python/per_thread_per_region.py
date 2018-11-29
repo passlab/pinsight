@@ -7,6 +7,7 @@ import sys
 import csv
 import copy
 from pprint import pprint
+from collections import defaultdict
 
 
 #---------------------------------------------------------
@@ -45,6 +46,13 @@ def reverse_mapping(mapping: dict):
     return out
 
 
+# Create a new TraceCollection object (required for new events iterator).
+def get_trace_collection(trace_path):
+    trace_collection = babeltrace.TraceCollection()
+    trace_collection.add_trace(trace_path, 'ctf')
+    return trace_collection
+
+
 #---------------------------------------------------------
 # Application functions
 
@@ -64,6 +72,27 @@ def add_durations(events: list):
     return events
 
 
+# Generator function that allows filtering events from the events
+# iterator by their `gtid` fields. Also adds `duration` tags.
+# events: babeltrace.TraceCollection.events generator
+def thread_events(thread_id: int, events):
+    prev = None
+    # Queue up first event in the stream.
+    for event in events:
+        if event["gtid"] == thread_id:
+            prev = event_as_dict(event)
+            break
+    # For all events thereafter, add on the duration field, and yield.
+    for event in events:
+        if event["gtid"] == thread_id:
+            prev["duration"] = event.timestamp - prev["timestamp"]
+            yield prev
+            prev = event_as_dict(event)
+    # HACK: Return last event with hard-coded duration.
+    prev["duration"] = 1
+    return prev
+
+
 # Use on master thread to generate mapping between `codeptr_ra` values and parallel region ids.
 def gen_codeptr_map(events: list):
     out = {}
@@ -79,24 +108,31 @@ def gen_codeptr_map(events: list):
 
 
 # The function that actually generates per-region statistics.
-def gen_stats(events: list, codeptr_map: dict):
+def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set)):
     # Output variables.
-    region_type = {k: 0 for k in codeptr_map}
-    region_num_runs = {k: 0 for k in codeptr_map}
-    region_total_exec_time = {k: 0 for k in codeptr_map}
-    region_total_overhead = {k: 0 for k in codeptr_map}
-    region_total_energy = {k: 0 for k in codeptr_map}
+    region_num_runs = defaultdict(int)
+    region_total_exec_time = defaultdict(int)
+    region_total_overhead = defaultdict(int)
+    region_total_energy = defaultdict(int)
     # Local state-tracking and helper variables.
     region_stack = []
-    mapping = reverse_mapping(codeptr_map)
+    mapping = reverse_mapping(codeptr_to_paridset)
     package_names = ["pkg_energy" + str(i) for i in range(0,4)]
-    gtid = events[0]["gtid"]  # DEBUG: helper variable for context.
+    #gtid = events[0]["gtid"]  # DEBUG: helper variable for context.
     seen = set()
     # Iterate across events.
     for event in events:
+        codeptr_ra = event.get("codeptr_ra")
         parallel_id = event.get("parallel_id")
+        if codeptr_ra is not None and parallel_id is not None:
+            # Ensure we're not looking at an "_end" event, and it's not a "work_single" event.
+            if codeptr_ra != 0 and parallel_id != 0 and "single" not in event["name"]:
+                codeptr_to_paridset[codeptr_ra].add(parallel_id)
+                mapping[parallel_id] = codeptr_ra
         if parallel_id is not None:
             # Ensure consistent codeptr value.
+            if parallel_id == 0 and len(region_stack) > 0:
+                parallel_id = region_stack[-1][2]
             codeptr_ra = mapping[parallel_id]
             seen.add(codeptr_ra)
             ts_cur = event["timestamp"]
@@ -105,7 +141,6 @@ def gen_stats(events: list, codeptr_map: dict):
             if event["name"].endswith("_begin") and codeptr_ra != 0:
                 if event["name"] == "lttng_pinsight:implicit_task_begin":
                     event_type = event["name"][:-6]  # Name - "_begin". Used for prefix matching.
-                    region_type[codeptr_ra] = event_type
                     region_stack.append([event_type, codeptr_ra, parallel_id, event["timestamp"]] + [event[x] for x in package_names])
 
             # Mark event as overhead if it's not a work-type event.
@@ -132,55 +167,56 @@ def gen_stats(events: list, codeptr_map: dict):
                 region_total_energy[codeptr_ra] += sum(energy)
         # Implicit else: ignore non parallel region events.
     #pprint(region_stack)  # DEBUG
+
+    # Corrects accounting on num_runs when last trace records are dropped.
+    if len(region_stack) > 0:
+        for item in region_stack:
+            eprint("Warning: Correcting number of runs for unfinished region. {}".format(item))
+            codeptr_ra = item[1]
+            region_num_runs[codeptr_ra] += 1
+
     out = {
         k: {
-            "type": region_type[k],
             "num_runs": region_num_runs[k],
             "total_exec_time": region_total_exec_time[k],
             "total_overhead": region_total_overhead[k],
             "total_energy": region_total_energy[k],
         } for k in list(seen)
     }
-    return out
+    return out, codeptr_to_paridset
 
 
 if __name__ == "__main__":
     # Check for right number of arguments.
-    if len(sys.argv) < 3:
-        usage = "Usage:\n  python3 per_thread_per_region.py path/to/trace MASTER_THREAD_ID"
+    if len(sys.argv) < 4:
+        usage = "Usage:\n  python3 per_thread_per_region.py path/to/trace NUM_TRACE_THREADS MASTER_THREAD_ID"
         eprint("Error: Too few arguments.\n"+usage)
         exit(1)
  
     # Get the trace path from the first command line argument.
     trace_path = sys.argv[1]
-    master_thread_id = int(sys.argv[2])
-
-    trace_collection = babeltrace.TraceCollection()
-    trace_collection.add_trace(trace_path, 'ctf')
+    threads_in_trace = list(range(0, int(sys.argv[2])))
+    master_thread_id = int(sys.argv[3])
 
     # Sort events by thread ID.
-    thread_event_map = {}
     last_ts = None
-    for event in trace_collection.events:
-        thread_id = event["gtid"]
-        # HACK: Use our converter function to get around event copying bug.
-        event_converted = event_as_dict(event)
-        # If this thread id hasn't been seen before, add it to the dictionary.
-        if thread_event_map.get(thread_id) is None:
-            thread_event_map[thread_id] = []
-        # Add event to the per-thread event list.
-        thread_event_map[thread_id].append(event_converted)
+    thread_stats = {k: {} for k in threads_in_trace}
 
-    # Add the duration tags to every thread's events.
-    for k in thread_event_map:
-        thread_event_map[k] = add_durations(thread_event_map[k])
+    # Build parallel region map off of master thread.
+    # Note: O(N) runtime; goes through all events once.
+    traces = get_trace_collection(trace_path)
+    # Chain generators together.
+    codeptr_to_paridset = defaultdict(set)
+    thread_stats[master_thread_id], codeptr_to_paridset = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset)
 
-    # Generate each thread's statistics per-region.
-    thread_stats = {k: {} for k in thread_event_map.keys()}
-    codeptr_map = gen_codeptr_map(thread_event_map[master_thread_id])
+    # TODO: Try doing this in parallel using the `multiprocessing` module.
     for k in thread_stats:
-        thread_stats[k] = gen_stats(thread_event_map[k], codeptr_map)
-    #pprint(thread_stats)  # DEBUG
+        # Skip the master thread; we just processed it.
+        if k == master_thread_id:
+            continue
+        # Do the work for everybody else, using the stuff from master.
+        traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
+        thread_stats[k], _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset)
 
     # Output CSV column headers.
     header = [
@@ -195,7 +231,7 @@ if __name__ == "__main__":
     # Write results to stdout.
     csvwriter = csv.writer(sys.stdout, delimiter=',')
     csvwriter.writerow(header)
-    for thread_id in thread_event_map.keys():
+    for thread_id in thread_stats:
         stats = thread_stats[thread_id]
         for codeptr_ra in stats:
             num_runs = stats[codeptr_ra]["num_runs"]
