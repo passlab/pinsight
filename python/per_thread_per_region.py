@@ -49,7 +49,7 @@ def reverse_mapping(mapping: dict):
 # Create a new TraceCollection object (required for new events iterator).
 def get_trace_collection(trace_path):
     trace_collection = babeltrace.TraceCollection()
-    trace_collection.add_trace(trace_path, 'ctf')
+    trace_collection.add_traces_recursive(trace_path, 'ctf')
     return trace_collection
 
 
