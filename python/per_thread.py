@@ -36,6 +36,13 @@ def event_as_dict(e):
     return out
 
 
+# Create a new TraceCollection object (required for new events iterator).
+def get_trace_collection(trace_path):
+    trace_collection = babeltrace.TraceCollection()
+    trace_collection.add_trace(trace_path, 'ctf')
+    return trace_collection
+
+
 #---------------------------------------------------------
 # Application functions
 
@@ -55,21 +62,52 @@ def add_durations(events: list):
     return events
 
 
+# Generator function that allows filtering events from the events
+# iterator by their `gtid` fields. Also adds `duration` tags.
+# events: babeltrace.TraceCollection.events generator
+def thread_events(thread_id: int, events):
+    prev = None
+    # Queue up first event in the stream.
+    for event in events:
+        if event["gtid"] == thread_id:
+            prev = event_as_dict(event)
+            break
+    # For all events thereafter, add on the duration field, and yield.
+    for event in events:
+        if event["gtid"] == thread_id:
+            prev["duration"] = event.timestamp - prev["timestamp"]
+            yield prev
+            prev = event_as_dict(event)
+    # HACK: Return last event with hard-coded duration.
+    prev["duration"] = 1
+    return prev
+
+
 # The function that actually generates per-thread statistics.
-def gen_stats(events: list):
-    total_exec_time = events[-1]["timestamp"] - events[0]["timestamp"]
+def gen_stats(events):
+    total_exec_time = 0
     total_overhead = 0
     total_energy = 0
+
+    start_event = next(events)
+    end_event = None
+
+    if start_event["name"] not in work_event_names:
+        total_overhead += start_event["duration"]
 
     # Figure out total overhead time by grinding through events linearly.
     for event in events:
         if event["name"] not in work_event_names:
             total_overhead += event["duration"]
+        end_event = event
+
+    # Figure out total execution time by timestamp differences.
+    total_exec_time = end_event["timestamp"] - start_event["timestamp"]
 
     # Figure out energy differences per-package and sum.
     package_names = ["pkg_energy" + str(i) for i in range(0,4)]
-    start_energy = [events[0][x] for x in package_names]
-    end_energy = [events[-1][x] for x in package_names]
+    start_energy = [start_event[x] for x in package_names]
+    end_energy = [end_event[x] for x in package_names]
     for i in range(0,4):
         total_energy += end_energy[i] - start_energy[i]
 
@@ -79,39 +117,20 @@ def gen_stats(events: list):
 if __name__ == "__main__":
     # Check for right number of arguments.
     if len(sys.argv) < 3:
-        usage = "Usage:\n  python3 per_thread.py path/to/trace MASTER_THREAD_ID"
+        usage = "Usage:\n  python3 per_thread.py path/to/trace NUM_TRACE_THREADS MASTER_THREAD_ID"
         eprint("Error: Too few arguments.\n"+usage)
         exit(1)
  
     # Get the trace path from the first command line argument.
     trace_path = sys.argv[1]
-    master_thread_id = int(sys.argv[2])
+    threads_in_trace = list(range(0, int(sys.argv[2])))
+    master_thread_id = int(sys.argv[3])
 
-    trace_collection = babeltrace.TraceCollection()
-    trace_collection.add_trace(trace_path, 'ctf')
-
-    # Sort events by thread ID.
-    thread_event_map = {}
-    last_ts = None
-    for event in trace_collection.events:
-        thread_id = event["gtid"]
-        # HACK: Use our converter function to get around event copying bug.
-        event_converted = event_as_dict(event)
-        # If this thread id hasn't been seen before, add it to the dictionary.
-        if thread_event_map.get(thread_id) is None:
-            thread_event_map[thread_id] = []
-        # Add event to the per-thread event list.
-        thread_event_map[thread_id].append(event_converted)
-
-    # Add the duration tags to every thread's events.
-    for k in thread_event_map:
-        thread_event_map[k] = add_durations(thread_event_map[k])
-
-    # Generate each thread's statistics per-region.
-    thread_stats = {k: [] for k in thread_event_map.keys()}
+    # TODO: Try doing this in parallel using the `multiprocessing` module.
+    thread_stats = {k: {} for k in threads_in_trace}
     for k in thread_stats:
-        thread_stats[k] = gen_stats(thread_event_map[k])
-    #pprint(thread_stats)  # DEBUG
+        traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
+        thread_stats[k] = gen_stats(thread_events(k, traces.events))
 
     # Output CSV column headers.
     header = [
@@ -124,7 +143,7 @@ if __name__ == "__main__":
     # Write results to stdout.
     csvwriter = csv.writer(sys.stdout, delimiter=',')
     csvwriter.writerow(header)
-    for thread_id in thread_event_map.keys():
+    for thread_id in thread_stats:
         total_exec, total_overhead, total_energy = thread_stats[thread_id]
         row = [thread_id, total_exec, total_overhead, total_energy]
         csvwriter.writerow(row)
