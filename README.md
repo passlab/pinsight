@@ -135,11 +135,19 @@ On a trace that had 32 threads:
 
     python3 python/per_thread_per_region.py /tmp/ompt-jacobi/ 32 > per-region.csv
 
+To run event processing in parallel, use the `-j <NUM_PROCESSES>` flag:
+
+    python3 python/per_thread_per_region.py -j 8 /tmp/ompt-jacobi/ 32 > per-region.csv
+
 #### Whole-program per-thread
 
 On a trace that had 32 threads:
 
     python3 python/per_thread.py /tmp/ompt-jacobi/ 32 > per-thread.csv
+
+To run event processing in parallel, use the `-j <NUM_PROCESSES>` flag:
+
+    python3 python/per_thread.py -j 8 /tmp/ompt-jacobi/ 32 > per-region.csv
 
 
 -----
