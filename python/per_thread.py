@@ -6,6 +6,7 @@ import babeltrace
 import sys
 import csv
 import copy
+from argparse import ArgumentParser
 from pprint import pprint
 
 
@@ -17,6 +18,8 @@ work_event_names = [
     "lttng_pinsight:implicit_task_begin",
     "lttng_pinsight:work_begin",
 ]
+
+description = "Per-thread (whole program) CSV generator script."
 
 
 #---------------------------------------------------------
@@ -115,16 +118,36 @@ def gen_stats(events):
 
 
 if __name__ == "__main__":
-    # Check for right number of arguments.
-    if len(sys.argv) < 3:
-        usage = "Usage:\n  python3 per_thread.py path/to/trace NUM_TRACE_THREADS MASTER_THREAD_ID"
-        eprint("Error: Too few arguments.\n"+usage)
-        exit(1)
- 
-    # Get the trace path from the first command line argument.
-    trace_path = sys.argv[1]
-    threads_in_trace = list(range(0, int(sys.argv[2])))
-    master_thread_id = int(sys.argv[3])
+    # Command line interface parser.
+    parser = ArgumentParser(description=description)
+
+    # Optional arguments.
+    parser.add_argument("-j", type=int,
+                            action="store",
+                            dest="num_procs",
+                            help="Number of parallel processes to use.")
+
+    parser.add_argument("--master", type=int,
+                        action="store",
+                        dest="master_thread_id",
+                        default=0,
+                        help="ID of the master thread.")
+
+    # Required arguments.
+    parser.add_argument("TRACE_PATH", type=str,
+                        action="store",
+                        help="Path to the LTTng trace data.")
+
+    parser.add_argument("THREADS_IN_TRACE", type=int,
+                        action="store",
+                        help="Number of threads in LTTng trace data.")
+
+    args = parser.parse_args()
+
+    # Use command line arguments.
+    trace_path = args.TRACE_PATH
+    threads_in_trace = list(range(0, int(args.THREADS_IN_TRACE)))
+    master_thread_id = args.master_thread_id
 
     # TODO: Try doing this in parallel using the `multiprocessing` module.
     thread_stats = {k: {} for k in threads_in_trace}
