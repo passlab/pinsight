@@ -9,6 +9,7 @@ import copy
 from argparse import ArgumentParser
 from pprint import pprint
 from collections import defaultdict
+from multiprocessing import Pool
 
 
 #---------------------------------------------------------
@@ -197,6 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("-j", type=int,
                             action="store",
                             dest="num_procs",
+                            default=1,
                             help="Number of parallel processes to use.")
 
     parser.add_argument("--master", type=int,
@@ -221,10 +223,9 @@ if __name__ == "__main__":
     threads_in_trace = list(range(0, int(args.THREADS_IN_TRACE)))
     master_thread_id = args.master_thread_id
 
-    # Sort events by thread ID.
-    last_ts = None
     thread_stats = {k: {} for k in threads_in_trace}
 
+    eprint("Info: Processing master thread.")
     # Build parallel region map off of master thread.
     # Note: O(N) runtime; goes through all events once.
     traces = get_trace_collection(trace_path)
@@ -232,14 +233,25 @@ if __name__ == "__main__":
     codeptr_to_paridset = defaultdict(set)
     thread_stats[master_thread_id], codeptr_to_paridset = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset)
 
-    # TODO: Try doing this in parallel using the `multiprocessing` module.
+    # Process per-thread event streams in parallel.
+    work_queue = []
     for k in thread_stats:
         # Skip the master thread; we just processed it.
         if k == master_thread_id:
             continue
         # Do the work for everybody else, using the stuff from master.
+        work_queue.append(k)
+
+    def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        thread_stats[k], _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset)
+        stats, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset)
+        return (k, stats)
+
+    eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE - 1))
+    with Pool(args.num_procs) as pool:
+        results = pool.map(process_events, work_queue)
+        for (k, stats) in results:
+            thread_stats[k] = stats
 
     # Output CSV column headers.
     header = [

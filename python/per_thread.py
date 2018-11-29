@@ -8,6 +8,7 @@ import csv
 import copy
 from argparse import ArgumentParser
 from pprint import pprint
+from multiprocessing import Pool
 
 
 #---------------------------------------------------------
@@ -125,6 +126,7 @@ if __name__ == "__main__":
     parser.add_argument("-j", type=int,
                             action="store",
                             dest="num_procs",
+                            default=1,
                             help="Number of parallel processes to use.")
 
     parser.add_argument("--master", type=int,
@@ -149,11 +151,20 @@ if __name__ == "__main__":
     threads_in_trace = list(range(0, int(args.THREADS_IN_TRACE)))
     master_thread_id = args.master_thread_id
 
-    # TODO: Try doing this in parallel using the `multiprocessing` module.
     thread_stats = {k: {} for k in threads_in_trace}
-    for k in thread_stats:
+
+    # Process per-thread event streams in parallel.
+    work_queue = threads_in_trace
+    def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        thread_stats[k] = gen_stats(thread_events(k, traces.events))
+        stats = gen_stats(thread_events(k, traces.events))
+        return (k, stats)
+
+    eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE))
+    with Pool(args.num_procs) as pool:
+        results = pool.map(process_events, work_queue)
+        for (k, stats) in results:
+            thread_stats[k] = stats
 
     # Output CSV column headers.
     header = [
