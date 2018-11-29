@@ -124,6 +124,17 @@ Once the application has run, we can tell LTTng to stop tracing:
 
 The resulting trace files will be located at `/tmp/ompt-trace`, and can be loaded into TraceCompass or Babeltrace for analysis.
 
+#### Enable/disable debug output
+
+On larger trace datasets, the debug printouts from PInsight can be quite massive.
+By default, these printouts are disabled for sake of disk usage.
+
+To enable the printouts, set the `PINSIGHT_DEBUG_ENABLE` environment variable to 1 before running a trace.
+
+Shell variable example:
+
+    export PINSIGHT_DEBUG_ENABLE=1
+    # Normal tracing stuff from here on...
 
 ### Analysis
 
