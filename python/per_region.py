@@ -15,11 +15,16 @@ from multiprocessing import Pool
 #---------------------------------------------------------
 # Global variables
 
-work_event_names = [
+events_of_interest = frozenset([
+    "lttng_pinsight:thread_begin",
+    "lttng_pinsight:thread_end",
     "lttng_pinsight:parallel_begin",
+    "lttng_pinsight:parallel_end",
     "lttng_pinsight:implicit_task_begin",
-    "lttng_pinsight:work_begin",
-]
+    "lttng_pinsight:implicit_task_end",
+    "lttng_pinsight:barrier_wait_begin",
+    "lttng_pinsight:barrier_wait_end",
+])
 
 description = "Per-thread per-region CSV generator script."
 
@@ -48,6 +53,21 @@ def reverse_mapping(mapping: dict):
         for parallel_id in v:
             out[parallel_id] = k
     return out
+
+
+def get_energy(event):
+    package_names = ["pkg_energy" + str(i) for i in range(0,4)]
+    return [event[x] for x in package_names]
+
+
+def compute_energy_diff(event_cur, event_prev):
+    return sum([(cur - prev) for (cur, prev) in
+                zip(get_energy(event_cur), get_energy(event_prev))])
+
+
+def verify_event_type(event, event_type):
+    if event["name"] != event_type:
+        eprint("Warning: Expected event of type {}, got event of type {} instead. {}".format(event_type, event["name"], event))
 
 
 # Create a new TraceCollection object (required for new events iterator).
@@ -112,71 +132,116 @@ def gen_codeptr_map(events: list):
 
 
 # The function that actually generates per-region statistics.
-def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set)):
+def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
     # Output variables.
     region_num_runs = defaultdict(int)
+
     region_total_exec_time = defaultdict(int)
     region_total_overhead = defaultdict(int)
-    region_total_energy = defaultdict(int)
+    region_total_idle = defaultdict(int)  # Time spent idling after region completes.
+
+    region_energy_total = defaultdict(int)
+    region_energy_overhead = defaultdict(int)
+    region_energy_idle = defaultdict(int)
+
     # Local state-tracking and helper variables.
+    is_master = False
+    master_last_barrier = None  # Timestamp of last barrier master saw. (Used for idle accounting.)
     region_stack = []
+    stack_parallel = []  # parallel_begin/end
+    stack_implicit = []  # implicit_task_begin/end
+    stack_barrier = []   # barrier_wait_begin/end
     mapping = reverse_mapping(codeptr_to_paridset)
-    package_names = ["pkg_energy" + str(i) for i in range(0,4)]
     #gtid = events[0]["gtid"]  # DEBUG: helper variable for context.
     seen = set()
     # Iterate across events.
     for event in events:
-        codeptr_ra = event.get("codeptr_ra")
-        parallel_id = event.get("parallel_id")
-        if codeptr_ra is not None and parallel_id is not None:
-            # Ensure we're not looking at an "_end" event, and it's not a "work_single" event.
-            if codeptr_ra != 0 and parallel_id != 0 and "single" not in event["name"]:
-                codeptr_to_paridset[codeptr_ra].add(parallel_id)
-                mapping[parallel_id] = codeptr_ra
-        if parallel_id is not None:
-            # Ensure consistent codeptr value.
-            if parallel_id == 0 and len(region_stack) > 0:
-                parallel_id = region_stack[-1][2]
+        # Skip events we don't care about.
+        if event["name"] not in events_of_interest:
+            continue
+        # Process events.
+        if   event["name"] == "lttng_pinsight:parallel_begin":
+            is_master = True  # Useful later for master-specific overhead accounting.
+            # Set mapping variables (this is the only place we should do this).
+            codeptr_ra = event["codeptr_ra"]
+            parallel_id = event["parallel_id"]
+            codeptr_to_paridset[codeptr_ra].add(parallel_id)
+            mapping[parallel_id] = codeptr_ra
+            #stack_parallel.append(event)
+            region_stack.append(event)
+        elif event["name"] == "lttng_pinsight:implicit_task_begin":
+            #stack_implicit.append(event)
+            region_stack.append(event)
+        elif event["name"] == "lttng_pinsight:barrier_wait_begin":
+            #stack_barrier.append(event)
+            region_stack.append(event)
+        # Master-specific tracking/measuring.
+        elif event["name"] == "lttng_pinsight:parallel_end":
+            #prev = stack_parallel.pop()
+            prev = region_stack.pop()
+            #verify_event_type(prev, "lttng_pinsight:parallel_begin")
+            assert(prev["name"] == "lttng_pinsight:parallel_begin")
+            codeptr_ra = prev["codeptr_ra"]
+            parallel_id = prev["parallel_id"]
+            seen.add(codeptr_ra)
+            splits[parallel_id] = event["timestamp"]  # Save where the overhead/idle breakover point is.
+            # Master's idle will be brief, and happens betwen barrier_wait_end and parallel_end.
+            region_total_idle[codeptr_ra] += event["timestamp"] - master_last_barrier
+            region_energy_idle[codeptr_ra] += compute_energy_diff(event, prev)
+        # Do majority of measurement.
+        elif event["name"] == "lttng_pinsight:implicit_task_end":
+            #prev = stack_implicit.pop()
+            prev = region_stack.pop()
+            assert(prev["name"] == "lttng_pinsight:implicit_task_begin")
+            #verify_event_type(prev, "lttng_pinsight:implicit_task_begin")
+            parallel_id = prev["parallel_id"]
             codeptr_ra = mapping[parallel_id]
             seen.add(codeptr_ra)
-            ts_cur = event["timestamp"]
-
-            # Push state on begin event.
-            if event["name"].endswith("_begin") and codeptr_ra != 0:
-                if event["name"] == "lttng_pinsight:implicit_task_begin":
-                    event_type = event["name"][:-6]  # Name - "_begin". Used for prefix matching.
-                    region_stack.append([event_type, codeptr_ra, parallel_id, event["timestamp"]] + [event[x] for x in package_names])
-
-            # Mark event as overhead if it's not a work-type event.
-            if (event["name"] not in work_event_names and len(region_stack) > 0):
-                region_total_overhead[codeptr_ra] += event["duration"]
-
-            # Pop state to generate measurements.
-            if (event["name"] == "lttng_pinsight:implicit_task_end"):
-                event_type, codeptr_ra_prev, parallel_id_prev, ts_prev, *energy_prev = region_stack.pop()
-                # Get correct codeptr_ra and parallel_id
-                parallel_id = parallel_id_prev
-                codeptr_ra = codeptr_ra_prev
-                region_num_runs[codeptr_ra] += 1
-                # Validation check.
-                if codeptr_ra != codeptr_ra_prev and event["name"][:-4] != "lttng_pinsight:implicit_task":
-                    eprint("Error: Thread {}, Region beginning at {:02X} does not match region end at {:02X}.".format(gtid, codeptr_ra, codeptr_ra_prev))
-                # Use prev values to figure out what happened over the interval.
-                duration = ts_cur - ts_prev
-                assert(duration > 0)
-                energy_cur = [event[x] for x in package_names]
-                energy = [(cur - prev) for (cur, prev) in zip(energy_cur, energy_prev)]
-                # Update global region stat trackers.
-                region_total_exec_time[codeptr_ra] += duration
-                region_total_energy[codeptr_ra] += sum(energy)
-        # Implicit else: ignore non parallel region events.
-    #pprint(region_stack)  # DEBUG
+            region_num_runs[codeptr_ra] += 1
+            # TODO: Actually measure performance and energy.
+            # Measure `total_exec_time` here, along with total energy burned.
+            region_total_exec_time[codeptr_ra] += event["timestamp"] - prev["timestamp"]
+            region_energy_total[codeptr_ra] += compute_energy_diff(event, prev)
+        # Do overhead/idle tracking here.
+        elif event["name"] == "lttng_pinsight:barrier_wait_end":
+            #prev = stack_barrier.pop()
+            prev = region_stack.pop()
+            #verify_event_type(prev, "lttng_pinsight:barrier_wait_begin")
+            assert(prev["name"] == "lttng_pinsight:barrier_wait_begin")
+            parallel_id = prev["parallel_id"]
+            codeptr_ra = mapping[parallel_id]
+            seen.add(codeptr_ra)
+            if is_master:
+                master_last_barrier = event["timestamp"]
+                region_total_overhead[codeptr_ra] += event["timestamp"] - prev["timestamp"]
+                region_energy_overhead[codeptr_ra] += compute_energy_diff(event, prev)
+                # Note: Idle time calculated in parallel_end for master.
+            else:
+                total_time = event["timestamp"] - prev["timestamp"]
+                # Is this a "split barrier" that needs special processing?
+                if splits[parallel_id] > prev["timestamp"]:
+                    # For workers: master parallel_end splits overhead vs idle for last barrier.
+                    overhead_time = splits[parallel_id] - prev["timestamp"]
+                    idle_time     = event["timestamp"]  - splits[parallel_id]
+                    region_total_overhead[codeptr_ra] += overhead_time
+                    region_total_idle[codeptr_ra]     += idle_time
+                    # Note: Energy measurement is tricky here because we have to split the measurement.
+                    energy = compute_energy_diff(event, prev)
+                    region_energy_overhead[codeptr_ra] += int((overhead_time / total_time) * energy)
+                    region_energy_idle[codeptr_ra]     += int((idle_time / total_time) * energy)
+                else:
+                    # Normal case. (Pure overheads.)
+                    region_total_overhead[codeptr_ra] += total_time
+                    region_energy_overhead[codeptr_ra] += compute_energy_diff(event, prev)
+        else:
+            pass
+            #eprint(event)  # DEBUG
 
     # Corrects accounting on num_runs when last trace records are dropped.
     if len(region_stack) > 0:
         for item in region_stack:
             eprint("Warning: Correcting number of runs for unfinished region. {}".format(item))
-            codeptr_ra = item[1]
+            codeptr_ra = mapping[item["parallel_id"]]
             region_num_runs[codeptr_ra] += 1
 
     out = {
@@ -184,10 +249,13 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set)):
             "num_runs": region_num_runs[k],
             "total_exec_time": region_total_exec_time[k],
             "total_overhead": region_total_overhead[k],
-            "total_energy": region_total_energy[k],
+            "total_idle": region_total_idle[k],
+            "energy_total": region_energy_total[k],
+            "energy_overhead": region_energy_overhead[k],
+            "energy_idle": region_energy_idle[k],
         } for k in list(seen)
     }
-    return out, codeptr_to_paridset
+    return out, codeptr_to_paridset, splits
 
 
 if __name__ == "__main__":
@@ -231,7 +299,8 @@ if __name__ == "__main__":
     traces = get_trace_collection(trace_path)
     # Chain generators together.
     codeptr_to_paridset = defaultdict(set)
-    thread_stats[master_thread_id], codeptr_to_paridset = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset)
+    splits = {}
+    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits)
 
     # Process per-thread event streams in parallel.
     work_queue = []
@@ -244,7 +313,7 @@ if __name__ == "__main__":
 
     def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        stats, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset)
+        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits)
         return (k, stats)
 
     eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE - 1))
@@ -260,7 +329,10 @@ if __name__ == "__main__":
         "num_runs",
         "total_execute_time",
         "total_overhead",
-        "total_energy",
+        "total_idle",
+        "energy_total",
+        "energy_overhead",
+        "energy_idle",
     ]
 
     # Write results to stdout.
@@ -272,6 +344,9 @@ if __name__ == "__main__":
             num_runs = stats[codeptr_ra]["num_runs"]
             total_exec = stats[codeptr_ra]["total_exec_time"]
             total_overhead = stats[codeptr_ra]["total_overhead"]
-            total_energy = stats[codeptr_ra]["total_energy"]
-            row = [thread_id, "0x{:02X}".format(codeptr_ra), num_runs, total_exec, total_overhead, total_energy]
+            total_idle = stats[codeptr_ra]["total_idle"]
+            energy_total = stats[codeptr_ra]["energy_total"]
+            energy_overhead = stats[codeptr_ra]["energy_overhead"]
+            energy_idle = stats[codeptr_ra]["energy_idle"]
+            row = [thread_id, "0x{:02X}".format(codeptr_ra), num_runs, total_exec, total_overhead, total_idle, energy_total, energy_overhead, energy_idle]
             csvwriter.writerow(row)
