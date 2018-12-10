@@ -114,7 +114,8 @@ def thread_events(thread_id: int, events):
             prev = event_as_dict(event)
     # HACK: Return last event with hard-coded duration.
     prev["duration"] = 1
-    return prev
+    yield prev
+    return
 
 
 # Use on master thread to generate mapping between `codeptr_ra` values and parallel region ids.
@@ -219,12 +220,13 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
             else:
                 total_time = event["timestamp"] - prev["timestamp"]
                 # Is this a "split barrier" that needs special processing?
-                if splits[parallel_id] > prev["timestamp"]:
+                if splits[parallel_id] > prev["timestamp"] and splits[parallel_id] < event["timestamp"]:
                     # For workers: master parallel_end splits overhead vs idle for last barrier.
                     overhead_time = splits[parallel_id] - prev["timestamp"]
                     idle_time     = event["timestamp"]  - splits[parallel_id]
                     region_total_overhead[codeptr_ra] += overhead_time
                     region_total_idle[codeptr_ra]     += idle_time
+                    assert(idle_time > 0)
                     # Note: Energy measurement is tricky here because we have to split the measurement.
                     energy = compute_energy_diff(event, prev)
                     region_energy_overhead[codeptr_ra] += int((overhead_time / total_time) * energy)
@@ -241,7 +243,8 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
     if len(region_stack) > 0:
         for item in region_stack:
             eprint("Warning: Correcting number of runs for unfinished region. {}".format(item))
-            codeptr_ra = mapping[item["parallel_id"]]
+            parallel_id = item["parallel_id"]
+            codeptr_ra = mapping[parallel_id]
             region_num_runs[codeptr_ra] += 1
 
     out = {
