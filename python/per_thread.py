@@ -40,6 +40,35 @@ def event_as_dict(e):
     return out
 
 
+def get_energy(event):
+    package_names = ["pkg_energy" + str(i) for i in range(0,4)]
+    return [event[x] for x in package_names]
+
+
+def compute_energy_diff(event_cur, event_prev):
+    return sum([(cur - prev) for (cur, prev) in
+                zip(get_energy(event_cur), get_energy(event_prev))])
+
+
+def get_rollover_status(event_cur, event_prev):
+    out = []
+    # Hardware counters can be rolling over independently of each other.
+    # Have to check them independently.
+    for (cur, prev) in zip(get_energy(event_cur), get_energy(event_prev)):
+        out.append(cur < prev)
+    return out
+
+
+def track_rollovers(rollover_counter, event_cur, event_prev):
+    rollover_happened = get_rollover_status(event_cur, event_prev)
+    if any(rollover_happened):
+        for i in range(0, len(rollover_happened)):
+            # Increment the counter(s) of any rollovers.
+            if rollover_happened[i]:
+                rollover_counter[i] += 1
+    return rollover_counter
+
+
 # Create a new TraceCollection object (required for new events iterator).
 def get_trace_collection(trace_path):
     trace_collection = babeltrace.TraceCollection()
@@ -89,13 +118,14 @@ def thread_events(thread_id: int, events):
 
 
 # The function that actually generates per-thread statistics.
-def gen_stats(events):
+def gen_stats(events, max_energy_uj=0):
     total_exec_time = 0
     total_overhead = 0
     total_energy = 0
+    rollover_counter = {i: 0 for i in range(0, 4)}  # More than 1 HW rollover can happen.
 
     start_event = next(events)
-    end_event = None
+    end_event = start_event
 
     if start_event["name"] not in work_event_names:
         total_overhead += start_event["duration"]
@@ -104,19 +134,22 @@ def gen_stats(events):
     for event in events:
         if event["name"] not in work_event_names:
             total_overhead += event["duration"]
+        rollover_counter = track_rollovers(rollover_counter, event, end_event)
         end_event = event
 
     # Figure out total execution time by timestamp differences.
     total_exec_time = end_event["timestamp"] - start_event["timestamp"]
 
     # Figure out energy differences per-package and sum.
-    package_names = ["pkg_energy" + str(i) for i in range(0,4)]
-    start_energy = [start_event[x] for x in package_names]
-    end_energy = [end_event[x] for x in package_names]
-    for i in range(0,4):
+    start_energy = get_energy(start_event)
+    end_energy = get_energy(end_event)
+    # Add rollover counter values to end_energy as needed.
+    for i in range(0, 4):
+        end_energy[i] += (rollover_counter[i] * max_energy_uj)
+    for i in range(0, 4):
         total_energy += end_energy[i] - start_energy[i]
 
-    return [total_exec_time, total_overhead, total_energy]
+    return [total_exec_time, total_overhead, total_energy, rollover_counter]
 
 
 if __name__ == "__main__":
@@ -135,6 +168,12 @@ if __name__ == "__main__":
                         dest="master_thread_id",
                         default=0,
                         help="ID of the master thread.")
+
+    parser.add_argument("--max-energy-uj", "-e", type=int,
+                        action="store",
+                        dest="max_energy_uj",
+                        default=0,
+                        help="Max energy_uj value. Used to fix hardware counter rollover issues.")
 
     # Required arguments.
     parser.add_argument("TRACE_PATH", type=str,
@@ -158,7 +197,7 @@ if __name__ == "__main__":
     work_queue = threads_in_trace
     def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        stats = gen_stats(thread_events(k, traces.events))
+        stats = gen_stats(thread_events(k, traces.events), args.max_energy_uj)
         return (k, stats)
 
     eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE))
@@ -173,12 +212,13 @@ if __name__ == "__main__":
         "total_execute_time",
         "total_overhead",
         "total_energy",
+        "rollovers_per_pkg",
     ]
 
     # Write results to stdout.
     csvwriter = csv.writer(sys.stdout, delimiter=',')
     csvwriter.writerow(header)
     for thread_id in thread_stats:
-        total_exec, total_overhead, total_energy = thread_stats[thread_id]
-        row = [thread_id, total_exec, total_overhead, total_energy]
+        total_exec, total_overhead, total_energy, rollovers = thread_stats[thread_id]
+        row = [thread_id, total_exec, total_overhead, total_energy, rollovers]
         csvwriter.writerow(row)
