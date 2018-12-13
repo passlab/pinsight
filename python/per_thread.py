@@ -84,6 +84,7 @@ def thread_events(thread_id: int, events):
             prev = event_as_dict(event)
     # HACK: Return last event with hard-coded duration.
     prev["duration"] = 1
+    yield prev
     return prev
 
 
