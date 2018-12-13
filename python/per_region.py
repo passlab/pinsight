@@ -65,6 +65,32 @@ def compute_energy_diff(event_cur, event_prev):
                 zip(get_energy(event_cur), get_energy(event_prev))])
 
 
+def update_event_energy(event, rollover_counter, max_energy_uj=0):
+    package_names = ["pkg_energy" + str(i) for i in range(0,4)]
+    for (i, pkg_name) in zip(range(0, len(package_names)), package_names):
+        event[pkg_name] += (rollover_counter[i] * max_energy_uj)
+    return event
+
+
+def get_rollover_status(event_cur, event_prev):
+    out = []
+    # Hardware counters can be rolling over independently of each other.
+    # Have to check them independently.
+    for (cur, prev) in zip(get_energy(event_cur), get_energy(event_prev)):
+        out.append(cur < prev)
+    return out
+
+
+def track_rollovers(rollover_counter, event_cur, event_prev):
+    rollover_happened = get_rollover_status(event_cur, event_prev)
+    if any(rollover_happened):
+        for i in range(0, len(rollover_happened)):
+            # Increment the counter(s) of any rollovers.
+            if rollover_happened[i]:
+                rollover_counter[i] += 1
+    return rollover_counter
+
+
 def verify_event_type(event, event_type):
     if event["name"] != event_type:
         eprint("Warning: Expected event of type {}, got event of type {} instead. {}".format(event_type, event["name"], event))
@@ -133,7 +159,7 @@ def gen_codeptr_map(events: list):
 
 
 # The function that actually generates per-region statistics.
-def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
+def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max_energy_uj=0):
     # Output variables.
     region_num_runs = defaultdict(int)
 
@@ -155,8 +181,17 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
     mapping = reverse_mapping(codeptr_to_paridset)
     #gtid = events[0]["gtid"]  # DEBUG: helper variable for context.
     seen = set()
+    ts_cur = None
+    duration = None
+    last_event = None
+    rollover_counter = {i: 0 for i in range(0, 4)}
     # Iterate across events.
     for event in events:
+        # Rollover tracking goes on regardless of whether we care about an event or not.
+        if last_event is not None:
+             rollover_counter = track_rollovers(rollover_counter, event, last_event)
+        last_event = event
+
         # Skip events we don't care about.
         if event["name"] not in events_of_interest:
             continue
@@ -169,16 +204,20 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
             codeptr_to_paridset[codeptr_ra].add(parallel_id)
             mapping[parallel_id] = codeptr_ra
             #stack_parallel.append(event)
+            event = update_event_energy(event, rollover_counter, max_energy_uj)
             region_stack.append(event)
         elif event["name"] == "lttng_pinsight:implicit_task_begin":
             #stack_implicit.append(event)
+            event = update_event_energy(event, rollover_counter, max_energy_uj)
             region_stack.append(event)
         elif event["name"] == "lttng_pinsight:barrier_wait_begin":
             #stack_barrier.append(event)
+            event = update_event_energy(event, rollover_counter, max_energy_uj)
             region_stack.append(event)
         # Master-specific tracking/measuring.
         elif event["name"] == "lttng_pinsight:parallel_end":
             #prev = stack_parallel.pop()
+            event = update_event_energy(event, rollover_counter, max_energy_uj)
             prev = region_stack.pop()
             #verify_event_type(prev, "lttng_pinsight:parallel_begin")
             assert(prev["name"] == "lttng_pinsight:parallel_begin")
@@ -192,6 +231,7 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
         # Do majority of measurement.
         elif event["name"] == "lttng_pinsight:implicit_task_end":
             #prev = stack_implicit.pop()
+            event = update_event_energy(event, rollover_counter, max_energy_uj)
             prev = region_stack.pop()
             assert(prev["name"] == "lttng_pinsight:implicit_task_begin")
             #verify_event_type(prev, "lttng_pinsight:implicit_task_begin")
@@ -206,6 +246,7 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
         # Do overhead/idle tracking here.
         elif event["name"] == "lttng_pinsight:barrier_wait_end":
             #prev = stack_barrier.pop()
+            event = update_event_energy(event, rollover_counter, max_energy_uj)
             prev = region_stack.pop()
             #verify_event_type(prev, "lttng_pinsight:barrier_wait_begin")
             assert(prev["name"] == "lttng_pinsight:barrier_wait_begin")
@@ -256,6 +297,7 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}):
             "energy_total": region_energy_total[k],
             "energy_overhead": region_energy_overhead[k],
             "energy_idle": region_energy_idle[k],
+            "rollovers_per_pkg": rollover_counter,
         } for k in list(seen)
     }
     return out, codeptr_to_paridset, splits
@@ -277,6 +319,12 @@ if __name__ == "__main__":
                         dest="master_thread_id",
                         default=0,
                         help="ID of the master thread.")
+
+    parser.add_argument("--max-energy-uj", "-e", type=int,
+                        action="store",
+                        dest="max_energy_uj",
+                        default=0,
+                        help="Max energy_uj value. Used to fix hardware counter rollover issues.")
 
     # Required arguments.
     parser.add_argument("TRACE_PATH", type=str,
@@ -303,7 +351,7 @@ if __name__ == "__main__":
     # Chain generators together.
     codeptr_to_paridset = defaultdict(set)
     splits = {}
-    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits)
+    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits, args.max_energy_uj)
 
     # Process per-thread event streams in parallel.
     work_queue = []
@@ -316,7 +364,7 @@ if __name__ == "__main__":
 
     def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits)
+        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits, args.max_energy_uj)
         return (k, stats)
 
     eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE - 1))
@@ -336,6 +384,7 @@ if __name__ == "__main__":
         "energy_total",
         "energy_overhead",
         "energy_idle",
+        "rollovers_per_pkg",
     ]
 
     # Write results to stdout.
@@ -351,5 +400,6 @@ if __name__ == "__main__":
             energy_total = stats[codeptr_ra]["energy_total"]
             energy_overhead = stats[codeptr_ra]["energy_overhead"]
             energy_idle = stats[codeptr_ra]["energy_idle"]
-            row = [thread_id, "0x{:02X}".format(codeptr_ra), num_runs, total_exec, total_overhead, total_idle, energy_total, energy_overhead, energy_idle]
+            rollovers = stats[codeptr_ra]["rollovers_per_pkg"]
+            row = [thread_id, "0x{:02X}".format(codeptr_ra), num_runs, total_exec, total_overhead, total_idle, energy_total, energy_overhead, energy_idle, rollovers]
             csvwriter.writerow(row)
