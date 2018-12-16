@@ -1,6 +1,6 @@
 include environment.mk
 
-CFLAGS += -fpic
+CFLAGS += -fpic -DENABLE_ENERGY
 CFLAGS += -I$(OMP_BASE_PATH)/include -Isrc/
 LDFLAGS += -L$(OMP_LIB_PATH) -lm -ldl -llttng-ust -lomp
 
