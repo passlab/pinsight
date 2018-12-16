@@ -7,7 +7,6 @@
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
-#include "ompt-signal.h"
 #include "env_config.h"
 #include "rapl.h"
 
