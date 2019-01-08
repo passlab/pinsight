@@ -12,6 +12,8 @@
 
 static int total_cores = 0, total_packages = 0;
 static int package_map[MAX_PACKAGES];
+static FILE* pkg_handles[MAX_PACKAGES];
+static FILE* rapl_sysfs_open_file(int package, int subdomain, char* filename);
 
 
 // Warning: Modifies global state.
@@ -43,6 +45,7 @@ static int detect_packages(void) {
     if (package_map[package] == -1) {
       total_packages++;
       package_map[package] = i;
+      pkg_handles[package] = rapl_sysfs_open_file(package, -1, "energy_uj");
     }
   }
 
@@ -94,21 +97,21 @@ int rapl_sysfs_read_name(char* dest, int package, int subdomain) {
   return 0;
 }
 
-
-// Attempts a read of a single Sysfs RAPL energy counter.
-// If the top-level package is to be accessed, use -1 for subdomain.
-// Returns: 0 for success, -1 for failure.
-int rapl_sysfs_read_energy(long long *dest, int package, int subdomain) {
-  FILE* fff;
-
-  // Open RAPL Sysfs file with the energy counter inside.
-  fff = rapl_sysfs_open_file(package, subdomain, "energy_uj");
+// Attempts a read of a Sysfs RAPL energy counter, given a file handle.
+int rapl_sysfs_read_energy(long long* dest, FILE* fff) {
   // Error check.
   if (fff == NULL) {
     return -1;
   }
   // Read RAPL energy counter.
   fscanf(fff, "%lld", dest);
+  return 0;
+}
+
+// Closes an open sysfs file handle.
+// Note: May not need this since most POSIX kernels automatically clean up
+//   open file descriptors on process exit.
+int rapl_sysfs_close(FILE* fff) {
   fclose(fff);
   return 0;
 }
@@ -166,7 +169,7 @@ int rapl_sysfs_read_packages(long long dest[]) {
 
   for (i = 0; i < total_packages; i++) {
     // Read package energy.
-    status = rapl_sysfs_read_energy(&dest[i], i, -1);
+    status = rapl_sysfs_read_energy(&dest[i], pkg_handles[i]);
   }
 }
 
@@ -175,21 +178,21 @@ int rapl_sysfs_read_packages(long long dest[]) {
 // Read across all RAPL subdomains efficiently.
 // Requires "dest" 2D array to take the form:
 //   long long energy_values[MAX_PACKAGES][NUM_RAPL_DOMAINS];
-int rapl_sysfs_read_all(long long dest[][NUM_RAPL_DOMAINS], int valid[][NUM_RAPL_DOMAINS]) {
-  int i, j, status;
-  FILE *fff;
-
-  for (j = 0; j < total_packages; j++) {
-    i = 0;
-    // Skip bad entries.
-    if (!valid[j][i]) { continue; }
-    // Read package energy.
-    status = rapl_sysfs_read_energy(&dest[j][i], j, -1);
-    for (i = 1; i < NUM_RAPL_DOMAINS; i++) {
-      // Skip bad entries.
-      if (!valid[j][i]) { continue; }
-      // Read subdomain energy.
-      status = rapl_sysfs_read_energy(&dest[j][i], j, i - 1);
-    }
-  }
-}
+//int rapl_sysfs_read_all(long long dest[][NUM_RAPL_DOMAINS], int valid[][NUM_RAPL_DOMAINS]) {
+//  int i, j, status;
+//  FILE *fff;
+//
+//  for (j = 0; j < total_packages; j++) {
+//    i = 0;
+//    // Skip bad entries.
+//    if (!valid[j][i]) { continue; }
+//    // Read package energy.
+//    status = rapl_sysfs_read_energy(&dest[j][i], &pkg_handles[j]);
+//    for (i = 1; i < NUM_RAPL_DOMAINS; i++) {
+//      // Skip bad entries.
+//      if (!valid[j][i]) { continue; }
+//      // Read subdomain energy.
+//      status = rapl_sysfs_read_energy(&dest[j][i], &pkg_handles[j]);
+//    }
+//  }
+//}

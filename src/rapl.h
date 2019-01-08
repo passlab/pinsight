@@ -46,7 +46,7 @@ int rapl_sysfs_read_name(char* dest, int package, int subdomain);
 // Attempts a read of a single Sysfs RAPL energy counter.
 // If the top-level package is to be accessed, use -1 for subdomain.
 // Returns: 0 for success, -1 for failure.
-int rapl_sysfs_read_energy(long long *dest, int package, int subdomain);
+int rapl_sysfs_read_energy(long long *dest, FILE* fff);
 
 // Read across all RAPL subdomains, and record which are valid.
 int rapl_sysfs_discover_valid(void);
@@ -68,6 +68,6 @@ int rapl_sysfs_read_packages(long long dest[]);
 // Read across all RAPL subdomains efficiently.
 // Requires "dest" 2D array to take the form:
 //   long long energy_values[MAX_PACKAGES][NUM_RAPL_DOMAINS];
-int rapl_sysfs_read_all(long long dest[][NUM_RAPL_DOMAINS], int valid[][NUM_RAPL_DOMAINS]);
+//int rapl_sysfs_read_all(long long dest[][NUM_RAPL_DOMAINS], int valid[][NUM_RAPL_DOMAINS]);
 
 #endif // RAPL_H
