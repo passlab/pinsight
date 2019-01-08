@@ -1,11 +1,10 @@
 include environment.mk
 
 # To enable energy measurement, uncomment the following line
-CFLAGS += -DENABLE_ENERGY
+#CFLAGS += -DENABLE_ENERGY
 CFLAGS += -fpic
 CFLAGS += -I$(OMP_BASE_PATH)/include -Isrc/
 LDFLAGS += -L$(OMP_LIB_PATH) -lm -ldl -llttng-ust -lomp
-
 
 .PHONY: clean test
 
