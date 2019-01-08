@@ -6,18 +6,18 @@
 USAGE=$(cat <<EOF
 Tracing script for use with PInsight.
 Usage:
-    trace.sh TRACEFILE_DEST PINSIGHT_LIB OMP_LIB_PATH OMP_NUM_THREADS ARGS...
+    trace.sh TRACEFILE_DEST OMP_LIB PINSIGHT_LIB OMP_NUM_THREADS ARGS...
 
 Arguments:
   TRACEFILE_DEST    Where to write the LTTng traces.
-  PINSIGHT_LIB      PInsight shared library file name to use with user application.
-  OMP_LIB_PATH      OpenMP shared library path to use with user application.
-  OMP_NUM_THREADS   set this OpenMP env, i.e. number of OpenMP threads to use
+  OMP_LIB           Full-path file name for OpenMP library to use with user application.
+  PINSIGHT_LIB      Full-path PInsight shared library file name to use with user application.
+  OMP_NUM_THREADS   A number for setting OMP_NUM_THREADS env
 
 Examples:
     trace.sh /tmp/ompt-jacobi \\ 
-      /opt/pinsight/lib/libpinsight.so \\ 
-      /opt/openmp-install/lib 8 \\
+      /opt/openmp-install/lib/libomp.so \\
+      /opt/pinsight/lib/libpinsight.so 8 \\ 
       ./jacobi 2048 2048
 EOF
 )
@@ -33,9 +33,8 @@ fi
 # Read in positional parameters, then shift array.
 # This leaves only the program command line in `$@`.
 TRACING_OUTPUT_DEST=$1
-PINSIGHT_LIB=$2
-OMP_LIB_PATH=$3
-export LD_LIBRARY_PATH=${OMP_LIB_PATH}:$LD_LIBRARY_PATH
+OMP_LIB=$2
+PINSIGHT_LIB=$3
 export OMP_NUM_THREADS=$4
 shift 4 
 
@@ -52,7 +51,7 @@ lttng enable-event --userspace lttng_pinsight:'*'
 lttng start
 
 # Run instrumented code.
-LD_PRELOAD=${PINSIGHT_LIB} "$@"
+LD_PRELOAD=${OMP_LIB}:${PINSIGHT_LIB} "$@"
 
 # Stop LTTng tracing.
 lttng stop
