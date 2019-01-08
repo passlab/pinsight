@@ -82,11 +82,12 @@ The instructions above will result in `libpinsight.so` being located at `lib/lib
 In the `scripts/` directory, a script called `trace.sh` is provided.
 This script helps make generating LTTng traces for OpenMP programs easier.
 
-Example using the `jacobi` application:
+Example using the `jacobi` application with `8` threads:
 
     trace.sh /tmp/ompt-jacobi \
       /opt/openmp-install/lib/libomp.so \
       /opt/pinsight/lib/libpinsight.so \
+      8 \
       ./jacobi 2048 2048
 
 
