@@ -1,0 +1,13 @@
+include ../../environment.mk
+
+helloomp: helloomp.c
+	gcc -fopenmp -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
+
+objdump:
+	objdump -d helloomp > helloomp.objdump
+
+test:
+	LD_PRELOAD=$(OMP_LIB_PATH)/libomp.so:$(PINSIGHT_LIB_PATH)/libpinsight.so ./helloomp
+
+clean:
+	rm helloomp

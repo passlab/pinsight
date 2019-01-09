@@ -4,6 +4,7 @@ This folder contains OpenMP applications to use for testing the tracing shared l
 
 Currently, we provide the following examples:
 
+ - `hello`  :: The classical hello world example in OpenMP
  - `jacobi` :: A finite difference solver, using the Jacobi iterative method.
  - `lulesh` :: A hydrodynamics modeling/simulation application, intended to be behaviorally similar to applications in the field.
 

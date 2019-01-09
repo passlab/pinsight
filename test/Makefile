@@ -1,7 +1,7 @@
 include ../environment.mk
 
 # List of test case folders.
-TEST_CASES = jacobi lulesh
+TEST_CASES = hello jacobi lulesh
 
 .PHONY: $(TEST_CASES)
 
