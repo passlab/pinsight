@@ -34,6 +34,8 @@ extern int __kmpc_global_num_threads(void *);
 #define get_global_thread_num() __kmpc_global_thread_num(NULL)
 #define get_global_num_threads() __kmpc_global_num_threads(NULL)
 
+__thread int thread_id;
+
 static const char* ompt_thread_type_t_values[] = {
   NULL,
   "ompt_thread_initial",
@@ -301,7 +303,6 @@ on_ompt_callback_sync_region(
   ompt_data_t *task_data,
   const void *codeptr_ra)
 {
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -379,7 +380,6 @@ on_ompt_callback_sync_region_wait(
   ompt_data_t *task_data,
   const void *codeptr_ra)
 {
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -502,7 +502,6 @@ on_ompt_callback_cancel(
 //on_ompt_callback_idle(
 //  ompt_scope_endpoint_t endpoint)
 //{
-//  int thread_id = get_global_thread_num();
 //  switch(endpoint)
 //  {
 //    case ompt_scope_begin:
@@ -528,7 +527,6 @@ on_ompt_callback_implicit_task(
 {
   /* in this call back, parallel_data is NULL for ompt_scope_end endpoint, thus to know the parallel_data at the end,
    * we need to pass the needed fields of parallel_data in the scope_begin to the task_data */
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -617,7 +615,6 @@ on_ompt_callback_work(
   uint64_t count,
   const void *codeptr_ra)
 {
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -769,7 +766,6 @@ on_ompt_callback_master(
   ompt_data_t *task_data,
   const void *codeptr_ra)
 {
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -812,7 +808,6 @@ on_ompt_callback_parallel_begin(
   const void *codeptr_ra)
 {
   parallel_data->value = ompt_get_unique_id();
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -836,7 +831,6 @@ on_ompt_callback_parallel_end(
   int32_t flag,
   const void *codeptr_ra)
 {
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -912,7 +906,7 @@ on_ompt_callback_thread_begin(
   ompt_thread_t thread_type,
   ompt_data_t *thread_data)
 {
-  int thread_id = get_global_thread_num();
+  thread_id = get_global_thread_num();
   thread_data->value = ompt_get_unique_id();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
@@ -933,7 +927,6 @@ static void
 on_ompt_callback_thread_end(
   ompt_data_t *thread_data)
 {
-  int thread_id = get_global_thread_num();
 #ifdef ENABLE_ENERGY
   if (thread_id == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
