@@ -81,7 +81,7 @@ static ompt_get_proc_id_t ompt_get_proc_id;
 
 static void print_ids(int level)
 {
-  omp_frame_t* frame ;
+  ompt_frame_t* frame ;
   ompt_data_t* parallel_data;
   ompt_data_t* task_data;
 //  int exists_parallel = ompt_get_parallel_info(level, &parallel_data, NULL);
@@ -89,9 +89,9 @@ static void print_ids(int level)
   if (frame)
   {
     if (debug_on) {
-      printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, enter_frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame, frame->enter_frame);
+      printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, enter_frame=%p\n", ompt_get_thread_data()->value, level, exists_task ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame.ptr, frame->enter_frame.ptr);
     }
-//    printf("%" PRIu64 ": parallel level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_parallel ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame, frame->enter_frame);
+//    printf("%" PRIu64 ": parallel level %d: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p\n", ompt_get_thread_data()->value, level, exists_parallel ? parallel_data->value : 0, exists_task ? task_data->value : 0, frame->exit_frame.ptr, frame->enter_frame.ptr);
   }
   else {
     if (debug_on) {
@@ -163,7 +163,7 @@ on_ompt_callback_mutex_acquire(
   ompt_mutex_t kind,
   unsigned int hint,
   unsigned int impl,
-  omp_wait_id_t wait_id,
+  ompt_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -201,7 +201,7 @@ on_ompt_callback_mutex_acquire(
 static void
 on_ompt_callback_mutex_acquired(
   ompt_mutex_t kind,
-  omp_wait_id_t wait_id,
+  ompt_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -239,7 +239,7 @@ on_ompt_callback_mutex_acquired(
 static void
 on_ompt_callback_mutex_released(
   ompt_mutex_t kind,
-  omp_wait_id_t wait_id,
+  ompt_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -277,7 +277,7 @@ on_ompt_callback_mutex_released(
 static void
 on_ompt_callback_nest_lock(
     ompt_scope_endpoint_t endpoint,
-    omp_wait_id_t wait_id,
+    ompt_wait_id_t wait_id,
     const void *codeptr_ra)
 {
   switch(endpoint)
@@ -563,7 +563,7 @@ on_ompt_callback_lock_init(
   ompt_mutex_t kind,
   unsigned int hint,
   unsigned int impl,
-  omp_wait_id_t wait_id,
+  ompt_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -586,7 +586,7 @@ on_ompt_callback_lock_init(
 static void
 on_ompt_callback_lock_destroy(
   ompt_mutex_t kind,
-  omp_wait_id_t wait_id,
+  ompt_wait_id_t wait_id,
   const void *codeptr_ra)
 {
   switch(kind)
@@ -800,7 +800,7 @@ on_ompt_callback_master(
 static void
 on_ompt_callback_parallel_begin(
   ompt_data_t *parent_task_data,
-  const omp_frame_t *parent_task_frame,
+  const ompt_frame_t *parent_task_frame,
   ompt_data_t* parallel_data,
   uint32_t requested_parallelism,
   int32_t flag,
@@ -819,7 +819,7 @@ on_ompt_callback_parallel_begin(
 #endif
   );
   if (debug_on) {
-    printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_parallelism=%" PRIu32 ", parallel_function=%p\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_frame, parent_task_frame->enter_frame, parallel_data->value, requested_parallelism, codeptr_ra);
+    printf("%" PRIu64 ": ompt_event_parallel_begin: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, parallel_id=%" PRIu64 ", requested_parallelism=%" PRIu32 ", parallel_function=%p\n", ompt_get_thread_data()->value, parent_task_data->value, parent_task_frame->exit_frame.ptr, parent_task_frame->enter_frame.ptr, parallel_data->value, requested_parallelism, codeptr_ra);
   }
 }
 
@@ -850,7 +850,7 @@ on_ompt_callback_parallel_end(
 static void
 on_ompt_callback_task_create(
     ompt_data_t *parent_task_data,    /* id of parent task            */
-    const omp_frame_t *parent_frame,  /* frame data for parent task   */
+    const ompt_frame_t *parent_frame,  /* frame data for parent task   */
     ompt_data_t* new_task_data,      /* id of created task           */
     int flag,
     int has_dependences,
@@ -858,7 +858,7 @@ on_ompt_callback_task_create(
 {
   new_task_data->value = ompt_get_unique_id();
   if (debug_on) {
-    printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.enter=%p, new_task_id=%" PRIu64 ", parallel_function=%p, has_dependences=%s\n", ompt_get_thread_data()->value, parent_task_data ? parent_task_data->value : 0, parent_frame ? parent_frame->exit_frame : NULL, parent_frame ? parent_frame->enter_frame : NULL, new_task_data->value, codeptr_ra, has_dependences ? "yes" : "no");
+    printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.enter=%p, new_task_id=%" PRIu64 ", parallel_function=%p, has_dependences=%s\n", ompt_get_thread_data()->value, parent_task_data ? parent_task_data->value : 0, parent_frame ? parent_frame->exit_frame.ptr : NULL, parent_frame ? parent_frame->enter_frame.ptr : NULL, new_task_data->value, codeptr_ra, has_dependences ? "yes" : "no");
   }
 }
 
