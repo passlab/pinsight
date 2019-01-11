@@ -10,7 +10,7 @@ LDFLAGS += -L$(OMP_LIB_PATH) -lm -ldl -llttng-ust -lomp
 
 libpinsight.so:
 	mkdir -p lib/
-	$(CC) $(CFLAGS) -shared -o lib/$@ src/callback.h src/lttng_tracepoint.h src/pinsight.c src/env_config.c src/rapl.c $(LDFLAGS)
+	$(CC) $(CFLAGS) -shared -o lib/$@ src/pinsight.c src/env_config.c src/rapl.c $(LDFLAGS)
 
 test:
 	$(MAKE) -C test
