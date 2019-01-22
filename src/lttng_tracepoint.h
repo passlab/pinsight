@@ -60,7 +60,7 @@ extern "C" {
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            ctf_integer(unsigned int, global_thread_num, global_thread_num) \
             ctf_integer(unsigned short, thread_type, thread_type)      \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
