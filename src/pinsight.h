@@ -8,7 +8,7 @@
 #include <ompt.h>
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
-#define MAX_NUM_LEXGIONS 128
+#define MAX_NUM_LEXGIONS 256
 
 /* the following two should add up 64 since we will combine the two number as uuid */
 #define BITS_4_MAX_RECORDS_PER_LEXGION 32
