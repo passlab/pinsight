@@ -21,9 +21,10 @@ extern "C" {
     ctf_integer(unsigned int, global_thread_num, global_thread_num) \
     ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
     ctf_integer_hex(long int, parallel_codeptr, parallel_codeptr) \
-    ctf_integer(unsigned int, parallel_counter, parallel_counter) \
-    ctf_integer_hex(long int, task_codeptr, task_codeptr) \
-    ctf_integer(unsigned int, task_counter, task_counter)
+    ctf_integer(unsigned int, parallel_counter, parallel_counter)
+
+//    ctf_integer_hex(long int, task_codeptr, task_codeptr) \
+//    ctf_integer(unsigned int, task_counter, task_counter)
 
 #ifdef ENABLE_ENERGY
 #define ENERGY_TP_ARGS             \
