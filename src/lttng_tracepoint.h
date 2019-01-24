@@ -20,7 +20,7 @@ extern "C" {
 #define COMMON_TP_FIELDS \
     ctf_integer(unsigned int, global_thread_num, global_thread_num) \
     ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    ctf_integer_hex(long int, parallel_codeptr, parallel_codeptr) \
+    ctf_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
     ctf_integer(unsigned int, parallel_counter, parallel_counter)
 
 //    ctf_integer_hex(long int, task_codeptr, task_codeptr) \
@@ -142,8 +142,8 @@ TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_end)
         TP_FIELDS(                                                             \
             COMMON_TP_FIELDS                                                    \
             ctf_integer(unsigned short, wstype, wstype)      \
-            ctf_integer_hex(long int, work_begin_codeptr, work_begin_codeptr)                  \
-            ctf_integer_hex(long int, work_end_codeptr, work_end_codeptr)                  \
+            ctf_integer_hex(unsigned int, work_begin_codeptr, work_begin_codeptr)                  \
+            ctf_integer_hex(unsigned int, work_end_codeptr, work_end_codeptr)                  \
             ctf_integer(unsigned int, counter, counter)                 \
             ctf_integer(unsigned int, count, count)                        \
             ENERGY_TP_FIELDS                                                \
@@ -167,8 +167,8 @@ TRACEPOINT_EVENT_WORK(work_end)
         ),                                                                     \
         TP_FIELDS(                                                             \
             COMMON_TP_FIELDS                                                    \
-            ctf_integer_hex(long int, master_begin_codeptr, master_begin_codeptr)                  \
-            ctf_integer_hex(long int, master_end_codeptr, master_end_codeptr)                  \
+            ctf_integer_hex(unsigned int, master_begin_codeptr, master_begin_codeptr)                  \
+            ctf_integer_hex(unsigned int, master_end_codeptr, master_end_codeptr)                  \
             ctf_integer(unsigned int, counter, counter)                 \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
@@ -190,7 +190,7 @@ TRACEPOINT_EVENT_MASTER(master_end)
         TP_FIELDS(                                                             \
             COMMON_TP_FIELDS                                                    \
             ctf_integer(unsigned short, kind, kind)      \
-            ctf_integer_hex(long int, sync_codeptr, sync_codeptr)                  \
+            ctf_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
             ctf_integer(unsigned int, counter, counter)                 \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
