@@ -872,8 +872,8 @@ int ompt_initialize(
 //  register_callback_t(ompt_callback_mutex_acquired, ompt_callback_mutex_t);
 //  register_callback_t(ompt_callback_mutex_released, ompt_callback_mutex_t);
 //  register_callback(ompt_callback_nest_lock);
-  register_callback(ompt_callback_sync_region);
- // register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
+//  register_callback(ompt_callback_sync_region);
+  register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
 //  register_callback(ompt_callback_control_tool);
 //  register_callback(ompt_callback_flush);
 //  register_callback(ompt_callback_cancel);
