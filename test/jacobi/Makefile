@@ -1,7 +1,7 @@
 include ../../environment.mk
 
 jacobi: jacobi.c
-	gcc -fopenmp -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
+	clang -fopenmp -g -finstrument-functions -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
 
 objdump:
 	objdump -d jacobi > jacobi.objdump
