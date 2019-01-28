@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
     REAL alpha = 0.0543;
     REAL tol = 0.0000000001;
     REAL relax = 1.0;
-    int mits = 2;
+    int mits = 100;
 
     fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
     fprintf(stderr, "\tn - grid dimension in x direction, default: %d\n", n);
@@ -309,7 +309,7 @@ void jacobi_omp(int n, int m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_
     while ((k <= mits) && (error > tol)) {
         error = 0.0;
 
-        printf("===================== iteration %d ===========================\n", k);
+//        printf("===================== iteration %d ===========================\n", k);
         /* Copy new solution into old */
 #pragma omp parallel for private(j,i) shared(m,n,uold,u)
         for (i = 0; i < n; i++)
