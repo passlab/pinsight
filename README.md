@@ -176,3 +176,6 @@ To run event processing in parallel, use the `-j <NUM_PROCESSES>` flag:
  1. Overhead analysis.
  1. Load balancing analysis.
  1. Offline analysis for configuring power usage and frequency (perhaps binary-based?).
+
+### For enabling callstack based tracing and flamegraph
+ 1. https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/LTTng-UST-Analyses.html
