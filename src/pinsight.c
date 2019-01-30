@@ -129,10 +129,20 @@ ompt_lexgion_t * top_lexgion_type(int type, unsigned int * counter) {
     while (top >=0) {
         ompt_lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
         if (lgp->type == type) {
-            *counter = pinsight_thread_data.lexgion_stack[top].counter;
+            if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
             return lgp;
         }
         top--;
+    }
+    return NULL;
+}
+
+ompt_lexgion_t * top_lexgion(unsigned int * counter) {
+    int top = pinsight_thread_data.stack_top;
+    if (top >=0) {
+        ompt_lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+        if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
+        return lgp;
     }
     return NULL;
 }

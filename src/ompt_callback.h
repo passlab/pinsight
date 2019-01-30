@@ -218,6 +218,61 @@ on_ompt_callback_thread_end(
   assert(counter == lgp->counter);
   lgp->end_codeptr_ra = (void*)OUTMOST_CODEPTR;
   tracepoint(lttng_pinsight, thread_end, (short)pinsight_thread_data.thread_type ENERGY_TRACEPOINT_CALL_ARGS);
+
+  //print out lexgion summary */
+  if (global_thread_num == 0) {
+    printf("============================================================\n");
+    printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.lexgion_end);
+    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    int i;
+    int count;
+    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      printf("%d\t%p\t%d\t%d\t%p\n", i+1, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+    }
+
+    printf("-------------------------------------------------------------\n");
+    printf("parallel lexgions (type %d) from thread 0\n", ompt_callback_parallel_begin);
+    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    count = 1;
+    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      if (lgp->type == ompt_callback_parallel_begin)
+      printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+    }
+
+    printf("-------------------------------------------------------------\n");
+    printf("sync lexgions (type %d) from thread 0\n", ompt_callback_sync_region);
+    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    count = 1;
+    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      if (lgp->type == ompt_callback_sync_region)
+        printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+    }
+
+    printf("-------------------------------------------------------------\n");
+    printf("work lexgions (type %d) from thread 0\n", ompt_callback_work);
+    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    count = 1;
+    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      if (lgp->type == ompt_callback_work)
+        printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+    }
+
+    printf("-------------------------------------------------------------\n");
+    printf("master lexgions (type %d) from thread 0\n", ompt_callback_master);
+    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    count = 1;
+    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      if (lgp->type == ompt_callback_master)
+        printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+    }
+    printf("============================================================\n");
+
+  }
 }
 
 static void
@@ -449,7 +504,7 @@ on_ompt_callback_sync_region(
       ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_sync_region, codeptr_ra);
       lgp->counter++;
       push_lexgion(lgp, lgp->counter);
-      tracepoint(lttng_pinsight, sync_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+      //tracepoint(lttng_pinsight, sync_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
       switch(kind)
       {
         case ompt_sync_region_barrier:
@@ -465,7 +520,7 @@ on_ompt_callback_sync_region(
       unsigned int counter;
       lgp = ompt_lexgion_end(&counter);
       lgp->end_codeptr_ra = codeptr_ra;
-      tracepoint(lttng_pinsight, sync_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+      //tracepoint(lttng_pinsight, sync_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
       switch(kind)
       {
         case ompt_sync_region_barrier:
@@ -487,13 +542,15 @@ on_ompt_callback_sync_region_wait(
         ompt_data_t *task_data,
         const void *codeptr_ra)
 {
+  unsigned int counter;
+  ompt_lexgion_t * lgp = top_lexgion(&counter);
   switch(endpoint)
   {
     case ompt_scope_begin:
       ;
-          ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
+          //lgp = ompt_lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
           //lgp->counter++;  //We do not increment the counter here since we will use the same counter as the sync_begin
-          push_lexgion(lgp, lgp->counter);
+          //push_lexgion(lgp, lgp->counter);
           tracepoint(lttng_pinsight, sync_wait_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
           switch(kind)
           {
@@ -507,9 +564,8 @@ on_ompt_callback_sync_region_wait(
           break;
     case ompt_scope_end:
       ;
-          unsigned int counter;
-          lgp = ompt_lexgion_end(&counter);
-          lgp->end_codeptr_ra = codeptr_ra;
+          //lgp = ompt_lexgion_end(&counter);
+          //lgp->end_codeptr_ra = codeptr_ra;
           tracepoint(lttng_pinsight, sync_wait_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
           switch(kind)
           {
@@ -872,14 +928,14 @@ int ompt_initialize(
 //  register_callback_t(ompt_callback_mutex_acquired, ompt_callback_mutex_t);
 //  register_callback_t(ompt_callback_mutex_released, ompt_callback_mutex_t);
 //  register_callback(ompt_callback_nest_lock);
-//  register_callback(ompt_callback_sync_region);
+  register_callback(ompt_callback_sync_region);
   register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
 //  register_callback(ompt_callback_control_tool);
 //  register_callback(ompt_callback_flush);
 //  register_callback(ompt_callback_cancel);
   //register_callback(ompt_callback_idle);  // Note: Obsoleted in TR7, as it was weird/impossible to implement correctly.
   register_callback(ompt_callback_implicit_task);
-//  register_callback_t(ompt_callback_lock_init, ompt_callback_mutex_acquire_t);
+  register_callback_t(ompt_callback_lock_init, ompt_callback_mutex_acquire_t);
 //  register_callback_t(ompt_callback_lock_destroy, ompt_callback_mutex_t);
   register_callback(ompt_callback_work);
   register_callback(ompt_callback_master);
