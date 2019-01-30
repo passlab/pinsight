@@ -110,7 +110,6 @@ extern __thread unsigned int task_counter;
 
 extern __thread pinsight_thread_data_t pinsight_thread_data;
 
-#define top_lexgion() (pinsight_thread_data.lexgion_stack)
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 
 #ifdef  __cplusplus
@@ -121,6 +120,7 @@ extern pinsight_thread_data_t * init_thread_data(int _thread_num, ompt_thread_t 
 extern void push_lexgion(ompt_lexgion_t * lexgion, unsigned int counter);
 extern ompt_lexgion_t * pop_lexgion(unsigned int * counter);
 extern ompt_lexgion_t * top_lexgion_type(int type, unsigned int * counter);
+extern ompt_lexgion_t * top_lexgion(unsigned int * counter);
 extern ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra);
 extern ompt_lexgion_t *ompt_lexgion_end(unsigned int * counter);
 
