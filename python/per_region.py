@@ -376,7 +376,7 @@ if __name__ == "__main__":
     # Chain generators together.
     codeptr_to_paridset = defaultdict(set)
     splits = {}
-    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits, args.max_energy_uj)
+    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits, args.max_energy_uj, args.enable_energy)
 
     # Process per-thread event streams in parallel.
     work_queue = []
@@ -389,7 +389,7 @@ if __name__ == "__main__":
 
     def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits, args.max_energy_uj)
+        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits, args.max_energy_uj, args.enable_energy)
         return (k, stats)
 
     eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE - 1))
