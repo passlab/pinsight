@@ -41,3 +41,10 @@ The current visualization is based on Eclipse data-driven analysis (http://archi
 Another development work we need is to add MPI tracing by using MPI tool interface. 
 MPI tool interface has the same mechanisms with OMPT, which is based on event/callback (https://computation.llnl.gov/projects/mpi_t), so it should be fairly straight forward to add in. The challenge will be how we integrate with LTTng since we will need to have multiple LTTng instances, e.g. one per process for collecting tracing. 
 
+## Information for pattern-based data-driven analysis using Trace Compass
+1. [Pattern provider from Trace Compass User Guide -- Data-Driven Analysis](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Writing_the_XML_pattern_provider)
+1. Paper [A declarative framework for stateful analysis of execution traces](https://publications.polymtl.ca/2987/1/2017_Wininger_Declarative_framework_stateful_analysis_execution.pdf)
+1. [Gene's XML tracing examples](https://secretaire.dorsal.polymtl.ca/~gbastien/Xml4Traces/)
+1. [Analyzing runtime CoreCLR events from Linux – Trace Compass](http://tooslowexception.com/analyzing-runtime-coreclr-events-from-linux-trace-compass/)
+1. [One email in Trace Compass maillist](https://www.eclipse.org/lists/tracecompass-dev/msg01199.html)
+1. [Geneviève Bastien's tracing blog About "The tale of Trace Compass and the Generic Callstack"](http://www.versatic.net/tracecompass/incubator/callstack/2017/11/27/tale-generic-callstack.html)
