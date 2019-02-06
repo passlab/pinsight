@@ -46,10 +46,12 @@ rm -rf ${TRACING_OUTPUT_DEST}
 
 # Create a userspace session.
 lttng create ompt-tracing-session --output="${TRACING_OUTPUT_DEST}"
+#lttng enable-channel --userspace --blocking-timeout=100 blocking-channel
 
 # Create and enable event rules.
-# lttng enable-event --userspace lttng_pinsight:'*'
-lttng enable-event -u -a
+lttng enable-event --userspace lttng_pinsight:'*'
+#lttng enable-event --userspace lttng_pinsight:'*' --channel=blocking-channel
+#lttng enable-event -u -a --channel=blocking-channel
 
 # Add related context field to all channels
 #lttng add-context --userspace --type=tid
@@ -57,9 +59,12 @@ lttng enable-event -u -a
 #lttng add-context --userspace --type=vtid
 #lttng add-context --userspace --type=perf:thread:cpu-migrations
 #lttng add-context --userspace --type=perf:thread:migrations
+lttng add-context --userspace --type=perf:thread:cpu-cycles
+lttng add-context --userspace --type=perf:thread:cycles
+lttng add-context --userspace --type=perf:thread:instructions
 
 # For enabling callstack analysis
-lttng add-context -u -t vpid -t vtid -t procname
+#lttng add-context -u -t vpid -t vtid -t procname
 
 # Start LTTng tracing.
 lttng start
@@ -68,7 +73,8 @@ lttng start
 # LD_PRELOAD=${OMP_LIB}:${PINSIGHT_LIB} "$@"
 
 # Enable callstack tracing
-LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${OMP_LIB}:${PINSIGHT_LIB} "$@"
+# LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${OMP_LIB}:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
+LD_PRELOAD=${OMP_LIB}:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
 
 # Stop LTTng tracing.
 lttng stop
