@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #define NUM_THREADS 4 
-#define NUM_ITERATIONS 10
+#define NUM_ITERATIONS 2 
 #define TEST_SUSPEND 1
 
 #define TRACEPOINT_CREATE_PROBES
