@@ -1,7 +1,7 @@
 include ../../environment.mk
 
 helloomp: helloomp.c
-	gcc -fopenmp -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
+	clang -fopenmp -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
 
 objdump:
 	objdump -d helloomp > helloomp.objdump
