@@ -22,8 +22,8 @@ events_of_interest = frozenset([
     "lttng_pinsight:parallel_end",
     "lttng_pinsight:implicit_task_begin",
     "lttng_pinsight:implicit_task_end",
-    "lttng_pinsight:barrier_wait_begin",
-    "lttng_pinsight:barrier_wait_end",
+    "lttng_pinsight:sync_wait_begin",
+    "lttng_pinsight:sync_wait_end",
 ])
 
 description = "Per-thread per-region CSV generator script."
@@ -45,6 +45,10 @@ def event_as_dict(e):
     out["timestamp"] = e.timestamp
     return out
 
+def add_parallel_id(e):
+    if "parallel_codeptr" in e.keys():
+        e["parallel_id"] = (e["parallel_codeptr"] << 32) | e["parallel_counter"]
+    return e
 
 # Reverse a codeptr-to-parallel_id-list mapping.
 def reverse_mapping(mapping: dict):
@@ -129,17 +133,20 @@ def thread_events(thread_id: int, events):
     prev = None
     # Queue up first event in the stream.
     for event in events:
-        if event["gtid"] == thread_id:
+        if event["global_thread_num"] == thread_id:
             prev = event_as_dict(event)
+            prev = add_parallel_id(prev)
             break
     # For all events thereafter, add on the duration field, and yield.
     for event in events:
-        if event["gtid"] == thread_id:
+        if event["global_thread_num"] == thread_id:
             prev["duration"] = event.timestamp - prev["timestamp"]
+            prev = add_parallel_id(prev)
             yield prev
             prev = event_as_dict(event)
     # HACK: Return last event with hard-coded duration.
     prev["duration"] = 1
+    prev = add_parallel_id(prev)
     yield prev
     return
 
@@ -148,7 +155,7 @@ def thread_events(thread_id: int, events):
 def gen_codeptr_map(events: list):
     out = {}
     for event in events:
-        codeptr_ra = event.get("codeptr_ra")
+        codeptr_ra = event.get("parallel_codeptr")
         parallel_id = event.get("parallel_id")
         if codeptr_ra is not None:
             if codeptr_ra in out:
@@ -159,7 +166,7 @@ def gen_codeptr_map(events: list):
 
 
 # The function that actually generates per-region statistics.
-def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max_energy_uj=0):
+def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max_energy_uj=0, energy_enabled=False):
     # Output variables.
     region_num_runs = defaultdict(int)
 
@@ -179,7 +186,7 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max
     stack_implicit = []  # implicit_task_begin/end
     stack_barrier = []   # barrier_wait_begin/end
     mapping = reverse_mapping(codeptr_to_paridset)
-    #gtid = events[0]["gtid"]  # DEBUG: helper variable for context.
+    #gtid = events[0]["global_thread_num"]  # DEBUG: helper variable for context.
     seen = set()
     ts_cur = None
     duration = None
@@ -187,9 +194,10 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max
     rollover_counter = {i: 0 for i in range(0, 4)}
     # Iterate across events.
     for event in events:
-        # Rollover tracking goes on regardless of whether we care about an event or not.
-        if last_event is not None:
-             rollover_counter = track_rollovers(rollover_counter, event, last_event)
+        if energy_enabled:
+            # Rollover tracking goes on regardless of whether we care about an event or not.
+            if last_event is not None:
+                 rollover_counter = track_rollovers(rollover_counter, event, last_event)
         last_event = event
 
         # Skip events we don't care about.
@@ -199,39 +207,45 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max
         if   event["name"] == "lttng_pinsight:parallel_begin":
             is_master = True  # Useful later for master-specific overhead accounting.
             # Set mapping variables (this is the only place we should do this).
-            codeptr_ra = event["codeptr_ra"]
+            codeptr_ra = event["parallel_codeptr"]
             parallel_id = event["parallel_id"]
             codeptr_to_paridset[codeptr_ra].add(parallel_id)
             mapping[parallel_id] = codeptr_ra
             #stack_parallel.append(event)
-            event = update_event_energy(event, rollover_counter, max_energy_uj)
+            if energy_enabled:
+                event = update_event_energy(event, rollover_counter, max_energy_uj)
             region_stack.append(event)
         elif event["name"] == "lttng_pinsight:implicit_task_begin":
             #stack_implicit.append(event)
-            event = update_event_energy(event, rollover_counter, max_energy_uj)
+            if energy_enabled:
+                event = update_event_energy(event, rollover_counter, max_energy_uj)
             region_stack.append(event)
-        elif event["name"] == "lttng_pinsight:barrier_wait_begin":
+        elif event["name"] == "lttng_pinsight:sync_wait_begin":
             #stack_barrier.append(event)
-            event = update_event_energy(event, rollover_counter, max_energy_uj)
+            if energy_enabled:
+                event = update_event_energy(event, rollover_counter, max_energy_uj)
             region_stack.append(event)
         # Master-specific tracking/measuring.
         elif event["name"] == "lttng_pinsight:parallel_end":
             #prev = stack_parallel.pop()
-            event = update_event_energy(event, rollover_counter, max_energy_uj)
+            if energy_enabled:
+                event = update_event_energy(event, rollover_counter, max_energy_uj)
             prev = region_stack.pop()
             #verify_event_type(prev, "lttng_pinsight:parallel_begin")
             assert(prev["name"] == "lttng_pinsight:parallel_begin")
-            codeptr_ra = prev["codeptr_ra"]
+            codeptr_ra = prev["parallel_codeptr"]
             parallel_id = prev["parallel_id"]
             seen.add(codeptr_ra)
             splits[parallel_id] = event["timestamp"]  # Save where the overhead/idle breakover point is.
             # Master's idle will be brief, and happens betwen barrier_wait_end and parallel_end.
             region_total_idle[codeptr_ra] += event["timestamp"] - master_last_barrier
-            region_energy_idle[codeptr_ra] += compute_energy_diff(event, prev)
+            if energy_enabled:
+                region_energy_idle[codeptr_ra] += compute_energy_diff(event, prev)
         # Do majority of measurement.
         elif event["name"] == "lttng_pinsight:implicit_task_end":
             #prev = stack_implicit.pop()
-            event = update_event_energy(event, rollover_counter, max_energy_uj)
+            if energy_enabled:
+                event = update_event_energy(event, rollover_counter, max_energy_uj)
             prev = region_stack.pop()
             assert(prev["name"] == "lttng_pinsight:implicit_task_begin")
             #verify_event_type(prev, "lttng_pinsight:implicit_task_begin")
@@ -242,21 +256,24 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max
             # TODO: Actually measure performance and energy.
             # Measure `total_exec_time` here, along with total energy burned.
             region_total_exec_time[codeptr_ra] += event["timestamp"] - prev["timestamp"]
-            region_energy_total[codeptr_ra] += compute_energy_diff(event, prev)
+            if energy_enabled:
+                region_energy_total[codeptr_ra] += compute_energy_diff(event, prev)
         # Do overhead/idle tracking here.
-        elif event["name"] == "lttng_pinsight:barrier_wait_end":
+        elif event["name"] == "lttng_pinsight:sync_wait_end":
             #prev = stack_barrier.pop()
-            event = update_event_energy(event, rollover_counter, max_energy_uj)
+            if energy_enabled:
+                event = update_event_energy(event, rollover_counter, max_energy_uj)
             prev = region_stack.pop()
             #verify_event_type(prev, "lttng_pinsight:barrier_wait_begin")
-            assert(prev["name"] == "lttng_pinsight:barrier_wait_begin")
+            assert(prev["name"] == "lttng_pinsight:sync_wait_begin")
             parallel_id = prev["parallel_id"]
             codeptr_ra = mapping[parallel_id]
             seen.add(codeptr_ra)
             if is_master:
                 master_last_barrier = event["timestamp"]
                 region_total_overhead[codeptr_ra] += event["timestamp"] - prev["timestamp"]
-                region_energy_overhead[codeptr_ra] += compute_energy_diff(event, prev)
+                if energy_enabled:
+                    region_energy_overhead[codeptr_ra] += compute_energy_diff(event, prev)
                 # Note: Idle time calculated in parallel_end for master.
             else:
                 total_time = event["timestamp"] - prev["timestamp"]
@@ -268,14 +285,16 @@ def gen_stats(events: dict, codeptr_to_paridset=defaultdict(set), splits={}, max
                     region_total_overhead[codeptr_ra] += overhead_time
                     region_total_idle[codeptr_ra]     += idle_time
                     assert(idle_time > 0)
-                    # Note: Energy measurement is tricky here because we have to split the measurement.
-                    energy = compute_energy_diff(event, prev)
-                    region_energy_overhead[codeptr_ra] += int((overhead_time / total_time) * energy)
-                    region_energy_idle[codeptr_ra]     += int((idle_time / total_time) * energy)
+                    if energy_enabled:
+                        # Note: Energy measurement is tricky here because we have to split the measurement.
+                        energy = compute_energy_diff(event, prev)
+                        region_energy_overhead[codeptr_ra] += int((overhead_time / total_time) * energy)
+                        region_energy_idle[codeptr_ra]     += int((idle_time / total_time) * energy)
                 else:
                     # Normal case. (Pure overheads.)
                     region_total_overhead[codeptr_ra] += total_time
-                    region_energy_overhead[codeptr_ra] += compute_energy_diff(event, prev)
+                    if energy_enabled:
+                        region_energy_overhead[codeptr_ra] += compute_energy_diff(event, prev)
         else:
             pass
             #eprint(event)  # DEBUG
@@ -314,13 +333,19 @@ if __name__ == "__main__":
                             default=1,
                             help="Number of parallel processes to use.")
 
+    # Turn on energy-related features.
+    parser.add_argument("--enable-energy", "-e",
+                        action="store_true",
+                        dest="enable_energy",
+                        help="Turn on energy-related features. (default: off)")
+
     parser.add_argument("--master", type=int,
                         action="store",
                         dest="master_thread_id",
                         default=0,
                         help="ID of the master thread.")
 
-    parser.add_argument("--max-energy-uj", "-e", type=int,
+    parser.add_argument("--max-energy-uj", "-m", type=int,
                         action="store",
                         dest="max_energy_uj",
                         default=0,
@@ -351,7 +376,7 @@ if __name__ == "__main__":
     # Chain generators together.
     codeptr_to_paridset = defaultdict(set)
     splits = {}
-    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits, args.max_energy_uj)
+    thread_stats[master_thread_id], codeptr_to_paridset, splits = gen_stats(thread_events(master_thread_id, traces.events), codeptr_to_paridset, splits, args.max_energy_uj, args.enable_energy)
 
     # Process per-thread event streams in parallel.
     work_queue = []
@@ -364,7 +389,7 @@ if __name__ == "__main__":
 
     def process_events(k):
         traces = get_trace_collection(trace_path)  # Rebuild the trace collection.
-        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits, args.max_energy_uj)
+        stats, _, _ = gen_stats(thread_events(k, traces.events), codeptr_to_paridset, splits, args.max_energy_uj, args.enable_energy)
         return (k, stats)
 
     eprint("Info: Launching {} processes to process {} threads' data.".format(args.num_procs, args.THREADS_IN_TRACE - 1))
