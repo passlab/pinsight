@@ -12,40 +12,82 @@ extern "C" {
 #endif
 
 #include <lttng/tracepoint.h>
-#include <ompt.h>
 #include <stdbool.h>
 
+/** Macros used to simplify the definition of LTTng TRACEPOINT_EVENT */
+#define COMMON_TP_ARGS
+//COMMON_TP_FIELDS are those fields in the thread-local storage. These fields will be added to all the trace records
+#define COMMON_TP_FIELDS \
+    ctf_integer(unsigned int, global_thread_num, global_thread_num) \
+    ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
+    ctf_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
+    ctf_integer(unsigned int, parallel_counter, parallel_counter)
+
+//    ctf_integer_hex(long int, task_codeptr, task_codeptr) \
+//    ctf_integer(unsigned int, task_counter, task_counter)
+
+#ifdef ENABLE_ENERGY
+#define ENERGY_TP_ARGS             \
+        ,\
+        long long int,    pkg_energy0,\
+        long long int,    pkg_energy1,\
+        long long int,    pkg_energy2,\
+        long long int,    pkg_energy3
+
+#define ENERGY_TP_FIELDS \
+        ctf_integer(long long int, pkg_energy0, pkg_energy0) \
+        ctf_integer(long long int, pkg_energy1, pkg_energy1) \
+        ctf_integer(long long int, pkg_energy2, pkg_energy2) \
+        ctf_integer(long long int, pkg_energy3, pkg_energy3)
+
+//package_energy[] is a global variable declared in ompt_callback.h file, since the arguments passed to the
+//tracepoint call depend on the ENERGY_TP_ARGS, thus we put here so update will be easy to make them consistent
+#define ENERGY_TRACEPOINT_CALL_ARGS ,package_energy[0],package_energy[1],package_energy[2],package_energy[3]
+#else
+#define ENERGY_TP_ARGS
+#define ENERGY_TP_FIELDS
+#define ENERGY_TRACEPOINT_CALL_ARGS
+#endif
+
+//LTTng TRACEPOINT_EVENT definition
+/**
+ * thread_begin and thread_end
+ */
+#define TRACEPOINT_EVENT_THREAD(event_name)                                    \
+    TRACEPOINT_EVENT(                                                          \
+        lttng_pinsight, event_name,                                            \
+        TP_ARGS(                                                               \
+            unsigned short,    thread_type                                     \
+            ENERGY_TP_ARGS                                                      \
+        ),                                                                     \
+        TP_FIELDS(                                                             \
+            ctf_integer(unsigned int, global_thread_num, global_thread_num) \
+            ctf_integer(unsigned short, thread_type, thread_type)      \
+            ENERGY_TP_FIELDS                                                \
+        )                                                                      \
+    )
+
+TRACEPOINT_EVENT_THREAD(thread_begin)
+TRACEPOINT_EVENT_THREAD(thread_end)
+
+/**
+ * parallel_begin
+ */
 TRACEPOINT_EVENT(
     lttng_pinsight,
     parallel_begin,
     TP_ARGS(
-        int,                  gtid,
-        const ompt_frame_t *, parent_task_frame,
-        ompt_data_t *,        parallel_data,
-        uint32_t,             requested_team_size,
-        const void *,         codeptr_ra
-#ifdef ENABLE_ENERGY
-        ,
-        long long int,        pkg_energy0,
-        long long int,        pkg_energy1,
-        long long int,        pkg_energy2,
-        long long int,        pkg_energy3
-#endif
+        unsigned int,         requested_team_size,
+        int,                  flag,
+        const void *,         parent_task_frame
+        ENERGY_TP_ARGS
     ),
     TP_FIELDS(
-        ctf_integer(int, gtid, gtid)
-        //                ctf_integer_hex(long int, frame,
-        //parent_task_frame->exit_frame)
-        ctf_integer_hex(long int, frame, parent_task_frame->enter_frame.ptr)
-        ctf_integer_hex(long int, parallel_id, parallel_data->value)
-        ctf_integer(int, team_size, requested_team_size)
-        ctf_integer_hex(long int, codeptr_ra, codeptr_ra)
-#ifdef ENABLE_ENERGY
-        ctf_integer(long long int, pkg_energy0, pkg_energy0)
-        ctf_integer(long long int, pkg_energy1, pkg_energy1)
-        ctf_integer(long long int, pkg_energy2, pkg_energy2)
-        ctf_integer(long long int, pkg_energy3, pkg_energy3)
-#endif
+        COMMON_TP_FIELDS
+        ctf_integer(unsigned int, team_size, requested_team_size)
+        ctf_integer(int, flag, flag)
+        ctf_integer_hex(long int, parent_task_frame, parent_task_frame)
+        ENERGY_TP_FIELDS
     )
 )
 
@@ -53,301 +95,111 @@ TRACEPOINT_EVENT(
     lttng_pinsight,
     parallel_end,
     TP_ARGS(
-        int,           gtid,
-        ompt_data_t *, parallel_data,
-        ompt_data_t *, task_data,
-        const void *,  codeptr_ra
-#ifdef ENABLE_ENERGY
-        ,
-        long long int, pkg_energy0,
-        long long int, pkg_energy1,
-        long long int, pkg_energy2,
-        long long int, pkg_energy3
-#endif
+        int,           flag
+        ENERGY_TP_ARGS
     ),
     TP_FIELDS(
-        ctf_integer(int, gtid, gtid)
-        ctf_integer_hex(long int, parallel_id, parallel_data->value)
-        ctf_integer_hex(long int, task_id, task_data->value)
-        ctf_integer_hex(long int, codeptr_ra, codeptr_ra)
-#ifdef ENABLE_ENERGY
-        ctf_integer(long long int, pkg_energy0, pkg_energy0)
-        ctf_integer(long long int, pkg_energy1, pkg_energy1)
-        ctf_integer(long long int, pkg_energy2, pkg_energy2)
-        ctf_integer(long long int, pkg_energy3, pkg_energy3)
-#endif
+        COMMON_TP_FIELDS
+        ctf_integer(int, flag, flag)
+        ENERGY_TP_FIELDS
     )
 )
 
 /**
- * thread work
- */
-#if !defined(ENABLE_ENERGY)
-#define TRACEPOINT_EVENT_WORK(event_name)                                      \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int,               gtid,                                           \
-            ompt_data_t *,     parallel_data,                                  \
-            ompt_data_t *,     task_data,                                      \
-            unsigned long int, count,                                          \
-            const void *,      codeptr_ra                                      \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer(unsigned long int, count, count)                       \
-            ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-        )                                                                      \
-    )
-#else
-#define TRACEPOINT_EVENT_WORK(event_name)                                      \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int,               gtid,                                           \
-            ompt_data_t *,     parallel_data,                                  \
-            ompt_data_t *,     task_data,                                      \
-            unsigned long int, count,                                          \
-            const void *,      codeptr_ra,                                     \
-            long long int,     pkg_energy0,                                    \
-            long long int,     pkg_energy1,                                    \
-            long long int,     pkg_energy2,                                    \
-            long long int,     pkg_energy3                                     \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer(unsigned long int, count, count)                       \
-            ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
-            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
-            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
-            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
-        )                                                                      \
-    )
-#endif
-
-TRACEPOINT_EVENT_WORK(work_loop_begin)
-TRACEPOINT_EVENT_WORK(work_loop_end)
-TRACEPOINT_EVENT_WORK(work_sections_begin)
-TRACEPOINT_EVENT_WORK(work_sections_end)
-TRACEPOINT_EVENT_WORK(work_single_executor_begin)
-TRACEPOINT_EVENT_WORK(work_single_executor_end)
-TRACEPOINT_EVENT_WORK(work_single_other_begin)
-TRACEPOINT_EVENT_WORK(work_single_other_end)
-TRACEPOINT_EVENT_WORK(work_workshare_begin)
-TRACEPOINT_EVENT_WORK(work_workshare_end)
-TRACEPOINT_EVENT_WORK(work_distribute_begin)
-TRACEPOINT_EVENT_WORK(work_distribute_end)
-TRACEPOINT_EVENT_WORK(work_taskloop_begin)
-TRACEPOINT_EVENT_WORK(work_taskloop_end)
-
-/**
- * master
- */
-#if !defined(ENABLE_ENERGY)
-#define TRACEPOINT_EVENT_MASTER(event_name)                                    \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int,           gtid,                                               \
-            ompt_data_t *, parallel_data,                                      \
-            ompt_data_t *, task_data,                                          \
-            const void *,  codeptr_ra                                          \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-        )                                                                      \
-    )
-#else
-#define TRACEPOINT_EVENT_MASTER(event_name)                                    \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int,           gtid,                                               \
-            ompt_data_t *, parallel_data,                                      \
-            ompt_data_t *, task_data,                                          \
-            const void *,  codeptr_ra,                                         \
-            long long int, pkg_energy0,                                        \
-            long long int, pkg_energy1,                                        \
-            long long int, pkg_energy2,                                        \
-            long long int, pkg_energy3                                         \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
-            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
-            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
-            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
-        )                                                                      \
-    )
-#endif
-
-TRACEPOINT_EVENT_MASTER(master_begin)
-TRACEPOINT_EVENT_MASTER(master_end)
-
-/**
  * implicit task begin and end
  */
-#if !defined(ENABLE_ENERGY)
-#define TRACEPOINT_EVENT_IMPLICIT_TASK(event_name)                             \
+#define TRACEPOINT_EVENT_IMPLICIT_TASK(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
         lttng_pinsight, event_name,                                            \
         TP_ARGS(                                                               \
-            int,           gtid,                                               \
-            ompt_data_t *, parallel_data,                                      \
-            ompt_data_t *, task_data,                                          \
-            unsigned int,  team_size,                                          \
-            unsigned int,  thread_num                                          \
+            unsigned int,    team_size                                     \
+            ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer(int, team_size, team_size)                             \
-            ctf_integer_hex(int, thread_num, thread_num)                       \
+            COMMON_TP_FIELDS                                                    \
+            ctf_integer(unsigned int, team_size, team_size)      \
+            ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
-#else
-#define TRACEPOINT_EVENT_IMPLICIT_TASK(event_name)                             \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int,           gtid,                                               \
-            ompt_data_t *, parallel_data,                                      \
-            ompt_data_t *, task_data,                                          \
-            unsigned int,  team_size,                                          \
-            unsigned int,  thread_num,                                         \
-            long long int, pkg_energy0,                                        \
-            long long int, pkg_energy1,                                        \
-            long long int, pkg_energy2,                                        \
-            long long int, pkg_energy3                                         \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer(int, team_size, team_size)                             \
-            ctf_integer_hex(int, thread_num, thread_num)                       \
-            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
-            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
-            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
-            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
-        )                                                                      \
-    )
-#endif
 
 TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_begin)
 TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_end)
 
-/* synchronization, e.g. barrier, taskwait, taskgroup, related tracepoint */
-#if !defined(ENABLE_ENERGY)
-#define TRACEPOINT_EVENT_SYNC(event_name)                                      \
+/**
+ * thread worksharing work
+ */
+#define TRACEPOINT_EVENT_WORK(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
         lttng_pinsight, event_name,                                            \
         TP_ARGS(                                                               \
-            int,           gtid,                                               \
-            ompt_data_t *, parallel_data,                                      \
-            ompt_data_t *, task_data,                                          \
-            const void *,  codeptr_ra                                          \
+            unsigned short,    wstype,                                     \
+            const void *,  work_begin_codeptr,                                          \
+            const void *,  work_end_codeptr,                                          \
+            unsigned int,  counter,            \
+            unsigned int,  count            \
+            ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
+            COMMON_TP_FIELDS                                                    \
+            ctf_integer(unsigned short, wstype, wstype)      \
+            ctf_integer_hex(unsigned int, work_begin_codeptr, work_begin_codeptr)                  \
+            ctf_integer_hex(unsigned int, work_end_codeptr, work_end_codeptr)                  \
+            ctf_integer(unsigned int, counter, counter)                 \
+            ctf_integer(unsigned int, count, count)                        \
+            ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
-#else
-#define TRACEPOINT_EVENT_SYNC(event_name)                                      \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int,           gtid,                                               \
-            ompt_data_t *, parallel_data,                                      \
-            ompt_data_t *, task_data,                                          \
-            const void *,  codeptr_ra,                                         \
-            long long int, pkg_energy0,                                        \
-            long long int, pkg_energy1,                                        \
-            long long int, pkg_energy2,                                        \
-            long long int, pkg_energy3                                         \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, parallel_id, (parallel_data) ? parallel_data->value : 0) \
-            ctf_integer_hex(long int, task_id, task_data->value)               \
-            ctf_integer_hex(long int, codeptr_ra, codeptr_ra)                  \
-            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
-            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
-            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
-            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
-        )                                                                      \
-    )
-#endif
 
-TRACEPOINT_EVENT_SYNC(barrier_begin)
-TRACEPOINT_EVENT_SYNC(barrier_end)
-TRACEPOINT_EVENT_SYNC(taskwait_begin)
-TRACEPOINT_EVENT_SYNC(taskwait_end)
-TRACEPOINT_EVENT_SYNC(taskgroup_begin)
-TRACEPOINT_EVENT_SYNC(taskgroup_end)
-TRACEPOINT_EVENT_SYNC(barrier_wait_begin)
-TRACEPOINT_EVENT_SYNC(barrier_wait_end)
-TRACEPOINT_EVENT_SYNC(taskwait_wait_begin)
-TRACEPOINT_EVENT_SYNC(taskwait_wait_end)
-TRACEPOINT_EVENT_SYNC(taskgroup_wait_begin)
-TRACEPOINT_EVENT_SYNC(taskgroup_wait_end)
+TRACEPOINT_EVENT_WORK(work_begin)
+TRACEPOINT_EVENT_WORK(work_end)
 
 /**
- * thread-related events
+ * master
  */
-#if !defined(ENABLE_ENERGY)
-#define TRACEPOINT_EVENT_THREAD(event_name)                                    \
+#define TRACEPOINT_EVENT_MASTER(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
         lttng_pinsight, event_name,                                            \
         TP_ARGS(                                                               \
-            int, gtid,                                                         \
-            ompt_data_t *, thread_data                                         \
+            const void *,  master_begin_codeptr,                                          \
+            const void *,  master_end_codeptr,                                          \
+            unsigned int,  counter            \
+            ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, thread_data_id, thread_data->value)      \
+            COMMON_TP_FIELDS                                                    \
+            ctf_integer_hex(unsigned int, master_begin_codeptr, master_begin_codeptr)                  \
+            ctf_integer_hex(unsigned int, master_end_codeptr, master_end_codeptr)                  \
+            ctf_integer(unsigned int, counter, counter)                 \
+            ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
-#else
-#define TRACEPOINT_EVENT_THREAD(event_name)                                    \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
-        TP_ARGS(                                                               \
-            int, gtid,                                                         \
-            ompt_data_t *, thread_data,                                        \
-            long long int, pkg_energy0,                                        \
-            long long int, pkg_energy1,                                        \
-            long long int, pkg_energy2,                                        \
-            long long int, pkg_energy3                                         \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            ctf_integer(int, gtid, gtid)                                       \
-            ctf_integer_hex(long int, thread_data_id, thread_data->value)      \
-            ctf_integer(long long int, pkg_energy0, pkg_energy0)               \
-            ctf_integer(long long int, pkg_energy1, pkg_energy1)               \
-            ctf_integer(long long int, pkg_energy2, pkg_energy2)               \
-            ctf_integer(long long int, pkg_energy3, pkg_energy3)               \
-        )                                                                      \
-    )
-#endif
 
-TRACEPOINT_EVENT_THREAD(thread_begin)
-TRACEPOINT_EVENT_THREAD(thread_end)
+TRACEPOINT_EVENT_MASTER(master_begin)
+TRACEPOINT_EVENT_MASTER(master_end)
+
+/* synchronization, e.g. barrier, taskwait, taskgroup, related tracepoint */
+#define TRACEPOINT_EVENT_SYNC(event_name)                                    \
+    TRACEPOINT_EVENT(                                                          \
+        lttng_pinsight, event_name,                                            \
+        TP_ARGS(                                                               \
+            unsigned short,    kind,                                     \
+            const void *,  sync_codeptr,                                          \
+            unsigned int,  counter            \
+            ENERGY_TP_ARGS                                                      \
+        ),                                                                     \
+        TP_FIELDS(                                                             \
+            COMMON_TP_FIELDS                                                    \
+            ctf_integer(unsigned short, kind, kind)      \
+            ctf_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
+            ctf_integer(unsigned int, counter, counter)                 \
+            ENERGY_TP_FIELDS                                                \
+        )                                                                      \
+    )
+
+TRACEPOINT_EVENT_SYNC(sync_begin)
+TRACEPOINT_EVENT_SYNC(sync_end)
+TRACEPOINT_EVENT_SYNC(sync_wait_begin)
+TRACEPOINT_EVENT_SYNC(sync_wait_end)
 
 #ifdef __cplusplus
 }
