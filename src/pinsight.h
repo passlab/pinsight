@@ -96,8 +96,8 @@ typedef struct pinsight_thread_data {
     /* this is the lexgion cache runtime stores, a lexgion is added to the array when the runtime encounters it.
      * The lexgion counter is updated when the lexgion is instantiated at the runtime */
     ompt_lexgion_t lexgions[MAX_NUM_LEXGIONS]; /* the array to store all the lexgions */
-    int lexgion_end; /* the last lexgion in the lexgion array */
-    int lexgion_recent; /* the most-recently used lexgion in the lexgion array */
+    int num_lexgions; /* the last lexgion in the lexgion array */
+    int recent_lexgion; /* the most-recently used lexgion in the lexgion array */
 } pinsight_thread_data_t;
 
 /* information to put in the event records */
