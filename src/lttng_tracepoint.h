@@ -126,6 +126,28 @@ TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_begin)
 TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_end)
 
 /**
+ * parallel join begin and end
+ * This is not an OMPT event, but we should be able to detect when each thread enters
+ * into join barrier (before sync_region) and when it completes the joining (upon the parallel_end)
+ */
+#define TRACEPOINT_EVENT_PARALLEL_JOIN(event_name)                                    \
+    TRACEPOINT_EVENT(                                                          \
+        lttng_pinsight, event_name,                                            \
+        TP_ARGS(                                                               \
+            unsigned short,    useless                                     \
+            ENERGY_TP_ARGS                                                      \
+        ),                                                                     \
+        TP_FIELDS(                                                             \
+            COMMON_TP_FIELDS                                                    \
+            ctf_integer(unsigned short, useless, useless)      \
+            ENERGY_TP_FIELDS                                                \
+        )                                                                      \
+    )
+
+TRACEPOINT_EVENT_PARALLEL_JOIN(parallel_join_begin)
+TRACEPOINT_EVENT_PARALLEL_JOIN(parallel_join_end)
+
+/**
  * thread worksharing work
  */
 #define TRACEPOINT_EVENT_WORK(event_name)                                    \

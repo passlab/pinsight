@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
     REAL alpha = 0.0543;
     REAL tol = 0.0000000001;
     REAL relax = 1.0;
-    int mits = 100;
+    int mits = 10;
 
     fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
     fprintf(stderr, "\tn - grid dimension in x direction, default: %d\n", n);
@@ -193,13 +193,12 @@ int main(int argc, char *argv[]) {
 #if CORRECTNESS_CHECK
     print_array("udev", "udev", (REAL*)udev, n, m);
 #endif
-    int num_threads;
+    int num_threads = 0;
 #pragma omp parallel
     {
 #pragma omp single
         num_threads = omp_get_num_threads();
     }
-
     elapsed = read_timer_ms();
     jacobi_omp(n, m, dx, dy, alpha, relax, uomp, f, tol, mits);
     elapsed = read_timer_ms() - elapsed;
@@ -316,6 +315,9 @@ void jacobi_omp(int n, int m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_
             for (j = 0; j < m; j++)
                 uold[i][j] = u[i][j];
 
+	for (i=0; i<10000; i++) {
+		error += i;
+        }
 #pragma omp parallel for private(j,i, resid) reduction(+:error)
         for (i = 1; i < (n - 1); i++)
             for (j = 1; j < (m - 1); j++) {

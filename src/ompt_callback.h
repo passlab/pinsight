@@ -222,11 +222,11 @@ on_ompt_callback_thread_end(
   //print out lexgion summary */
   if (global_thread_num == 0) {
     printf("============================================================\n");
-    printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.lexgion_end);
+    printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.num_lexgions);
     printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
     int i;
     int count;
-    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+    for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       printf("%d\t%p\t%d\t%d\t%p\n", i+1, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
     }
@@ -235,7 +235,7 @@ on_ompt_callback_thread_end(
     printf("parallel lexgions (type %d) from thread 0\n", ompt_callback_parallel_begin);
     printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
     count = 1;
-    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+    for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_parallel_begin)
       printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
@@ -245,7 +245,7 @@ on_ompt_callback_thread_end(
     printf("sync lexgions (type %d) from thread 0\n", ompt_callback_sync_region);
     printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
     count = 1;
-    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+    for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_sync_region)
         printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
@@ -255,7 +255,7 @@ on_ompt_callback_thread_end(
     printf("work lexgions (type %d) from thread 0\n", ompt_callback_work);
     printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
     count = 1;
-    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+    for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_work)
         printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
@@ -265,7 +265,7 @@ on_ompt_callback_thread_end(
     printf("master lexgions (type %d) from thread 0\n", ompt_callback_master);
     printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
     count = 1;
-    for (i=0; i<pinsight_thread_data.lexgion_end; i++) {
+    for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_master)
         printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
@@ -320,7 +320,6 @@ on_ompt_callback_parallel_end(
   assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
 
   tracepoint(lttng_pinsight, parallel_end, flag ENERGY_TRACEPOINT_CALL_ARGS);
-
   /* find the topmost parallel lexgion in the stack (in the nested parallel situation) */
   unsigned int counter;
   ompt_lexgion_t * enclosing_parallel = top_lexgion_type(ompt_callback_parallel_begin, &counter);
@@ -372,7 +371,7 @@ on_ompt_callback_implicit_task(
     }
     case ompt_scope_end: {
       tracepoint(lttng_pinsight, implicit_task_end, team_size ENERGY_TRACEPOINT_CALL_ARGS);
-      pop_lexgion(NULL);
+      ompt_lexgion_end(NULL);
       /* find the topmost task lexgion instance in the stack (in the nested situation) */
       unsigned int counter;
       ompt_lexgion_t * enclosing_task = top_lexgion_type(ompt_callback_task_create, &counter);
@@ -484,6 +483,15 @@ on_ompt_callback_master(
   }
 }
 
+/**
+ * In this callback, we will separate parallel_join sync from barrier/taskwait/taskgroup sync
+ *
+ * @param kind
+ * @param endpoint
+ * @param parallel_data
+ * @param task_data
+ * @param codeptr_ra
+ */
 static void
 on_ompt_callback_sync_region(
         ompt_sync_region_t kind,
@@ -500,11 +508,18 @@ on_ompt_callback_sync_region(
   switch(endpoint)
   {
     case ompt_scope_begin:
-      ;
-      ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_sync_region, codeptr_ra);
-      lgp->counter++;
-      push_lexgion(lgp, lgp->counter);
-      //tracepoint(lttng_pinsight, sync_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+      if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
+        /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
+         * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
+        tracepoint(lttng_pinsight, parallel_join_begin, 0 ENERGY_TRACEPOINT_CALL_ARGS);
+      } else {
+        /* implicit barrier in worksharing, single, sections, and explicit barrier */
+        /* each thread will have a lexgion object for the same lexgion */
+        ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_sync_region, codeptr_ra);
+        lgp->counter++;
+        push_lexgion(lgp, lgp->counter);
+        tracepoint(lttng_pinsight, sync_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+      }
       switch(kind)
       {
         case ompt_sync_region_barrier:
@@ -516,11 +531,20 @@ on_ompt_callback_sync_region(
       }
       break;
     case ompt_scope_end:
-      ;
-      unsigned int counter;
-      lgp = ompt_lexgion_end(&counter);
-      lgp->end_codeptr_ra = codeptr_ra;
-      //tracepoint(lttng_pinsight, sync_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+      if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
+        /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
+         * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
+        /* this is NOT the actual join_end since by the time sycn region terminates, a thread may already
+         * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
+         * when a thread is about to enter into a parallel region and start an implicit task */
+      } else {
+        /* implicit barrier in worksharing, single, sections, and explicit barrier */
+        /* each thread will have a lexgion object for the same lexgion */
+        unsigned int counter;
+        ompt_lexgion_t * lgp = ompt_lexgion_end(&counter);
+        lgp->end_codeptr_ra = codeptr_ra;
+        tracepoint(lttng_pinsight, sync_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+      }
       switch(kind)
       {
         case ompt_sync_region_barrier:
@@ -547,36 +571,47 @@ on_ompt_callback_sync_region_wait(
   switch(endpoint)
   {
     case ompt_scope_begin:
-      ;
-          //lgp = ompt_lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
-          //lgp->counter++;  //We do not increment the counter here since we will use the same counter as the sync_begin
-          //push_lexgion(lgp, lgp->counter);
-          tracepoint(lttng_pinsight, sync_wait_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
-          switch(kind)
-          {
-            case ompt_sync_region_barrier:
-              break;
-            case ompt_sync_region_taskwait:
-              break;
-            case ompt_sync_region_taskgroup:
-              break;
-          }
+      if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
+        /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
+        * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
+      } else {
+        //lgp = ompt_lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
+        //lgp->counter++;  //We do not increment the counter here since we will use the same counter as the sync_begin
+        //push_lexgion(lgp, lgp->counter);
+        tracepoint(lttng_pinsight, sync_wait_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+      }
+      switch(kind)
+      {
+        case ompt_sync_region_barrier:
           break;
+        case ompt_sync_region_taskwait:
+          break;
+        case ompt_sync_region_taskgroup:
+          break;
+      }
+      break;
     case ompt_scope_end:
-      ;
-          //lgp = ompt_lexgion_end(&counter);
-          //lgp->end_codeptr_ra = codeptr_ra;
-          tracepoint(lttng_pinsight, sync_wait_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
-          switch(kind)
-          {
-            case ompt_sync_region_barrier:
-              break;
-            case ompt_sync_region_taskwait:
-              break;
-            case ompt_sync_region_taskgroup:
-              break;
-          }
+      if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
+        /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
+         * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
+        /* this is NOT join_end */
+      } else {
+        /* implicit barrier in worksharing, single, sections, and explicit barrier */
+        /* each thread will have a lexgion object for the same lexgion */
+        //lgp = ompt_lexgion_end(&counter);
+        //lgp->end_codeptr_ra = codeptr_ra;
+        tracepoint(lttng_pinsight, sync_wait_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+      }
+      switch(kind)
+      {
+        case ompt_sync_region_barrier:
           break;
+        case ompt_sync_region_taskwait:
+          break;
+        case ompt_sync_region_taskgroup:
+          break;
+      }
+      break;
   }
 }
 
@@ -929,7 +964,7 @@ int ompt_initialize(
 //  register_callback_t(ompt_callback_mutex_released, ompt_callback_mutex_t);
 //  register_callback(ompt_callback_nest_lock);
   register_callback(ompt_callback_sync_region);
-  register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
+//  register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
 //  register_callback(ompt_callback_control_tool);
 //  register_callback(ompt_callback_flush);
 //  register_callback(ompt_callback_cancel);
