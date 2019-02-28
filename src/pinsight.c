@@ -1,5 +1,9 @@
 #include "ompt_callback.h"
 
+/* these are thread-local storage assuming that OpenMP runtime threads are 1:1 mapped to
+ * the system threads (PThread for example). If not, we should implement our own OpenMP
+ * thread-local storage (not system TLS).
+ */
 __thread int global_thread_num;
 __thread int omp_thread_num;
 __thread const void * parallel_codeptr;
@@ -14,8 +18,8 @@ pinsight_thread_data_t * init_thread_data(int _thread_num, ompt_thread_t thread_
     global_thread_num = _thread_num;
     pinsight_thread_data.thread_type = thread_type;
     pinsight_thread_data.stack_top = -1;
-    pinsight_thread_data.lexgion_end = -1;
-    pinsight_thread_data.lexgion_recent = -1;
+    pinsight_thread_data.num_lexgions = 0;
+    pinsight_thread_data.recent_lexgion = -1;
 
     return &pinsight_thread_data;
 }
@@ -47,11 +51,11 @@ ompt_lexgion_t * pop_lexgion(unsigned int * counter) {
  */
 static ompt_lexgion_t *ompt_find_lexgion(int type, const void *codeptr_ra, int * index) {
     /* play it safe for dealing with data race */
-    if (pinsight_thread_data.lexgion_recent < 0 || pinsight_thread_data.lexgion_end < 0) return NULL;
+    if (pinsight_thread_data.recent_lexgion < 0 || pinsight_thread_data.num_lexgions <= 0) return NULL;
     int i;
     ompt_lexgion_t * lgp;
     /* search forward from the most recent one */
-    for (i=pinsight_thread_data.lexgion_recent; i<=pinsight_thread_data.lexgion_end; i++) {
+    for (i=pinsight_thread_data.recent_lexgion; i<pinsight_thread_data.num_lexgions; i++) {
         if (type == pinsight_thread_data.lexgions[i].type && pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra) {
             *index = i;
             lgp = &pinsight_thread_data.lexgions[i];
@@ -65,7 +69,7 @@ static ompt_lexgion_t *ompt_find_lexgion(int type, const void *codeptr_ra, int *
         }
     }
     /* search from 0 to most recent one */
-    for (i=0; i<pinsight_thread_data.lexgion_recent; i++) {
+    for (i=0; i<pinsight_thread_data.recent_lexgion; i++) {
         if (pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra && type == pinsight_thread_data.lexgions[i].type) {
             *index = i;
             lgp = &pinsight_thread_data.lexgions[i];
@@ -90,7 +94,7 @@ ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra) {
 
     ompt_lexgion_t *lgp = ompt_find_lexgion(type, codeptr_ra, &index);
     if (lgp == NULL) {
-        index = pinsight_thread_data.lexgion_end + 1;
+        index = pinsight_thread_data.num_lexgions;
         if (index == MAX_NUM_LEXGIONS) {
             fprintf(stderr, "Max number of lex regions (%d) allowed in the source code reached\n",
                     MAX_NUM_LEXGIONS);
@@ -101,9 +105,9 @@ ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra) {
         //printf("%d: lexgion_begin(%d, %X): first time encountered %X\n", thread_id, i, codeptr_ra, lgp);
         lgp->type = type;
         lgp->counter = 0;
-        pinsight_thread_data.lexgion_end = index;
+        pinsight_thread_data.num_lexgions++;
     }
-    pinsight_thread_data.lexgion_recent = index; /* cache it for future search */
+    pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
     return lgp;
 }
 
