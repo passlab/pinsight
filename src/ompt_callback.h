@@ -218,57 +218,58 @@ on_ompt_callback_thread_end(
   assert(counter == lgp->counter);
   lgp->end_codeptr_ra = (void*)OUTMOST_CODEPTR;
   tracepoint(lttng_pinsight, thread_end, (short)pinsight_thread_data.thread_type ENERGY_TRACEPOINT_CALL_ARGS);
+  ompt_lexgion_post_trace_update(lgp);
 
   //print out lexgion summary */
   if (global_thread_num == 0) {
     printf("============================================================\n");
     printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.num_lexgions);
-    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     int i;
     int count;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
-      printf("%d\t%p\t%d\t%d\t%p\n", i+1, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+      printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", i+1, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
 
     printf("-------------------------------------------------------------\n");
     printf("parallel lexgions (type %d) from thread 0\n", ompt_callback_parallel_begin);
-    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_parallel_begin)
-      printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
 
     printf("-------------------------------------------------------------\n");
     printf("sync lexgions (type %d) from thread 0\n", ompt_callback_sync_region);
-    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_sync_region)
-        printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
 
     printf("-------------------------------------------------------------\n");
     printf("work lexgions (type %d) from thread 0\n", ompt_callback_work);
-    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_work)
-        printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
 
     printf("-------------------------------------------------------------\n");
     printf("master lexgions (type %d) from thread 0\n", ompt_callback_master);
-    printf("#\tcodeptr_ra\tcount\ttype\tend_codeptr_ra\n");
+    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_master)
-        printf("%d\t%p\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->type, lgp->end_codeptr_ra);
+        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
     printf("============================================================\n");
 
@@ -287,20 +288,24 @@ on_ompt_callback_parallel_begin(
 //  parallel_data->value = ompt_get_unique_id();
   ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_parallel_begin, codeptr_ra);
   lgp->counter++;
+  lgp->num_exes_after_last_trace ++;
   push_lexgion(lgp, lgp->counter);
   //This parallel_data->value will be passed to the implicit tasks, which use this number to get codeptr and counter
   parallel_data->value = LEXGION_RECORD_UUID(codeptr_ra, lgp->counter); //we use [codeptr_ra][counter]-formatted uuid
 
-  parallel_codeptr = codeptr_ra; //redundant since implicit_task will do this
-  parallel_counter = lgp->counter; //redundant since implicit task will do this
-  omp_thread_num = 0;  //redundant since implicit task will do this
+//  parallel_codeptr = codeptr_ra; //redundant since implicit_task will do this
+//  parallel_counter = lgp->counter; //redundant since implicit task will do this
+//  omp_thread_num = 0;  //redundant since implicit task will do this
+  ompt_set_trace(lgp);
+  if (trace_bit) {
 #ifdef ENABLE_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
+    if (global_thread_num == 0) {
+      rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+    }
 #endif
-  tracepoint(lttng_pinsight, parallel_begin, requested_team_size, flag,
-             parent_task_frame->enter_frame.ptr ENERGY_TRACEPOINT_CALL_ARGS);
+    tracepoint(lttng_pinsight, parallel_begin, requested_team_size, flag,
+               parent_task_frame->enter_frame.ptr ENERGY_TRACEPOINT_CALL_ARGS);
+  }
 }
 
 static void
@@ -310,18 +315,22 @@ on_ompt_callback_parallel_end(
         int flag,
         const void *codeptr_ra)
 {
-#ifdef ENABLE_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
-#endif
   ompt_lexgion_t * lgp = ompt_lexgion_end(NULL);
   lgp->end_codeptr_ra = codeptr_ra;
   assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
+  if (trace_bit) {
+#ifdef ENABLE_ENERGY
+    if (global_thread_num == 0) {
+      rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+    }
+#endif
 
-  tracepoint(lttng_pinsight, parallel_end, flag ENERGY_TRACEPOINT_CALL_ARGS);
+    tracepoint(lttng_pinsight, parallel_end, flag ENERGY_TRACEPOINT_CALL_ARGS);
+    ompt_lexgion_post_trace_update(lgp);
+  }
   /* find the topmost parallel lexgion in the stack (in the nested parallel situation) */
   unsigned int counter;
+  implicit_task = top_lexgion_type(ompt_callback_implicit_task, NULL); /* the nested situation */
   ompt_lexgion_t * enclosing_parallel = top_lexgion_type(ompt_callback_parallel_begin, &counter);
   if (enclosing_parallel == NULL) {
     parallel_codeptr = (void*) OUTMOST_CODEPTR;
@@ -344,11 +353,6 @@ on_ompt_callback_implicit_task(
         unsigned int team_size,
         unsigned int thread_num)
 {
-  #ifdef ENABLE_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
-#endif
   switch(endpoint)
   {
     case ompt_scope_begin: {
@@ -360,20 +364,37 @@ on_ompt_callback_implicit_task(
       /* in this call back, parallel_data is NULL for ompt_scope_end endpoint, thus to know the parallel_data at the end,
        * we need to pass the needed fields of parallel_data in the scope_begin to the task_data */
       task_data->value = parallel_data->value; // Here we just save the parallel_data to the task
-      ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_implicit_task, parallel_codeptr);
+      implicit_task = ompt_lexgion_begin(ompt_callback_implicit_task, parallel_codeptr);
       /* here no need to increment the counter since we this is the same instance as when
        * the parallel_begin starts the parallel region */
-      lgp->counter = parallel_counter;
-      push_lexgion(lgp, parallel_counter);
-
-      tracepoint(lttng_pinsight, implicit_task_begin, team_size ENERGY_TRACEPOINT_CALL_ARGS);
+      implicit_task->counter++; /* this should be the same as parallel_counter; */
+      implicit_task->num_exes_after_last_trace++;
+      push_lexgion(implicit_task, implicit_task->counter);
+      ompt_set_trace(implicit_task);
+      if (trace_bit) {
+#ifdef ENABLE_ENERGY
+        if (global_thread_num == 0) {
+          rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+        }
+#endif
+        tracepoint(lttng_pinsight, implicit_task_begin, team_size ENERGY_TRACEPOINT_CALL_ARGS);
+      }
       break;
     }
     case ompt_scope_end: {
-      tracepoint(lttng_pinsight, implicit_task_end, team_size ENERGY_TRACEPOINT_CALL_ARGS);
-      ompt_lexgion_end(NULL);
+      ompt_lexgion_t * lgp = ompt_lexgion_end(NULL); /* this is the same as implicit_task */
+      if (trace_bit) {
+#ifdef ENABLE_ENERGY
+        if (global_thread_num == 0) {
+          rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+        }
+#endif
+        tracepoint(lttng_pinsight, implicit_task_end, team_size ENERGY_TRACEPOINT_CALL_ARGS);
+        ompt_lexgion_post_trace_update(lgp);
+      }
       /* find the topmost task lexgion instance in the stack (in the nested situation) */
       unsigned int counter;
+      implicit_task = top_lexgion_type(ompt_callback_implicit_task, NULL); /* the nested situation */
       ompt_lexgion_t * enclosing_task = top_lexgion_type(ompt_callback_task_create, &counter);
       if (enclosing_task == NULL) {
         task_codeptr = (void*) OUTMOST_CODEPTR;
@@ -398,11 +419,6 @@ on_ompt_callback_work(
         uint64_t count,
         const void *codeptr_ra)
 {
-  #ifdef ENABLE_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
-#endif
   switch(endpoint)
   {
     case ompt_scope_begin:
@@ -411,8 +427,16 @@ on_ompt_callback_work(
         ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_work, codeptr_ra);
         lgp->counter++;
         push_lexgion(lgp, lgp->counter);
-        tracepoint(lttng_pinsight, work_begin, (short) wstype, codeptr_ra, (void*)0x000000, lgp->counter,
-                   count ENERGY_TRACEPOINT_CALL_ARGS);
+
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+          if (global_thread_num == 0) {
+            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+          }
+#endif
+          tracepoint(lttng_pinsight, work_begin, (short) wstype, codeptr_ra, (void *) 0x000000, lgp->counter,
+                     count ENERGY_TRACEPOINT_CALL_ARGS);
+        }
       } else {
         fprintf(stderr, "The work_scope_begin lexgion codeptr is the same as enclosing parallel or task codeptr, "
                 "something wrong. %p", codeptr_ra);
@@ -442,8 +466,16 @@ on_ompt_callback_work(
       ompt_lexgion_t *lgp = ompt_lexgion_end(&counter);
       lgp->end_codeptr_ra = codeptr_ra;
       if (lgp->codeptr_ra != parallel_codeptr && lgp->codeptr_ra != task_codeptr) {/* safety check */
-        tracepoint(lttng_pinsight, work_end, (short) wstype, lgp->codeptr_ra, codeptr_ra, counter,
-                   count ENERGY_TRACEPOINT_CALL_ARGS);
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+          if (global_thread_num == 0) {
+            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+          }
+#endif
+          tracepoint(lttng_pinsight, work_end, (short) wstype, lgp->codeptr_ra, codeptr_ra, counter,
+                     count ENERGY_TRACEPOINT_CALL_ARGS);
+          ompt_lexgion_post_trace_update(lgp);
+        }
       } else {
         fprintf(stderr, "The work_scope_end lexgion codeptr is the same as enclosing parallel or task codeptr, "
                 "something wrong. %p", codeptr_ra);
@@ -459,11 +491,6 @@ on_ompt_callback_master(
         ompt_data_t *task_data,
         const void *codeptr_ra)
 {
-  #ifdef ENABLE_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
-#endif
   switch(endpoint)
   {
     case ompt_scope_begin:
@@ -471,14 +498,31 @@ on_ompt_callback_master(
       ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_master, codeptr_ra);
       lgp->counter++;
       push_lexgion(lgp, lgp->counter);
-      tracepoint(lttng_pinsight, master_begin, codeptr_ra, (void*)0x000000, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+      if (trace_bit) {
+#ifdef ENABLE_ENERGY
+        if (global_thread_num == 0) {
+          rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+        }
+#endif
+        tracepoint(lttng_pinsight, master_begin, codeptr_ra, (void *) 0x000000, lgp->counter
+                   ENERGY_TRACEPOINT_CALL_ARGS);
+      }
       break;
     case ompt_scope_end:
       ;
       unsigned int counter;
       lgp = ompt_lexgion_end(&counter);
       lgp->end_codeptr_ra = codeptr_ra;
-      tracepoint(lttng_pinsight, master_end, lgp->codeptr_ra, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+
+      if (trace_bit) {
+#ifdef ENABLE_ENERGY
+        if (global_thread_num == 0) {
+          rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+        }
+#endif
+        tracepoint(lttng_pinsight, master_end, lgp->codeptr_ra, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+        ompt_lexgion_post_trace_update(lgp);
+      }
       break;
   }
 }
@@ -500,25 +544,35 @@ on_ompt_callback_sync_region(
         ompt_data_t *task_data,
         const void *codeptr_ra)
 {
-  #ifdef ENABLE_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
-#endif
   switch(endpoint)
   {
     case ompt_scope_begin:
       if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
         /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
          * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-        tracepoint(lttng_pinsight, parallel_join_begin, 0 ENERGY_TRACEPOINT_CALL_ARGS);
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+          if (global_thread_num == 0) {
+            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+          }
+#endif
+          tracepoint(lttng_pinsight, parallel_join_begin, 0 ENERGY_TRACEPOINT_CALL_ARGS);
+        }
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit barrier */
         /* each thread will have a lexgion object for the same lexgion */
         ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_sync_region, codeptr_ra);
         lgp->counter++;
         push_lexgion(lgp, lgp->counter);
-        tracepoint(lttng_pinsight, sync_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+            if (global_thread_num == 0) {
+              rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+            }
+#endif
+            tracepoint(lttng_pinsight, sync_begin, (unsigned short) kind, codeptr_ra, lgp->counter
+                       ENERGY_TRACEPOINT_CALL_ARGS);
+        }
       }
       switch(kind)
       {
@@ -543,7 +597,16 @@ on_ompt_callback_sync_region(
         unsigned int counter;
         ompt_lexgion_t * lgp = ompt_lexgion_end(&counter);
         lgp->end_codeptr_ra = codeptr_ra;
-        tracepoint(lttng_pinsight, sync_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+            if (global_thread_num == 0) {
+              rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+            }
+#endif
+            tracepoint(lttng_pinsight, sync_end, (unsigned short) kind, codeptr_ra, counter
+                       ENERGY_TRACEPOINT_CALL_ARGS);
+            ompt_lexgion_post_trace_update(lgp);
+        }
       }
       switch(kind)
       {
@@ -578,7 +641,15 @@ on_ompt_callback_sync_region_wait(
         //lgp = ompt_lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
         //lgp->counter++;  //We do not increment the counter here since we will use the same counter as the sync_begin
         //push_lexgion(lgp, lgp->counter);
-        tracepoint(lttng_pinsight, sync_wait_begin, (unsigned short)kind, codeptr_ra, lgp->counter ENERGY_TRACEPOINT_CALL_ARGS);
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+            if (global_thread_num == 0) {
+              rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+            }
+#endif
+            tracepoint(lttng_pinsight, sync_wait_begin, (unsigned short) kind, codeptr_ra, lgp->counter
+                       ENERGY_TRACEPOINT_CALL_ARGS);
+        }
       }
       switch(kind)
       {
@@ -600,7 +671,16 @@ on_ompt_callback_sync_region_wait(
         /* each thread will have a lexgion object for the same lexgion */
         //lgp = ompt_lexgion_end(&counter);
         //lgp->end_codeptr_ra = codeptr_ra;
-        tracepoint(lttng_pinsight, sync_wait_end, (unsigned short) kind, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
+        if (trace_bit) {
+#ifdef ENABLE_ENERGY
+            if (global_thread_num == 0) {
+              rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+            }
+#endif
+            tracepoint(lttng_pinsight, sync_wait_end, (unsigned short) kind, codeptr_ra, counter
+                       ENERGY_TRACEPOINT_CALL_ARGS);
+            //ompt_lexgion_post_trace_update(lgp);
+        }
       }
       switch(kind)
       {
@@ -987,6 +1067,14 @@ int ompt_initialize(
   debug_on = env_get_long(PINSIGHT_DEBUG_ENABLE, PINSIGHT_DEBUG_ENABLE_DEFAULT);
   if (debug_on) {
     printf("0: NULL_POINTER=%p\n", NULL);
+  }
+
+  const char* pinsight_trace_config = getenv("PINSIGHT_TRACE_CONFIG");
+  if (pinsight_trace_config != NULL) {
+      printf("PINSIGHT_TRACE_CONFIG: %s\n", pinsight_trace_config);
+      sscanf(pinsight_trace_config, "%d:%d:%d", &NUM_INITIAL_TRACES, &MAX_NUM_TRACES, &TRACE_SAMPLING_RATE);
+      printf("NUM_INITIAL_TRACES: %u, MAX_NUM_TRACES: %u, TRACE_SAMPLING_RATE: %u\n",
+             NUM_INITIAL_TRACES, MAX_NUM_TRACES, TRACE_SAMPLING_RATE);
   }
 
 #ifdef ENABLE_ENERGY
