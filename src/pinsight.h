@@ -32,6 +32,15 @@
 #define LEXGION_RECORD_COUNTER(uuid) (uint32_t)uuid
 #define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) (uint32_t)(uint64_t)codeptr_ra
 
+/* Constant or variable for controlling sampling tracing */
+#define DEFAULT_NUM_INITIAL_TRACES 10
+#define DEFAULT_MAX_NUM_TRACES 50
+#define DEFAULT_TRACE_SAMPLING_RATE 8
+
+extern unsigned int NUM_INITIAL_TRACES;
+extern unsigned int MAX_NUM_TRACES;
+extern unsigned int TRACE_SAMPLING_RATE;
+
 /**
  * A lexgion (lexical region) is a region in the source code that has its footprint in
  * the runtime, e.g. a parallel region, a worksharing region, master/single region, task
@@ -72,8 +81,24 @@ typedef struct ompt_lexgion {
     int type; /* the type of a lexgion: parallel, master, singer, barrier, task, section, etc. we use trace record event id for this type */
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
     /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
-    volatile unsigned int counter; /* total number of records, i.e. about total number of execution of the same region */
+    volatile unsigned int counter; /* counter for total number of execution of the region */
+
+    /* counter and count for sampling and fine-grained control of tracing. So far, we only do trace control for parallel region.
+     * If a parallel region is traced, all constructs insides are traced. */
+    unsigned int num_initial_traces;
+    int sample_rate; /* the rate of tracing. Every sample_rate executions of the region, a trace is recorded.
+                      * 0: no tracing; -1: trace all */
+    unsigned int num_exes_after_last_trace; /* counter to control the sampling */
+    unsigned int max_num_traces;
+    unsigned int trace_counter; /* counter for total number of traced execution */
 } ompt_lexgion_t;
+
+/* This macro check whether to trace or not: traces for the initial number of exes or when reaching sampling rate */
+#define ompt_set_trace(lgp) {trace_bit = lgp->trace_counter < lgp->num_initial_traces || \
+                            (lgp->trace_counter < lgp->max_num_traces && (lgp->sample_rate == -1 || \
+                                                    lgp->num_exes_after_last_trace == lgp->sample_rate));}
+
+#define ompt_lexgion_post_trace_update(lgp) {lgp->trace_counter++; lgp->num_exes_after_last_trace=0;}
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16
@@ -90,6 +115,7 @@ typedef struct pinsight_thread_data {
         ompt_lexgion_t *lgp;
         unsigned int counter; /* this counter is the counter of lgp when an lexgion instance is created and
                                * pushed to the stack */
+        int tracing; /* a flag to indicate whether to trace this instance or not */
     } lexgion_stack[MAX_LEXGION_STACK_DEPTH];
     int stack_top;
 
@@ -109,6 +135,8 @@ extern __thread const void * task_codeptr;
 extern __thread unsigned int task_counter;
 
 extern __thread pinsight_thread_data_t pinsight_thread_data;
+extern __thread ompt_lexgion_t * implicit_task;
+extern __thread int trace_bit; /* 0 or 1 for enabling trace */
 
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 

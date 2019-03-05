@@ -43,6 +43,9 @@ shift 5
 # --------------------------------------------------------
 # Main script
 
+# Clean the trace folder first
+rm -rf ${TRACING_OUTPUT_DEST}
+
 # Create a userspace session.
 lttng create ompt-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
