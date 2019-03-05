@@ -11,6 +11,12 @@ __thread unsigned int parallel_counter;
 __thread const void * task_codeptr;
 __thread unsigned int task_counter;
 __thread pinsight_thread_data_t pinsight_thread_data;
+__thread ompt_lexgion_t * implicit_task;
+__thread int trace_bit; /* 0 or 1 for enabling trace */
+
+unsigned int NUM_INITIAL_TRACES = DEFAULT_NUM_INITIAL_TRACES;
+unsigned int MAX_NUM_TRACES = DEFAULT_MAX_NUM_TRACES;
+unsigned int TRACE_SAMPLING_RATE = DEFAULT_TRACE_SAMPLING_RATE;
 
 /** init thread data
  */
@@ -104,7 +110,15 @@ ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra) {
         lgp->codeptr_ra = codeptr_ra;
         //printf("%d: lexgion_begin(%d, %X): first time encountered %X\n", thread_id, i, codeptr_ra, lgp);
         lgp->type = type;
+
+        /* init counters for number of exes, traces, and sampling */
         lgp->counter = 0;
+        lgp->num_exes_after_last_trace = 0;
+        lgp->sample_rate = TRACE_SAMPLING_RATE;
+        lgp->trace_counter = 0;
+        lgp->max_num_traces = MAX_NUM_TRACES;
+        lgp->num_initial_traces = NUM_INITIAL_TRACES;
+
         pinsight_thread_data.num_lexgions++;
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
