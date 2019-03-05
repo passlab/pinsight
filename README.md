@@ -84,12 +84,18 @@ This script helps make generating LTTng traces for OpenMP programs easier.
 
 Example using the `jacobi` application with `8` threads:
 
-    trace.sh /tmp/ompt-jacobi \
+    trace.sh /tmp/ompt-jacobi jacobi \
       /opt/openmp-install/lib/libomp.so \
       /opt/pinsight/lib/libpinsight.so \
       8 \
       ./jacobi 2048 2048
 
+#### Specifying tracing rate
+To allow user's control of tracing of each parallel region, one can specify a sampling rate, max number of traces, and initial number of traces of each parallel region using ``PINSIGH_TRACE_CONFIG`` environment variable. The ``PINSIGH_TRACE_CONFIG`` should be the form of ``<num_initial_traces>:<max_num_traces>:<trace_sampling_rate>``. Below are the examples of ``PINSIGH_TRACE_CONFIG`` settings and their tracing behavior:
+1. ``PINSIGH_TRACE_CONFIG=10:50:8``, This is the system default. It records the first 10 traces, then after that, records one trace per 10 executions and in total max 50 traces will be recorded. 
+1. ``PINSIGH_TRACE_CONFIG=0:-1:-1``,  record all the traces. 
+1. ``PINSIGHT_TRACE_CONFIG=0:-1:10``, record 1 trace per 10 executions for all the executions. 
+1. ``PINSIGHT_TRACE_CONFIG=20:20:-1``, record the first 20 executions only
 
 #### Manual LTTng tracing session
 
