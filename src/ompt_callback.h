@@ -347,11 +347,12 @@ on_ompt_callback_parallel_end(
 
 static void
 on_ompt_callback_implicit_task(
-        ompt_scope_endpoint_t endpoint,
-        ompt_data_t *parallel_data,
-        ompt_data_t *task_data,
-        unsigned int team_size,
-        unsigned int thread_num)
+    ompt_scope_endpoint_t endpoint,
+    ompt_data_t *parallel_data,
+    ompt_data_t *task_data,
+    unsigned int team_size,
+    unsigned int thread_num,
+    int flags)
 {
   switch(endpoint)
   {
@@ -978,7 +979,7 @@ on_ompt_callback_task_schedule(
 static void
 on_ompt_callback_task_dependences(
   ompt_data_t *task_data,
-  const ompt_task_dependence_t *deps,
+  const ompt_dependence_t *deps,
   int ndeps)
 {
 
@@ -1025,6 +1026,7 @@ do {                                                          \
 
 int ompt_initialize(
   ompt_function_lookup_t lookup,
+  int initial_device_num,
   ompt_data_t *tool_data)
 {
   ompt_set_callback = (ompt_set_callback_t) lookup("ompt_set_callback");
