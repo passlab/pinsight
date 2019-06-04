@@ -33,6 +33,28 @@
 #define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) (uint32_t)(uint64_t)codeptr_ra
 
 /* Constant or variable for controlling sampling tracing */
+/* For sampling-based tracing, which allows user's control of tracing of each parallel region by specifying
+ * a sampling rate, max number of traces, and initial number of traces using PINSIGHT_TRACE_CONFIG environment
+ * variable. The PINSIGHT_TRACE_CONFIG should be in the form of
+ * <num_initial_traces>:<max_num_traces>:<trace_sampling_rate>. Below are the example of setting PINSIGHT_TRACE_CONFIG
+ * and its tracing behavior:
+        PINSIGH_TRACE_CONFIG=10:50:8, This is the system default. It records the first 10 traces,
+                then after that, record one trace per 10 execution and in total max 50 traces should be recorded.
+        PINSIGH_TRACE_CONFIG=<any_number>:-1:-1,  Record all the traces.
+        PINSIGHT_TRACE_CONFIG=0:-1:10, record 1 trace per 10 executions for all the executions.
+        PINSIGHT_TRACE_CONFIG=20:20:-1, record the first 20 iterations
+
+ * In implementation, there are three global variables for the three configuration variables: NUM_INITIAL_TRACES,
+ * MAX_NUM_TRACES, TRACE_SAMPLING_RATE.
+ * NUM_INITIAL_TRACES specifies how many traces must be recorded from the beginning of the execution of the region.
+ * MAX_NUM_TRACES specifies the total number of trace records LTTng will collect for the region.
+ * TRACE_SAMPLING_RATE specifies the rate a trace will be recorded, e.g. every TRACE_SAMPLING_RATE of
+ * executions of the region, a trace is recorded.
+ * The three variables will be initialized from PINSIGHT_TRACE_CONFIG environment variable when OMPT is initialized.
+ * For each region, they are copied to the corresponding variables of each region, thus the implementation has the
+ * capability of setting different trace configuration for different regions.
+ */
+
 #define DEFAULT_NUM_INITIAL_TRACES 10
 #define DEFAULT_MAX_NUM_TRACES 50
 #define DEFAULT_TRACE_SAMPLING_RATE 8
