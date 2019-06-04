@@ -351,7 +351,8 @@ on_ompt_callback_implicit_task(
         ompt_data_t *parallel_data,
         ompt_data_t *task_data,
         unsigned int team_size,
-        unsigned int thread_num)
+        unsigned int thread_num,
+        int flags)
 {
   switch(endpoint)
   {
@@ -976,9 +977,9 @@ on_ompt_callback_task_schedule(
 }
 
 static void
-on_ompt_callback_task_dependences(
+on_ompt_callback_dependences(
   ompt_data_t *task_data,
-  const ompt_task_dependence_t *deps,
+  const ompt_dependence_t *deps,
   int ndeps)
 {
 
@@ -1025,6 +1026,7 @@ do {                                                          \
 
 int ompt_initialize(
   ompt_function_lookup_t lookup,
+  int initial_device_num,
   ompt_data_t *tool_data)
 {
   ompt_set_callback = (ompt_set_callback_t) lookup("ompt_set_callback");
@@ -1085,15 +1087,21 @@ int ompt_initialize(
   return 1; //success
 }
 
-void ompt_finalize()
+void ompt_finalize(ompt_data_t *tool_data)
 {
   //printf("%d: ompt_event_runtime_shutdown\n", omp_get_thread_num());
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 ompt_start_tool_result_t* ompt_start_tool(
-  unsigned int omp_version,
-  const char *runtime_version)
+        unsigned int omp_version,
+        const char *runtime_version)
 {
-  static ompt_start_tool_result_t ompt_fns = {&ompt_initialize, &ompt_finalize, 0};
-  return &ompt_fns;
+    static ompt_start_tool_result_t ompt_start_tool_result = {&ompt_initialize,&ompt_finalize, 0};
+    return &ompt_start_tool_result;
 }
+#ifdef __cplusplus
+}
+#endif
