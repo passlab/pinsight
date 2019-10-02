@@ -29,7 +29,8 @@ extern "C" {
 
 //COMMON_TP_FIELDS are those fields in the thread-local storage. These fields will be added to all the trace records
 #define COMMON_TP_FIELDS \
-    ctf_integer(unsigned int, mpirank, mpirank)
+    ctf_integer(unsigned int, mpirank, mpirank) \
+    ctf_integer_hex(unsigned int, mpi_codeptr, __builtin_return_address(1))
 
 /* mpi_init_begin/end: ideally, we want to uniquely identify a process before we know its MPI rank, e.g. hostname/IP + pid.
  * However, right now we just use pid */
@@ -40,6 +41,7 @@ TRACEPOINT_EVENT(
             unsigned int,         pid
         ),
         TP_FIELDS(
+            COMMON_TP_FIELDS
             ctf_integer(unsigned int, pid, pid)
         )
 )
