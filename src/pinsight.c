@@ -1,4 +1,5 @@
-#include "ompt_callback.h"
+#include <stdio.h>
+#include "pinsight.h"
 
 /* these are thread-local storage assuming that OpenMP runtime threads are 1:1 mapped to
  * the system threads (PThread for example). If not, we should implement our own OpenMP
