@@ -7,13 +7,14 @@ SHELL = /bin/sh
 
 LULESH_EXEC = lulesh
 
-MPI_INC = /opt/local/include/openmpi
-MPI_LIB = /opt/local/lib
+MPI_INC = /usr/include/mpi
+MPI_LIB = /usr/lib
 
 SERCXX = clang++ -DUSE_MPI=0
-#MPICXX = mpig++ -DUSE_MPI=1
-#CXX = $(MPICXX)
-CXX = g++
+#MPICXX = OMPI_CC=clang OMPI_CXX=clang++ mpic++ -DUSE_MPI=1
+MPICXX = mpic++ -DUSE_MPI=1
+CXX = $(MPICXX)
+#CXX = g++
 
 SOURCES2.0 = \
 	lulesh.cc \
@@ -42,8 +43,10 @@ LDFLAGS = -g -O3 -fopenmp
 #visit: https://wci.llnl.gov/codes/visit/download.html
 
 #below is and example of how to make with silo, hdf5 to get vizulization by default all this is turned off.  All paths are Livermore specific.
-#CXXFLAGS = -g -DVIZ_MESH -I${SILO_INCDIR} -Wall -Wno-pragmas
-#LDFLAGS = -g -L${SILO_LIBDIR} -Wl,-rpath -Wl,${SILO_LIBDIR} -lsiloh5 -lhdf5
+CXXFLAGS = -g -DVIZ_MESH -I${SILO_INCDIR} -Wall -Wno-pragmas -fopenmp
+CXXFLAGS = -g -I${SILO_INCDIR} -Wall -Wno-pragmas -fopenmp
+LDFLAGS = -g -L${SILO_LIBDIR} -fopenmp -Wl,-rpath -Wl,${SILO_LIBDIR} -lsiloh5 -lhdf5
+LDFLAGS = -g -L${SILO_LIBDIR} -fopenmp -Wl,-rpath
 
 .cc.o: lulesh.h
 	@echo "Building $<"
