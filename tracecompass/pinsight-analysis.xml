@@ -777,7 +777,7 @@
 
 		<entry path="Thread-CPU">
 			<display type="self" />
-			<entry path="*">
+			<entry path="*" displayText="true">
 				<display type="self" />
 			</entry>
 		</entry>
