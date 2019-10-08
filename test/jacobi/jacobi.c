@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
     REAL alpha = 0.0543;
     REAL tol = 0.0000000001;
     REAL relax = 1.0;
-    int mits = 5;
+    int mits = 500;
 
     fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
     fprintf(stderr, "\tn - grid dimension in x direction, default: %d\n", n);

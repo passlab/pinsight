@@ -27,8 +27,8 @@ extern "C" {
 /** Macros used to simplify the definition of LTTng TRACEPOINT_EVENT */
 #define COMMON_TP_ARGS
 
-//COMMON_TP_FIELDS are those fields in the thread-local storage. These fields will be added to all the trace records
-#define COMMON_TP_FIELDS \
+//COMMON_TP_FIELDS_PMPI are those fields in the thread-local storage. These fields will be added to all the trace records
+#define COMMON_TP_FIELDS_PMPI \
     ctf_integer(unsigned int, mpirank, mpirank) \
     ctf_integer_hex(unsigned int, mpi_codeptr, __builtin_return_address(1))
 
@@ -41,7 +41,7 @@ TRACEPOINT_EVENT(
             unsigned int,         pid
         ),
         TP_FIELDS(
-            COMMON_TP_FIELDS
+            COMMON_TP_FIELDS_PMPI
             ctf_integer(unsigned int, pid, pid)
         )
 )
@@ -54,7 +54,7 @@ TRACEPOINT_EVENT(
             unsigned int, mpirank
         ),
         TP_FIELDS(
-            COMMON_TP_FIELDS
+            COMMON_TP_FIELDS_PMPI
         )
 )
 
@@ -67,7 +67,7 @@ TRACEPOINT_EVENT(
             unsigned int, mpirank
         ),
         TP_FIELDS(
-            COMMON_TP_FIELDS
+            COMMON_TP_FIELDS_PMPI
         )
 )
 
@@ -78,7 +78,7 @@ TRACEPOINT_EVENT(
             unsigned int, mpirank
         ),
         TP_FIELDS(
-            COMMON_TP_FIELDS
+            COMMON_TP_FIELDS_PMPI
         )
 )
 
@@ -93,7 +93,7 @@ TRACEPOINT_EVENT(
             unsigned int,  tag                                          \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_PMPI                                                    \
             ctf_integer_hex(unsigned int, buf, buf)                  \
             ctf_integer(unsigned int, count, count)      \
             ctf_integer(unsigned int, dest, dest)      \
@@ -115,7 +115,7 @@ TRACEPOINT_EVENT_MPI_SEND(MPI_Send_end)
             unsigned int,  tag                                          \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_PMPI                                                    \
             ctf_integer_hex(unsigned int, buf, buf)                  \
             ctf_integer(unsigned int, count, count)      \
             ctf_integer(unsigned int, source, source)      \
@@ -134,7 +134,7 @@ TRACEPOINT_EVENT_MPI_RECV(MPI_Recv_end)
             unsigned int,  useless                                          \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_PMPI                                                    \
         )                                                                      \
     )
 
@@ -154,7 +154,7 @@ TRACEPOINT_EVENT_MPI_BARRIER(MPI_Barrier_end)
             void *,  mpi_op                                          \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_PMPI                                                    \
             ctf_integer_hex(unsigned int, sendbuf, sendbuf)                  \
             ctf_integer_hex(unsigned int, recvbuf, recvbuf)                  \
             ctf_integer(unsigned int, count, count)      \
@@ -178,7 +178,7 @@ TRACEPOINT_EVENT_MPI_REDUCE(MPI_Reduce_end)
             void *,  mpi_op                                          \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_PMPI                                                    \
             ctf_integer_hex(unsigned int, sendbuf, sendbuf)                  \
             ctf_integer_hex(unsigned int, recvbuf, recvbuf)                  \
             ctf_integer(unsigned int, count, count)      \
