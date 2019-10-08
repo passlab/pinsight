@@ -1,12 +1,11 @@
 #undef TRACEPOINT_PROVIDER
-#define TRACEPOINT_PROVIDER lttng_pinsight
+#define TRACEPOINT_PROVIDER lttng_pinsight_ompt
 
 #undef TRACEPOINT_INCLUDE_FILE
-#define TRACEPOINT_INCLUDE_FILE ./lttng_tracepoint.h
+#define TRACEPOINT_INCLUDE_FILE ./ompt_lttng_tracepoint.h
 
-#if !defined(_TRACEPOINT_LTTNG_TRACEPOINT_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
-#define _TRACEPOINT_LTTNG_TRACEPOINT_H
-
+#if !defined(_TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
+#define _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,15 +13,37 @@ extern "C" {
 #include <lttng/tracepoint.h>
 #include <stdbool.h>
 
+#ifndef _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H_DECLARE_ONCE
+#define _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H_DECLARE_ONCE
+extern __thread int global_thread_num;
+extern __thread int omp_thread_num;
+extern __thread const void * parallel_codeptr;
+extern __thread unsigned int parallel_counter;
+extern __thread const void * task_codeptr;
+extern __thread unsigned int task_counter;
+#ifdef PINSIGHT_MPI
+#include <mpi.h>
+extern int mpirank ;
+#endif
+#endif
+
 /** Macros used to simplify the definition of LTTng TRACEPOINT_EVENT */
-#define COMMON_TP_ARGS
-//COMMON_TP_FIELDS are those fields in the thread-local storage. These fields will be added to all the trace records
-#define COMMON_TP_FIELDS \
+//COMMON_TP_FIELDS_OMPT are those fields in the thread-local storage. These fields will be added to all the trace records
+#if defined(PINSIGHT_MPI)
+#define COMMON_TP_FIELDS_OMPT \
+    ctf_integer(unsigned int, mpirank, mpirank) \
     ctf_integer(unsigned int, global_thread_num, global_thread_num) \
     ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
     ctf_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
     ctf_integer(unsigned int, parallel_counter, parallel_counter)
-
+#else
+#define COMMON_TP_FIELDS_OMPT \
+    ctf_integer(unsigned int, global_thread_num, global_thread_num) \
+    ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
+    ctf_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
+    ctf_integer(unsigned int, parallel_counter, parallel_counter)
+#endif
+// For future tasking extension of OpenMP
 //    ctf_integer_hex(long int, task_codeptr, task_codeptr) \
 //    ctf_integer(unsigned int, task_counter, task_counter)
 
@@ -53,9 +74,9 @@ extern "C" {
 /**
  * thread_begin and thread_end
  */
-#define TRACEPOINT_EVENT_THREAD(event_name)                                    \
+#define TRACEPOINT_EVENT_OMPT_THREAD(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
+        lttng_pinsight_ompt, event_name,                                            \
         TP_ARGS(                                                               \
             unsigned short,    thread_type                                     \
             ENERGY_TP_ARGS                                                      \
@@ -67,14 +88,14 @@ extern "C" {
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_THREAD(thread_begin)
-TRACEPOINT_EVENT_THREAD(thread_end)
+TRACEPOINT_EVENT_OMPT_THREAD(thread_begin)
+TRACEPOINT_EVENT_OMPT_THREAD(thread_end)
 
 /**
  * parallel_begin
  */
 TRACEPOINT_EVENT(
-    lttng_pinsight,
+    lttng_pinsight_ompt,
     parallel_begin,
     TP_ARGS(
         unsigned int,         requested_team_size,
@@ -83,7 +104,7 @@ TRACEPOINT_EVENT(
         ENERGY_TP_ARGS
     ),
     TP_FIELDS(
-        COMMON_TP_FIELDS
+        COMMON_TP_FIELDS_OMPT
         ctf_integer(unsigned int, team_size, requested_team_size)
         ctf_integer(int, flag, flag)
         ctf_integer_hex(long int, parent_task_frame, parent_task_frame)
@@ -92,14 +113,14 @@ TRACEPOINT_EVENT(
 )
 
 TRACEPOINT_EVENT(
-    lttng_pinsight,
+    lttng_pinsight_ompt,
     parallel_end,
     TP_ARGS(
         int,           flag
         ENERGY_TP_ARGS
     ),
     TP_FIELDS(
-        COMMON_TP_FIELDS
+        COMMON_TP_FIELDS_OMPT
         ctf_integer(int, flag, flag)
         ENERGY_TP_FIELDS
     )
@@ -108,51 +129,51 @@ TRACEPOINT_EVENT(
 /**
  * implicit task begin and end
  */
-#define TRACEPOINT_EVENT_IMPLICIT_TASK(event_name)                                    \
+#define TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
+        lttng_pinsight_ompt, event_name,                                            \
         TP_ARGS(                                                               \
             unsigned int,    team_size                                     \
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_OMPT                                                    \
             ctf_integer(unsigned int, team_size, team_size)      \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_begin)
-TRACEPOINT_EVENT_IMPLICIT_TASK(implicit_task_end)
+TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_begin)
+TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_end)
 
 /**
  * parallel join begin and end
  * This is not an OMPT event, but we should be able to detect when each thread enters
  * into join barrier (before sync_region) and when it completes the joining (upon the parallel_end)
  */
-#define TRACEPOINT_EVENT_PARALLEL_JOIN(event_name)                                    \
+#define TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
+        lttng_pinsight_ompt, event_name,                                            \
         TP_ARGS(                                                               \
             unsigned short,    useless                                     \
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_OMPT                                                    \
             ctf_integer(unsigned short, useless, useless)      \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_PARALLEL_JOIN(parallel_join_begin)
-TRACEPOINT_EVENT_PARALLEL_JOIN(parallel_join_end)
+TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_begin)
+TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_end)
 
 /**
  * thread worksharing work
  */
-#define TRACEPOINT_EVENT_WORK(event_name)                                    \
+#define TRACEPOINT_EVENT_OMPT_WORK(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
+        lttng_pinsight_ompt, event_name,                                            \
         TP_ARGS(                                                               \
             unsigned short,    wstype,                                     \
             const void *,  work_begin_codeptr,                                          \
@@ -162,7 +183,7 @@ TRACEPOINT_EVENT_PARALLEL_JOIN(parallel_join_end)
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_OMPT                                                    \
             ctf_integer(unsigned short, wstype, wstype)      \
             ctf_integer_hex(unsigned int, work_begin_codeptr, work_begin_codeptr)                  \
             ctf_integer_hex(unsigned int, work_end_codeptr, work_end_codeptr)                  \
@@ -172,15 +193,15 @@ TRACEPOINT_EVENT_PARALLEL_JOIN(parallel_join_end)
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_WORK(work_begin)
-TRACEPOINT_EVENT_WORK(work_end)
+TRACEPOINT_EVENT_OMPT_WORK(work_begin)
+TRACEPOINT_EVENT_OMPT_WORK(work_end)
 
 /**
  * master
  */
-#define TRACEPOINT_EVENT_MASTER(event_name)                                    \
+#define TRACEPOINT_EVENT_OMPT_MASTER(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
+        lttng_pinsight_ompt, event_name,                                            \
         TP_ARGS(                                                               \
             const void *,  master_begin_codeptr,                                          \
             const void *,  master_end_codeptr,                                          \
@@ -188,7 +209,7 @@ TRACEPOINT_EVENT_WORK(work_end)
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_OMPT                                                    \
             ctf_integer_hex(unsigned int, master_begin_codeptr, master_begin_codeptr)                  \
             ctf_integer_hex(unsigned int, master_end_codeptr, master_end_codeptr)                  \
             ctf_integer(unsigned int, counter, counter)                 \
@@ -196,13 +217,13 @@ TRACEPOINT_EVENT_WORK(work_end)
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_MASTER(master_begin)
-TRACEPOINT_EVENT_MASTER(master_end)
+TRACEPOINT_EVENT_OMPT_MASTER(master_begin)
+TRACEPOINT_EVENT_OMPT_MASTER(master_end)
 
 /* synchronization, e.g. barrier, taskwait, taskgroup, related tracepoint */
-#define TRACEPOINT_EVENT_SYNC(event_name)                                    \
+#define TRACEPOINT_EVENT_OMPT_SYNC(event_name)                                    \
     TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight, event_name,                                            \
+        lttng_pinsight_ompt, event_name,                                            \
         TP_ARGS(                                                               \
             unsigned short,    kind,                                     \
             const void *,  sync_codeptr,                                          \
@@ -210,7 +231,7 @@ TRACEPOINT_EVENT_MASTER(master_end)
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS                                                    \
+            COMMON_TP_FIELDS_OMPT                                                    \
             ctf_integer(unsigned short, kind, kind)      \
             ctf_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
             ctf_integer(unsigned int, counter, counter)                 \
@@ -218,16 +239,16 @@ TRACEPOINT_EVENT_MASTER(master_end)
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_SYNC(sync_begin)
-TRACEPOINT_EVENT_SYNC(sync_end)
-TRACEPOINT_EVENT_SYNC(sync_wait_begin)
-TRACEPOINT_EVENT_SYNC(sync_wait_end)
+TRACEPOINT_EVENT_OMPT_SYNC(sync_begin)
+TRACEPOINT_EVENT_OMPT_SYNC(sync_end)
+TRACEPOINT_EVENT_OMPT_SYNC(sync_wait_begin)
+TRACEPOINT_EVENT_OMPT_SYNC(sync_wait_end)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _TRACEPOINT_LTTNG_TRACEPOINT_H */
+#endif /* _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H */
 
 /* This part must be outside ifdef protection */
 #include <lttng/tracepoint-event.h>

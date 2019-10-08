@@ -50,7 +50,8 @@ rm -rf ${TRACING_OUTPUT_DEST}
 lttng create ompt-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
 # Create and enable event rules.
-lttng enable-event --userspace lttng_pinsight:'*'
+lttng enable-event --userspace lttng_pinsight_ompt:'*'
+lttng enable-event --userspace lttng_pinsight_pmpi:'*'
 
 # Start LTTng tracing.
 lttng start
