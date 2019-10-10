@@ -5,7 +5,7 @@ include environment.mk
 CFLAGS += -fpic -g -finstrument-functions -save-temps
 CFLAGS += -I$(OMP_BASE_PATH)/include -Isrc/ -DPINSIGHT_OPENMP=TRUE
 CFLAGS += -I/usr/include/mpi -DPINSIGHT_MPI=TRUE
-LDFLAGS += -L$(OMP_LIB_PATH) -lm -ldl -llttng-ust -lomp
+LDFLAGS += -L$(OMP_LIB_PATH) -lm -ldl -llttng-ust -lomp -lmpi
 
 .PHONY: clean test
 
