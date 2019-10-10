@@ -63,6 +63,31 @@ TRACEPOINT_EVENT(
         )
 )
 
+//MPI_Init_thread_begin/end for MPI_Init_thread call
+TRACEPOINT_EVENT(
+    lttng_pinsight_pmpi,
+    MPI_Init_thread_begin,
+    TP_ARGS(
+        unsigned int,         pid
+    ),
+    TP_FIELDS(
+        COMMON_TP_FIELDS_PMPI
+        ctf_integer(unsigned int, pid, pid)
+    )
+)
+
+TRACEPOINT_EVENT(
+    lttng_pinsight_pmpi,
+    MPI_Init_thread_end,
+    TP_ARGS(
+        unsigned int,  pid,
+        unsigned int, mpirank
+    ),
+    TP_FIELDS(
+        COMMON_TP_FIELDS_PMPI
+    )
+)
+
 /** MPI_finalize begin and end */
 
 TRACEPOINT_EVENT(

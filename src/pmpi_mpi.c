@@ -27,13 +27,26 @@ int mpirank = 0;
 #define TRACEPOINT_DEFINE
 #include "pmpi_lttng_tracepoint.h"
 
+_EXTERN_C_ int PMPI_Init_thread( int *argc, char ***argv, int required, int *provided );
+/* ================== C Wrappers for MPI_Init ================== */
+_EXTERN_C_ int MPI_Init_thread( int *argc, char ***argv, int required, int *provided ) {
+    unsigned int pid = getpid();
+    tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_begin, pid);
+    int return_val = PMPI_Init_thread(argc, argv, required, provided);
+    PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
+    //printf("process %d rank: %d\n", pid, mpirank);
+    tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_end, pid, mpirank);
+    return return_val;
+}
+
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int PMPI_Init(int *argc, char ***argv);
 _EXTERN_C_ int MPI_Init(int *argc, char ***argv) {
     unsigned int pid = getpid();
     tracepoint(lttng_pinsight_pmpi, MPI_Init_begin, pid);
     int return_val = PMPI_Init(argc, argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
+    PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
+    //printf("process %d rank: %d\n", pid, mpirank);
     tracepoint(lttng_pinsight_pmpi, MPI_Init_end, pid, mpirank);
     return return_val;
 }
