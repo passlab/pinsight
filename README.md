@@ -93,6 +93,10 @@ Example using the `jacobi` application with `8` threads:
 For jacobi on my vm:
 ./scripts/trace.sh traces/jacobi jacobi  /home/yanyh/tools/llvm-openmp-install/lib/libomp.so   /home/yanyh/tools/pinsight/lib/libpinsight.so 8 ./test/jacobi/jacobi 2048 2048
 
+For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
+
+     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th /home/yanyh/tools/llvm-openmp-install/lib/libomp.so ./lib/libpinsight.so 4 mpirun -np 8 ./test/LULESH/build/lulesh2.0 
+
 #### Specifying tracing rate
 To allow user's control of tracing of each parallel region, one can specify a sampling rate, max number of traces, and initial number of traces of each parallel region using ``PINSIGHT_TRACE_CONFIG`` environment variable. The ``PINSIGHT_TRACE_CONFIG`` should be the form of ``<num_initial_traces>:<max_num_traces>:<trace_sampling_rate>``. Below are the examples of ``PINSIGHT_TRACE_CONFIG`` settings and their tracing behavior:
 1. ``PINSIGHT_TRACE_CONFIG=10:50:10``, This is the system default. It records the first 10 traces, then after that, records one trace per 10 executions and in total max 50 traces will be recorded. 
@@ -111,7 +115,8 @@ Since we're using LTTng, we have to set up a [tracing session][lttng-tracing-ses
     lttng create ompt-tracing-session --output=/tmp/ompt-trace
 
     # Create and enable event rules.
-    lttng enable-event --userspace lttng_pinsight:'*'
+    lttng enable-event --userspace lttng_pinsight_ompt:'*'
+    lttng enable-event --userspace lttng_pinsight_pmpi:'*'
 
     # Start LTTng tracing.
     lttng start
