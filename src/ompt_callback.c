@@ -19,7 +19,7 @@
 // Configuration settings.
 static int debug_on;
 
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
 #include "rapl.h"
 // --------------------------------------------------------
 // RAPL package values.
@@ -178,7 +178,7 @@ on_ompt_callback_thread_begin(
         ompt_thread_t thread_type,
         ompt_data_t *thread_data)
 {
-  init_thread_data(get_global_thread_num(), thread_type);
+  init_thread_data(get_global_thread_num() /*, thread_type */);
   thread_data->value = global_thread_num;
 
   //This is the codeptr for the first lexgion of each thread
@@ -194,7 +194,7 @@ on_ompt_callback_thread_begin(
   task_counter = 1;
 
   //initial task initialization is done at the task_create callback
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
   if (global_thread_num == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
   }
@@ -206,7 +206,7 @@ static void
 on_ompt_callback_thread_end(
         ompt_data_t *thread_data)
 {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
   if (global_thread_num == 0) {
     rapl_sysfs_read_packages(package_energy); // Read package energy counters.
   }
@@ -218,7 +218,7 @@ on_ompt_callback_thread_end(
   task_counter = counter;
   assert(counter == lgp->counter);
   lgp->end_codeptr_ra = (void*)OUTMOST_CODEPTR;
-  tracepoint(lttng_pinsight_ompt, thread_end, (short)pinsight_thread_data.thread_type ENERGY_TRACEPOINT_CALL_ARGS);
+  tracepoint(lttng_pinsight_ompt, thread_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
   ompt_lexgion_post_trace_update(lgp);
 
   //print out lexgion summary */
@@ -304,7 +304,7 @@ on_ompt_callback_parallel_begin(
 //  omp_thread_num = 0;  //redundant since implicit task will do this
   ompt_set_trace(lgp);
   if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
       rapl_sysfs_read_packages(package_energy); // Read package energy counters.
     }
@@ -325,7 +325,7 @@ on_ompt_callback_parallel_end(
   lgp->end_codeptr_ra = codeptr_ra;
   assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
   if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
       rapl_sysfs_read_packages(package_energy); // Read package energy counters.
     }
@@ -379,7 +379,7 @@ on_ompt_callback_implicit_task(
       push_lexgion(implicit_task, implicit_task->counter);
       ompt_set_trace(implicit_task);
       if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
@@ -391,7 +391,7 @@ on_ompt_callback_implicit_task(
     case ompt_scope_end: {
       ompt_lexgion_t * lgp = ompt_lexgion_end(NULL); /* this is the same as implicit_task */
       if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
@@ -436,7 +436,7 @@ on_ompt_callback_work(
         push_lexgion(lgp, lgp->counter);
 
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0) {
             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
           }
@@ -474,7 +474,7 @@ on_ompt_callback_work(
       lgp->end_codeptr_ra = codeptr_ra;
       if (lgp->codeptr_ra != parallel_codeptr && lgp->codeptr_ra != task_codeptr) {/* safety check */
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0) {
             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
           }
@@ -506,7 +506,7 @@ on_ompt_callback_master(
       lgp->counter++;
       push_lexgion(lgp, lgp->counter);
       if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
@@ -522,7 +522,7 @@ on_ompt_callback_master(
       lgp->end_codeptr_ra = codeptr_ra;
 
       if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
@@ -558,7 +558,7 @@ on_ompt_callback_sync_region(
         /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
          * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0) {
             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
           }
@@ -572,7 +572,7 @@ on_ompt_callback_sync_region(
         lgp->counter++;
         push_lexgion(lgp, lgp->counter);
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
             if (global_thread_num == 0) {
               rapl_sysfs_read_packages(package_energy); // Read package energy counters.
             }
@@ -605,7 +605,7 @@ on_ompt_callback_sync_region(
         ompt_lexgion_t * lgp = ompt_lexgion_end(&counter);
         lgp->end_codeptr_ra = codeptr_ra;
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
             if (global_thread_num == 0) {
               rapl_sysfs_read_packages(package_energy); // Read package energy counters.
             }
@@ -649,7 +649,7 @@ on_ompt_callback_sync_region_wait(
         //lgp->counter++;  //We do not increment the counter here since we will use the same counter as the sync_begin
         //push_lexgion(lgp, lgp->counter);
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
             if (global_thread_num == 0) {
               rapl_sysfs_read_packages(package_energy); // Read package energy counters.
             }
@@ -679,7 +679,7 @@ on_ompt_callback_sync_region_wait(
         //lgp = ompt_lexgion_end(&counter);
         //lgp->end_codeptr_ra = codeptr_ra;
         if (trace_bit) {
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
             if (global_thread_num == 0) {
               rapl_sysfs_read_packages(package_energy); // Read package energy counters.
             }
@@ -1085,7 +1085,7 @@ int ompt_initialize(
              NUM_INITIAL_TRACES, MAX_NUM_TRACES, TRACE_SAMPLING_RATE);
   }
 
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
   // Initialize RAPL subsystem.
   rapl_sysfs_discover_valid();
 #endif

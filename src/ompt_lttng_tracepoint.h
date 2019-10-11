@@ -47,7 +47,7 @@ extern int mpirank ;
 //    ctf_integer_hex(long int, task_codeptr, task_codeptr) \
 //    ctf_integer(unsigned int, task_counter, task_counter)
 
-#ifdef ENABLE_ENERGY
+#ifdef PINSIGHT_ENERGY
 #define ENERGY_TP_ARGS             \
         ,\
         long long int,    pkg_energy0,\
@@ -83,10 +83,11 @@ extern int mpirank ;
         ),                                                                     \
         TP_FIELDS(                                                             \
             ctf_integer(unsigned int, global_thread_num, global_thread_num) \
-            ctf_integer(unsigned short, thread_type, thread_type)      \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
+
+//ctf_integer(unsigned short, thread_type, thread_type)      \
 
 TRACEPOINT_EVENT_OMPT_THREAD(thread_begin)
 TRACEPOINT_EVENT_OMPT_THREAD(thread_end)

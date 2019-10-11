@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "pinsight.h"
 
 #ifndef _EXTERN_C_
 #ifdef __cplusplus

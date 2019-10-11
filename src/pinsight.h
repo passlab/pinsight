@@ -4,8 +4,8 @@
 
 #ifndef PINSIGHT_PINSIGHT_H
 #define PINSIGHT_PINSIGHT_H
-
-#include <ompt.h>
+#include <stdint.h>
+//#include "pinsight_config.h"
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
@@ -128,7 +128,6 @@ typedef struct ompt_lexgion {
  * the thread-local object that store data for each thread
  */
 typedef struct pinsight_thread_data {
-    ompt_thread_t thread_type;
     /* the stack for storing the lexgion */
     //ompt_lexgion_t *lexgion_stack;
 
@@ -166,7 +165,7 @@ extern __thread int trace_bit; /* 0 or 1 for enabling trace */
 extern "C" {
 #endif
 
-extern pinsight_thread_data_t * init_thread_data(int _thread_num, ompt_thread_t thread_type);
+extern pinsight_thread_data_t * init_thread_data(int _thread_num);
 extern void push_lexgion(ompt_lexgion_t * lexgion, unsigned int counter);
 extern ompt_lexgion_t * pop_lexgion(unsigned int * counter);
 extern ompt_lexgion_t * top_lexgion_type(int type, unsigned int * counter);
