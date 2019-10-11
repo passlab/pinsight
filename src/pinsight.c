@@ -21,9 +21,9 @@ unsigned int TRACE_SAMPLING_RATE = DEFAULT_TRACE_SAMPLING_RATE;
 
 /** init thread data
  */
-pinsight_thread_data_t * init_thread_data(int _thread_num, ompt_thread_t thread_type) {
+pinsight_thread_data_t * init_thread_data(int _thread_num) {
     global_thread_num = _thread_num;
-    pinsight_thread_data.thread_type = thread_type;
+//    pinsight_thread_data.thread_type = thread_type;
     pinsight_thread_data.stack_top = -1;
     pinsight_thread_data.num_lexgions = 0;
     pinsight_thread_data.recent_lexgion = -1;
