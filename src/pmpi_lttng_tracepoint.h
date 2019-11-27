@@ -12,7 +12,7 @@
 #define TRACEPOINT_PROVIDER lttng_pinsight_pmpi
 
 #undef TRACEPOINT_INCLUDE_FILE
-#define TRACEPOINT_INCLUDE_FILE ./pmpi_lttng_tracepoint.h
+#define TRACEPOINT_INCLUDE_FILE pmpi_lttng_tracepoint.h
 
 #if !defined(_TRACEPOINT_PMPI_LTTNG_TRACEPOINT_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
 #define _TRACEPOINT_PMPI_LTTNG_TRACEPOINT_H

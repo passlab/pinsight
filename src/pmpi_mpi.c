@@ -28,15 +28,46 @@ int mpirank = 0;
 #define TRACEPOINT_DEFINE
 #include "pmpi_lttng_tracepoint.h"
 
+/**
+ * enum to define code for each MPI methods, used in searching lexgion
+ */
+typedef enum MPI_Func_type {
+    MPI_Init_type = 0,
+    MPI_Init_thread_type,
+    MPI_Finalize_type,
+    MPI_Send_type,
+    MPI_Recv_type,
+    MPI_Barrier_type,
+    MPI_Reduce_type,
+    MPI_Allreduce_type,
+} MPI_Func_type_t;
+
 _EXTERN_C_ int PMPI_Init_thread( int *argc, char ***argv, int required, int *provided );
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int MPI_Init_thread( int *argc, char ***argv, int required, int *provided ) {
     unsigned int pid = getpid();
-    tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_begin, pid);
+
+    const void * codeptr_ra = __builtin_return_address(0);
+    lexgion_t * lgp = lexgion_begin(MPI_LEXGION, MPI_Init_thread_type, codeptr_ra);
+    lgp->num_exes_after_last_trace ++;
+
+    lexgion_set_trace_bit(lgp);
+    if (trace_bit) {
+        tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_begin, pid);
+    }
+
     int return_val = PMPI_Init_thread(argc, argv, required, provided);
     PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
     //printf("process %d rank: %d\n", pid, mpirank);
-    tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_end, pid, mpirank);
+
+    lexgion_end(NULL);
+    lgp->end_codeptr_ra = codeptr_ra;
+
+    if (trace_bit) {
+        tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_end, pid, mpirank);
+        lexgion_post_trace_update(lgp);
+    }
+
     return return_val;
 }
 
