@@ -2,7 +2,7 @@
 #define TRACEPOINT_PROVIDER lttng_pinsight_ompt
 
 #undef TRACEPOINT_INCLUDE_FILE
-#define TRACEPOINT_INCLUDE_FILE ./ompt_lttng_tracepoint.h
+#define TRACEPOINT_INCLUDE_FILE ompt_lttng_tracepoint.h
 
 #if !defined(_TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
 #define _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H

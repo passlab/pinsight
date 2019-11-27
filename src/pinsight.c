@@ -12,7 +12,7 @@ __thread unsigned int parallel_counter;
 __thread const void * task_codeptr;
 __thread unsigned int task_counter;
 __thread pinsight_thread_data_t pinsight_thread_data;
-__thread ompt_lexgion_t * implicit_task;
+__thread lexgion_t * ompt_implicit_task;
 __thread int trace_bit; /* 0 or 1 for enabling trace */
 
 unsigned int NUM_INITIAL_TRACES = DEFAULT_NUM_INITIAL_TRACES;
@@ -31,7 +31,12 @@ pinsight_thread_data_t * init_thread_data(int _thread_num) {
     return &pinsight_thread_data;
 }
 
-void push_lexgion(ompt_lexgion_t * lgp, unsigned int counter) {
+/**
+ * push the encounting lexgion to the stack, also saving the counter of the lexgion instance
+ * @param lgp
+ * @param counter
+ */
+void push_lexgion(lexgion_t * lgp, unsigned int counter) {
     int top = pinsight_thread_data.stack_top+1;
     if (top == MAX_LEXGION_STACK_DEPTH) {
        fprintf(stderr, "thread %d lexgion stack overflow\n", global_thread_num);
@@ -42,9 +47,14 @@ void push_lexgion(ompt_lexgion_t * lgp, unsigned int counter) {
     pinsight_thread_data.stack_top++;
 }
 
-ompt_lexgion_t * pop_lexgion(unsigned int * counter) {
+/**
+ * pop the lexgion out of the stack and also return the counter if it is requested.
+ * @param counter
+ * @return
+ */
+lexgion_t * pop_lexgion(unsigned int * counter) {
     int top = pinsight_thread_data.stack_top;
-    ompt_lexgion_t * lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+    lexgion_t * lgp = pinsight_thread_data.lexgion_stack[top].lgp;
     if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
     pinsight_thread_data.stack_top--;
     return lgp;
@@ -56,14 +66,16 @@ ompt_lexgion_t * pop_lexgion(unsigned int * counter) {
  * @param index
  * @return
  */
-static ompt_lexgion_t *ompt_find_lexgion(int type, const void *codeptr_ra, int * index) {
+static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int * index) {
     /* play it safe for dealing with data race */
     if (pinsight_thread_data.recent_lexgion < 0 || pinsight_thread_data.num_lexgions <= 0) return NULL;
     int i;
-    ompt_lexgion_t * lgp;
+    lexgion_t * lgp;
     /* search forward from the most recent one */
     for (i=pinsight_thread_data.recent_lexgion; i<pinsight_thread_data.num_lexgions; i++) {
-        if (type == pinsight_thread_data.lexgions[i].type && pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra) {
+        if (class == pinsight_thread_data.lexgions[i].class &&
+                type == pinsight_thread_data.lexgions[i].type &&
+                pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra) {
             *index = i;
             lgp = &pinsight_thread_data.lexgions[i];
             return lgp;
@@ -77,7 +89,9 @@ static ompt_lexgion_t *ompt_find_lexgion(int type, const void *codeptr_ra, int *
     }
     /* search from 0 to most recent one */
     for (i=0; i<pinsight_thread_data.recent_lexgion; i++) {
-        if (pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra && type == pinsight_thread_data.lexgions[i].type) {
+        if (class == pinsight_thread_data.lexgions[i].class &&
+                pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra &&
+                type == pinsight_thread_data.lexgions[i].type) {
             *index = i;
             lgp = &pinsight_thread_data.lexgions[i];
             return lgp;
@@ -96,10 +110,10 @@ static ompt_lexgion_t *ompt_find_lexgion(int type, const void *codeptr_ra, int *
  * This is a thread-specific call
  *
  */
-ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra) {
+lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     int index;
 
-    ompt_lexgion_t *lgp = ompt_find_lexgion(type, codeptr_ra, &index);
+    lexgion_t *lgp = find_lexgion(class, type, codeptr_ra, &index);
     if (lgp == NULL) {
         index = pinsight_thread_data.num_lexgions;
         if (index == MAX_NUM_LEXGIONS) {
@@ -111,6 +125,7 @@ ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra) {
         lgp->codeptr_ra = codeptr_ra;
         //printf("%d: lexgion_begin(%d, %X): first time encountered %X\n", thread_id, i, codeptr_ra, lgp);
         lgp->type = type;
+        lgp->class = class;
 
         /* init counters for number of exes, traces, and sampling */
         lgp->counter = 0;
@@ -123,16 +138,19 @@ ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra) {
         pinsight_thread_data.num_lexgions++;
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
+
+    lgp->counter++; //counter only increment
+    push_lexgion(lgp, lgp->counter);
+
     return lgp;
 }
 
 /**
- * Mark a lexgion end
- * @param type
- * @param codeptr_ra
+ * mark the end of a lexgion, return the lexgion and the counter of the instance if it is requested
+ * @param counter the counter of the lexgion instance that is just ended.
  * @return
  */
-ompt_lexgion_t *ompt_lexgion_end(unsigned int * counter) {
+lexgion_t *lexgion_end(unsigned int * counter) {
     return pop_lexgion(counter);
 }
 
@@ -143,11 +161,11 @@ ompt_lexgion_t *ompt_lexgion_end(unsigned int * counter) {
  * @param counter
  * @return
  */
-ompt_lexgion_t * top_lexgion_type(int type, unsigned int * counter) {
+lexgion_t * top_lexgion_type(int class, int type, unsigned int * counter) {
     int top = pinsight_thread_data.stack_top;
     while (top >=0) {
-        ompt_lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-        if (lgp->type == type) {
+        lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+        if (lgp->class == class && lgp->type == type) {
             if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
             return lgp;
         }
@@ -156,10 +174,10 @@ ompt_lexgion_t * top_lexgion_type(int type, unsigned int * counter) {
     return NULL;
 }
 
-ompt_lexgion_t * top_lexgion(unsigned int * counter) {
+lexgion_t * top_lexgion(unsigned int * counter) {
     int top = pinsight_thread_data.stack_top;
     if (top >=0) {
-        ompt_lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+        lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
         if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
         return lgp;
     }

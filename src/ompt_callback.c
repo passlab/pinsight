@@ -183,9 +183,7 @@ on_ompt_callback_thread_begin(
 
   //This is the codeptr for the first lexgion of each thread
   const void * codeptr_ra = (void*)OUTMOST_CODEPTR;
-  ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_thread_begin, codeptr_ra);
-  lgp->counter++; //counter only increment
-  push_lexgion(lgp, lgp->counter);
+  lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_thread_begin, codeptr_ra);
 
   parallel_codeptr = codeptr_ra;
   parallel_counter = 1;
@@ -212,14 +210,14 @@ on_ompt_callback_thread_end(
   }
 #endif
   unsigned int counter;
-  ompt_lexgion_t * lgp = ompt_lexgion_end(&counter);
+  lexgion_t * lgp = lexgion_end(&counter);
   assert(lgp->codeptr_ra == (void*)OUTMOST_CODEPTR);
   task_codeptr = lgp->codeptr_ra;
   task_counter = counter;
   assert(counter == lgp->counter);
   lgp->end_codeptr_ra = (void*)OUTMOST_CODEPTR;
   tracepoint(lttng_pinsight_ompt, thread_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
-  ompt_lexgion_post_trace_update(lgp);
+  lexgion_post_trace_update(lgp);
 
   //print out lexgion summary */
   if (global_thread_num == 0) {
@@ -229,7 +227,7 @@ on_ompt_callback_thread_end(
     int i;
     int count;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
-      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", i+1, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
 
@@ -238,7 +236,7 @@ on_ompt_callback_thread_end(
     printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
-      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_parallel_begin)
         printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
@@ -248,7 +246,7 @@ on_ompt_callback_thread_end(
     printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
-      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_sync_region)
         printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
@@ -258,7 +256,7 @@ on_ompt_callback_thread_end(
     printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
-      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_work)
         printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
@@ -268,7 +266,7 @@ on_ompt_callback_thread_end(
     printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
-      ompt_lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+      lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_master)
         printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
     }
@@ -287,10 +285,8 @@ on_ompt_callback_parallel_begin(
         const void *codeptr_ra)
 {
 //  parallel_data->value = ompt_get_unique_id();
-  ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_parallel_begin, codeptr_ra);
-  lgp->counter++;
+  lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
   lgp->num_exes_after_last_trace ++;
-  push_lexgion(lgp, lgp->counter);
 
   /* set up thread local for tracing */
   parallel_codeptr = codeptr_ra;
@@ -302,7 +298,7 @@ on_ompt_callback_parallel_begin(
 //  parallel_codeptr = codeptr_ra; //redundant since implicit_task will do this
 //  parallel_counter = lgp->counter; //redundant since implicit task will do this
 //  omp_thread_num = 0;  //redundant since implicit task will do this
-  ompt_set_trace(lgp);
+  lexgion_set_trace_bit(lgp);
   if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
@@ -321,7 +317,7 @@ on_ompt_callback_parallel_end(
         int flag,
         const void *codeptr_ra)
 {
-  ompt_lexgion_t * lgp = ompt_lexgion_end(NULL);
+  lexgion_t * lgp = lexgion_end(NULL);
   lgp->end_codeptr_ra = codeptr_ra;
   assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
   if (trace_bit) {
@@ -332,12 +328,12 @@ on_ompt_callback_parallel_end(
 #endif
 
     tracepoint(lttng_pinsight_ompt, parallel_end, flag ENERGY_TRACEPOINT_CALL_ARGS);
-    ompt_lexgion_post_trace_update(lgp);
+    lexgion_post_trace_update(lgp);
   }
   /* find the topmost parallel lexgion in the stack (in the nested parallel situation) */
   unsigned int counter;
-  implicit_task = top_lexgion_type(ompt_callback_implicit_task, NULL); /* the nested situation */
-  ompt_lexgion_t * enclosing_parallel = top_lexgion_type(ompt_callback_parallel_begin, &counter);
+  ompt_implicit_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_implicit_task, NULL); /* the nested situation */
+  lexgion_t * enclosing_parallel = top_lexgion_type(OPENMP_LEXGION, ompt_callback_parallel_begin, &counter);
   if (enclosing_parallel == NULL) {
     parallel_codeptr = (void*) OUTMOST_CODEPTR;
     parallel_counter = 1;
@@ -371,13 +367,11 @@ on_ompt_callback_implicit_task(
       /* in this call back, parallel_data is NULL for ompt_scope_end endpoint, thus to know the parallel_data at the end,
        * we need to pass the needed fields of parallel_data in the scope_begin to the task_data */
       task_data->value = parallel_data->value; // Here we just save the parallel_data to the task
-      implicit_task = ompt_lexgion_begin(ompt_callback_implicit_task, parallel_codeptr);
-      /* here no need to increment the counter since we this is the same instance as when
-       * the parallel_begin starts the parallel region */
-      implicit_task->counter++; /* this should be the same as parallel_counter; */
-      implicit_task->num_exes_after_last_trace++;
-      push_lexgion(implicit_task, implicit_task->counter);
-      ompt_set_trace(implicit_task);
+      ompt_implicit_task = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
+      /* Here a new lexgion with the same codeptr as the parallel region is created, but this lexgion has implicit_task type
+       */
+      ompt_implicit_task->num_exes_after_last_trace++;
+      lexgion_set_trace_bit(ompt_implicit_task);
       if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
@@ -389,7 +383,7 @@ on_ompt_callback_implicit_task(
       break;
     }
     case ompt_scope_end: {
-      ompt_lexgion_t * lgp = ompt_lexgion_end(NULL); /* this is the same as implicit_task */
+      lexgion_t * lgp = lexgion_end(NULL); /* this is the same as implicit_task */
       if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
@@ -397,12 +391,12 @@ on_ompt_callback_implicit_task(
         }
 #endif
         tracepoint(lttng_pinsight_ompt, implicit_task_end, team_size ENERGY_TRACEPOINT_CALL_ARGS);
-        ompt_lexgion_post_trace_update(lgp);
+        lexgion_post_trace_update(lgp);
       }
       /* find the topmost task lexgion instance in the stack (in the nested situation) */
       unsigned int counter;
-      implicit_task = top_lexgion_type(ompt_callback_implicit_task, NULL); /* the nested situation */
-      ompt_lexgion_t * enclosing_task = top_lexgion_type(ompt_callback_task_create, &counter);
+      ompt_implicit_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_implicit_task, NULL); /* the nested situation */
+      lexgion_t * enclosing_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_task_create, &counter);
       if (enclosing_task == NULL) {
         task_codeptr = (void*) OUTMOST_CODEPTR;
         task_counter = 1;
@@ -431,9 +425,7 @@ on_ompt_callback_work(
     case ompt_scope_begin:
       if (codeptr_ra != parallel_codeptr && codeptr_ra != task_codeptr) {
         /* safety check for combined construct, such as parallel_for */
-        ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_work, codeptr_ra);
-        lgp->counter++;
-        push_lexgion(lgp, lgp->counter);
+        lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_work, codeptr_ra);
 
         if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
@@ -470,7 +462,7 @@ on_ompt_callback_work(
        * of the lexgion as index, thus here we need to retrieve back the beginning address */
       ;
       unsigned int counter;
-      ompt_lexgion_t *lgp = ompt_lexgion_end(&counter);
+      lexgion_t *lgp = lexgion_end(&counter);
       lgp->end_codeptr_ra = codeptr_ra;
       if (lgp->codeptr_ra != parallel_codeptr && lgp->codeptr_ra != task_codeptr) {/* safety check */
         if (trace_bit) {
@@ -481,7 +473,7 @@ on_ompt_callback_work(
 #endif
           tracepoint(lttng_pinsight_ompt, work_end, (short) wstype, lgp->codeptr_ra, codeptr_ra, counter,
                      count ENERGY_TRACEPOINT_CALL_ARGS);
-          ompt_lexgion_post_trace_update(lgp);
+          lexgion_post_trace_update(lgp);
         }
       } else {
         fprintf(stderr, "The work_scope_end lexgion codeptr is the same as enclosing parallel or task codeptr, "
@@ -502,9 +494,7 @@ on_ompt_callback_master(
   {
     case ompt_scope_begin:
       ;
-      ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_master, codeptr_ra);
-      lgp->counter++;
-      push_lexgion(lgp, lgp->counter);
+      lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_master, codeptr_ra);
       if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
@@ -518,7 +508,7 @@ on_ompt_callback_master(
     case ompt_scope_end:
       ;
       unsigned int counter;
-      lgp = ompt_lexgion_end(&counter);
+      lgp = lexgion_end(&counter);
       lgp->end_codeptr_ra = codeptr_ra;
 
       if (trace_bit) {
@@ -528,7 +518,7 @@ on_ompt_callback_master(
         }
 #endif
         tracepoint(lttng_pinsight_ompt, master_end, lgp->codeptr_ra, codeptr_ra, counter ENERGY_TRACEPOINT_CALL_ARGS);
-        ompt_lexgion_post_trace_update(lgp);
+        lexgion_post_trace_update(lgp);
       }
       break;
   }
@@ -568,9 +558,7 @@ on_ompt_callback_sync_region(
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit barrier */
         /* each thread will have a lexgion object for the same lexgion */
-        ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_sync_region, codeptr_ra);
-        lgp->counter++;
-        push_lexgion(lgp, lgp->counter);
+        lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_sync_region, codeptr_ra);
         if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
             if (global_thread_num == 0) {
@@ -602,7 +590,7 @@ on_ompt_callback_sync_region(
         /* implicit barrier in worksharing, single, sections, and explicit barrier */
         /* each thread will have a lexgion object for the same lexgion */
         unsigned int counter;
-        ompt_lexgion_t * lgp = ompt_lexgion_end(&counter);
+        lexgion_t * lgp = lexgion_end(&counter);
         lgp->end_codeptr_ra = codeptr_ra;
         if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
@@ -612,7 +600,7 @@ on_ompt_callback_sync_region(
 #endif
             tracepoint(lttng_pinsight_ompt, sync_end, (unsigned short) kind, codeptr_ra, counter
                        ENERGY_TRACEPOINT_CALL_ARGS);
-            ompt_lexgion_post_trace_update(lgp);
+            lexgion_post_trace_update(lgp);
         }
       }
       switch(kind)
@@ -637,7 +625,7 @@ on_ompt_callback_sync_region_wait(
         const void *codeptr_ra)
 {
   unsigned int counter;
-  ompt_lexgion_t * lgp = top_lexgion(&counter);
+  lexgion_t * lgp = top_lexgion(&counter);
   switch(endpoint)
   {
     case ompt_scope_begin:
@@ -645,9 +633,7 @@ on_ompt_callback_sync_region_wait(
         /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
         * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
       } else {
-        //lgp = ompt_lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
-        //lgp->counter++;  //We do not increment the counter here since we will use the same counter as the sync_begin
-        //push_lexgion(lgp, lgp->counter);
+        //lgp = lexgion_begin(ompt_callback_sync_region_wait, codeptr_ra);
         if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
             if (global_thread_num == 0) {
@@ -676,7 +662,7 @@ on_ompt_callback_sync_region_wait(
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit barrier */
         /* each thread will have a lexgion object for the same lexgion */
-        //lgp = ompt_lexgion_end(&counter);
+        //lgp = lexgion_end(&counter);
         //lgp->end_codeptr_ra = codeptr_ra;
         if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
@@ -686,7 +672,7 @@ on_ompt_callback_sync_region_wait(
 #endif
             tracepoint(lttng_pinsight_ompt, sync_wait_end, (unsigned short) kind, codeptr_ra, counter
                        ENERGY_TRACEPOINT_CALL_ARGS);
-            //ompt_lexgion_post_trace_update(lgp);
+            //lexgion_post_trace_update(lgp);
         }
       }
       switch(kind)
@@ -961,7 +947,7 @@ on_ompt_callback_task_create(
   //thus it is initialized in initial task
   if (type & ompt_task_initial) {
     /* the initial task */
-    //ompt_lexgion_t * lgp = ompt_lexgion_begin(ompt_callback_task_create, (void*)0xFFFFFFFF, &new_task_data->value);
+    //lexgion_t * lgp = lexgion_begin(ompt_callback_task_create, (void*)0xFFFFFFFF, &new_task_data->value);
   }
 }
 

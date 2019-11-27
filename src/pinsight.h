@@ -5,7 +5,7 @@
 #ifndef PINSIGHT_PINSIGHT_H
 #define PINSIGHT_PINSIGHT_H
 #include <stdint.h>
-//#include "pinsight_config.h"
+#include "pinsight_config.h"
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
@@ -63,6 +63,12 @@ extern unsigned int NUM_INITIAL_TRACES;
 extern unsigned int MAX_NUM_TRACES;
 extern unsigned int TRACE_SAMPLING_RATE;
 
+typedef enum LEXGION_CLASS {
+    OPENMP_LEXGION = 0,
+    MPI_LEXGION = 1,
+    CUDA_LEXGION = 2,
+} LEXGION_CLASS_t;
+
 /**
  * A lexgion (lexical region) is a region in the source code that has its footprint in
  * the runtime, e.g. a parallel region, a worksharing region, master/single region, task
@@ -95,11 +101,12 @@ extern unsigned int TRACE_SAMPLING_RATE;
  * Becasue of that, the events for those constructs may use the same codeptr_ra for the callback, thus we need further
  * check the type so we know whether we need to create two different lexgion objects
  * */
-typedef struct ompt_lexgion {
+typedef struct lexgion {
     /* we use the binary address and type of the lexgion as key for each lexgion.
      * A code region may be entered from multiple callpath.
      */
     const void *codeptr_ra; /* the codeptr_ra at the beginning of the lexgion */
+    int class; /* the class of the lexgionm, which could be OPENMP_LEXGION, MPI_LEXGION, CUDA_LEXGION */
     int type; /* the type of a lexgion: parallel, master, singer, barrier, task, section, etc. we use trace record event id for this type */
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
     /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
@@ -113,14 +120,14 @@ typedef struct ompt_lexgion {
     unsigned int num_exes_after_last_trace; /* counter to control the sampling */
     unsigned int max_num_traces;
     unsigned int trace_counter; /* counter for total number of traced execution */
-} ompt_lexgion_t;
+} lexgion_t;
 
 /* This macro check whether to trace or not: traces for the initial number of exes or when reaching sampling rate */
-#define ompt_set_trace(lgp) {trace_bit = lgp->trace_counter < lgp->num_initial_traces || \
+#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_counter < lgp->num_initial_traces || \
                             (lgp->trace_counter < lgp->max_num_traces && (lgp->sample_rate == -1 || \
                                                     lgp->num_exes_after_last_trace == lgp->sample_rate));}
 
-#define ompt_lexgion_post_trace_update(lgp) {lgp->trace_counter++; lgp->num_exes_after_last_trace=0;}
+#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; lgp->num_exes_after_last_trace=0;}
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16
@@ -129,11 +136,11 @@ typedef struct ompt_lexgion {
  */
 typedef struct pinsight_thread_data {
     /* the stack for storing the lexgion */
-    //ompt_lexgion_t *lexgion_stack;
+    //lexgion_t *lexgion_stack;
 
     /* the runtime stack for lexgion instances */
-    struct ompt_lexgion_stack {
-        ompt_lexgion_t *lgp;
+    struct lexgion_stack {
+        lexgion_t *lgp;
         unsigned int counter; /* this counter is the counter of lgp when an lexgion instance is created and
                                * pushed to the stack */
         int tracing; /* a flag to indicate whether to trace this instance or not */
@@ -142,7 +149,7 @@ typedef struct pinsight_thread_data {
 
     /* this is the lexgion cache runtime stores, a lexgion is added to the array when the runtime encounters it.
      * The lexgion counter is updated when the lexgion is instantiated at the runtime */
-    ompt_lexgion_t lexgions[MAX_NUM_LEXGIONS]; /* the array to store all the lexgions */
+    lexgion_t lexgions[MAX_NUM_LEXGIONS]; /* the array to store all the lexgions */
     int num_lexgions; /* the last lexgion in the lexgion array */
     int recent_lexgion; /* the most-recently used lexgion in the lexgion array */
 } pinsight_thread_data_t;
@@ -156,7 +163,7 @@ extern __thread const void * task_codeptr;
 extern __thread unsigned int task_counter;
 
 extern __thread pinsight_thread_data_t pinsight_thread_data;
-extern __thread ompt_lexgion_t * implicit_task;
+extern __thread lexgion_t * ompt_implicit_task;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
 
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
@@ -166,12 +173,12 @@ extern "C" {
 #endif
 
 extern pinsight_thread_data_t * init_thread_data(int _thread_num);
-extern void push_lexgion(ompt_lexgion_t * lexgion, unsigned int counter);
-extern ompt_lexgion_t * pop_lexgion(unsigned int * counter);
-extern ompt_lexgion_t * top_lexgion_type(int type, unsigned int * counter);
-extern ompt_lexgion_t * top_lexgion(unsigned int * counter);
-extern ompt_lexgion_t *ompt_lexgion_begin(int type, const void *codeptr_ra);
-extern ompt_lexgion_t *ompt_lexgion_end(unsigned int * counter);
+extern void push_lexgion(lexgion_t * lexgion, unsigned int counter);
+extern lexgion_t * pop_lexgion(unsigned int * counter);
+extern lexgion_t * top_lexgion_type(int class, int type, unsigned int * counter);
+extern lexgion_t * top_lexgion(unsigned int * counter);
+extern lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra);
+extern lexgion_t *lexgion_end(unsigned int * counter);
 
 #ifdef  __cplusplus
 };

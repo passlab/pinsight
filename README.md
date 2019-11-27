@@ -45,34 +45,36 @@ LTTng has some special [setup instructions][lttng-install].
 
 You will also need to build the [LLVM OpenMP runtime][llvm-openmp].
 
-An example of that build process (taken from our `Dockerfile`), building to `/opt/openmp-install`:
+An example of that build process (taken from our `Dockerfile`), building and installing to `/home/yanyh/tools/llvm-openmp-install`:
 
     git clone https://github.com/llvm-mirror/openmp.git && \
     cd openmp && \
     git remote update && \
     cd .. && \
     mkdir -p openmp-build && \
-    mkdir -p openmp-install && \
     cd openmp-build && \
     cmake -G "Unix Makefiles" \
       -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_INSTALL_PREFIX=../openmp-install \
+      -DCMAKE_INSTALL_PREFIX=/home/yanyh/tools/llvm-openmp-install \
       -DOPENMP_ENABLE_LIBOMPTARGET=off \
       -DLIBOMP_OMPT_SUPPORT=on \
       ../openmp
 
-    cd openmp && make && make install
+    make && make install
 
    [llvm-openmp]: https://github.com/llvm-mirror/openmp
 
 
 ### Build
 
-To build the main `pinsight` shared library, use the GNU `Makefile` provided in the top-level directory of this repo:
-
+To build the main `pinsight` shared library, use the cmake and make utilities. OpenMP library path needs to be provided to
+cmake as the value for the OMPLIB_INSTALL variable. 
+    git clone https://github.com/passlab/pinsight.git
+    mkdir build && cd build
+    cmake -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install ..
     make
 
-The instructions above will result in `libpinsight.so` being located at `lib/libpinsight.so`.
+The instructions above will result in `build/libpinsight.so` being located at `build/libpinsight.so`.
 
 
 ### Run
@@ -80,18 +82,18 @@ The instructions above will result in `libpinsight.so` being located at `lib/lib
 #### Tracing script
 
 In the `scripts/` directory, a script called `trace.sh` is provided.
-This script helps make generating LTTng traces for OpenMP programs easier.
+This script helps make generating LTTng traces for MPI/OpenMP/CUDA programs easier.
 
 Example using the `jacobi` application with `8` threads:
 
-    trace.sh /tmp/ompt-jacobi jacobi \
-      /opt/openmp-install/lib/libomp.so \
-      /opt/pinsight/lib/libpinsight.so \
+    trace.sh traces/jacobi jacobi \
+      /home/yanyh/tools/llvm-openmp-install/lib/libomp.so \
+      build/libpinsight.so \
       8 \
       ./jacobi 2048 2048
 
 For jacobi on my vm:
-./scripts/trace.sh traces/jacobi jacobi  /home/yanyh/tools/llvm-openmp-install/lib/libomp.so   /home/yanyh/tools/pinsight/lib/libpinsight.so 8 ./test/jacobi/jacobi 2048 2048
+./scripts/trace.sh traces/jacobi jacobi  /home/yanyh/tools/llvm-openmp-install/lib/libomp.so   build/libpinsight.so 8 ./test/jacobi/jacobi 2048 2048
 
 For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
 

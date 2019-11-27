@@ -16,7 +16,7 @@ Arguments:
   OMP_NUM_THREADS   A number for setting OMP_NUM_THREADS env
 
 Examples:
-    trace.sh /tmp/ompt-jacobi jacobi \\ 
+    trace.sh ./traces/jacobi jacobi \\ 
       /opt/openmp-install/lib/libomp.so \\
       /opt/pinsight/lib/libpinsight.so 8 \\ 
       ./jacobi 2048 2048
