@@ -4,29 +4,32 @@
 # Shell script prelude
 
 USAGE=$(cat <<EOF
-Tracing script for use with PInsight.
-Usage:
-    trace.sh TRACEFILE_DEST TRACE_NAME OMP_LIB PINSIGHT_LIB OMP_NUM_THREADS ARGS...
+Usage for this tracing script for use with PInsight:
+    trace.sh TRACEFILE_DEST TRACE_NAME PINSIGHT_LIB PROG_AND_ARGS...
 
 Arguments:
   TRACEFILE_DEST    Where to write the LTTng traces.
   TRACE_NAME	    Give a proper name for the trace to be displayed in tracecompass.  
-  OMP_LIB           Full-path file name for OpenMP library to use with user application.
   PINSIGHT_LIB      Full-path PInsight shared library file name to use with user application.
-  OMP_NUM_THREADS   A number for setting OMP_NUM_THREADS env
 
 Examples:
-    trace.sh /tmp/ompt-jacobi jacobi \\ 
-      /opt/openmp-install/lib/libomp.so \\
-      /opt/pinsight/lib/libpinsight.so 8 \\ 
+    trace.sh ./traces/jacobi jacobi \\ 
+      /opt/pinsight/lib/libpinsight.so \\ 
       ./jacobi 2048 2048
+    
+    trace.sh ./traces/LULESH LULESH \\ 
+      /opt/pinsight/lib/libpinsight.so \\ 
+      mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
 EOF
 )
 
 # Check to make sure user provided enough args.
 # If not, then exit early with usage info.
-if [ $# -lt 6 ]; then
-    echo "Error: Not enough arguments provided.";
+if [ $# -lt 4 ]; then
+    echo "********************************************************************";
+    echo "**  Error: Not enough arguments provided for the tracing script.  **";
+    echo "********************************************************************";
+    echo "";
     echo "${USAGE}";
     exit 1;
 fi
@@ -35,10 +38,8 @@ fi
 # This leaves only the program command line in `$@`.
 TRACING_OUTPUT_DEST=$1
 TRACE_NAME=$2
-OMP_LIB=$3
-PINSIGHT_LIB=$4
-export OMP_NUM_THREADS=$5
-shift 5 
+PINSIGHT_LIB=$3
+shift 3 
 
 # --------------------------------------------------------
 # Main script
@@ -51,8 +52,10 @@ lttng create ompt-tracing-session --output="${TRACING_OUTPUT_DEST}"
 #lttng enable-channel --userspace --blocking-timeout=100 blocking-channel
 
 # Create and enable event rules.
-lttng enable-event --userspace lttng_pinsight:'*'
-#lttng enable-event --userspace lttng_pinsight:'*' --channel=blocking-channel
+lttng enable-event --userspace lttng_pinsight_ompt:'*'
+lttng enable-event --userspace lttng_pinsight_pmpi:'*'
+
+#lttng enable-event --userspace lttng_pinsight_ompt:'*' --channel=blocking-channel
 #lttng enable-event -u -a --channel=blocking-channel
 
 # Add related context field to all channels
@@ -75,8 +78,8 @@ lttng start
 # LD_PRELOAD=${OMP_LIB}:${PINSIGHT_LIB} "$@"
 
 # Enable callstack tracing
-# LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${OMP_LIB}:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
-LD_PRELOAD=${OMP_LIB}:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
+# LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
+LD_PRELOAD=${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
 
 # Stop LTTng tracing.
 lttng stop

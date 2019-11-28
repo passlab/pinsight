@@ -68,7 +68,7 @@ An example of that build process (taken from our `Dockerfile`), building and ins
 ### Build
 
 To build the main `pinsight` shared library, use the cmake and make utilities. OpenMP library path needs to be provided to
-cmake as the value for the OMPLIB_INSTALL variable. 
+cmake as the value for the OMPLIB_INSTALL variable. But only omp.h and ompt.h are needed to build libpinsight.so 
     git clone https://github.com/passlab/pinsight.git
     mkdir build && cd build
     cmake -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install ..
@@ -83,21 +83,22 @@ The instructions above will result in `build/libpinsight.so` being located at `b
 
 In the `scripts/` directory, a script called `trace.sh` is provided.
 This script helps make generating LTTng traces for MPI/OpenMP/CUDA programs easier.
+OpenMP OMP_NUM_THREADS should be set for the needed number of threads
+mpirun can be used as command to launch MPI applications. 
 
 Example using the `jacobi` application with `8` threads:
 
+    export OMP_NUM_THREADS=8
     trace.sh traces/jacobi jacobi \
-      /home/yanyh/tools/llvm-openmp-install/lib/libomp.so \
       build/libpinsight.so \
-      8 \
       ./jacobi 2048 2048
 
 For jacobi on my vm:
-./scripts/trace.sh traces/jacobi jacobi  /home/yanyh/tools/llvm-openmp-install/lib/libomp.so   build/libpinsight.so 8 ./test/jacobi/jacobi 2048 2048
+./scripts/trace.sh traces/jacobi jacobi build/libpinsight.so ./test/jacobi/jacobi 2048 2048
 
 For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
 
-     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th /home/yanyh/tools/llvm-openmp-install/lib/libomp.so ./lib/libpinsight.so 4 mpirun -np 8 ./test/LULESH/build/lulesh2.0 
+     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so mpirun -np 8 ./test/LULESH/build/lulesh2.0 
 
 #### Specifying tracing rate
 To allow user's control of tracing of each parallel region, one can specify a sampling rate, max number of traces, and initial number of traces of each parallel region using ``PINSIGHT_TRACE_CONFIG`` environment variable. The ``PINSIGHT_TRACE_CONFIG`` should be the form of ``<num_initial_traces>:<max_num_traces>:<trace_sampling_rate>``. Below are the examples of ``PINSIGHT_TRACE_CONFIG`` settings and their tracing behavior:
