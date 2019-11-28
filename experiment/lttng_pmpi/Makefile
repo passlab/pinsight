@@ -19,6 +19,9 @@ test: jacobi_mpi_4np
 	lttng start
 	# Run instrumented code.
 	mpirun -np 4 $<
+	# If -lpinsight_mpi is not used when compiling and linking jacobi_mpi_4np.c with mpicc, 
+	# The following command of launching mpirun still works
+	# LD_PRELOAD=libpinsight_mpi.so mpirun -np 4 $<
 	# Stop LTTng tracing.
 	lttng stop
 	lttng destroy
