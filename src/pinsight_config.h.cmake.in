@@ -1,0 +1,16 @@
+#ifndef PINSIGHT_CONFIG_H
+#define PINSIGHT_CONFIG_H
+
+#define PINSIGHT_VERSION_MAJOR    @PINSIGHT_VERSION_MAJOR@
+#define PINSIGHT_VERSION_MINOR    @PINSIGHT_VERSION_MINOR@
+#define PINSIGHT_VERSION          @PINSIGHT_VERSION@
+
+// cmakedefine01 MACRO will define MACRO as either 0 or 1
+// cmakedefine MACRO 1 will define MACRO as 1 or leave undefined
+
+#cmakedefine PINSIGHT_OPENMP
+#cmakedefine PINSIGHT_MPI
+#cmakedefine PINSIGHT_CUDA
+#cmakedefine PINSIGHT_ENERGY
+
+#endif /* PINSIGHT_CONFIG_H */

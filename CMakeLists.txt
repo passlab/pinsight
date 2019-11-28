@@ -10,12 +10,12 @@ set(PINSIGHT_VERSION_MAJOR 0)
 set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
-
 option(PINSIGHT_OPENMP "Build with OpenMP Support"       TRUE)
 option(PINSIGHT_MPI    "Build with MPI Support"          TRUE)
 option(PINSIGHT_CUDA   "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
 
 set(SOURCE_FILES
         src/env_config.c
