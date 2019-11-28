@@ -69,8 +69,9 @@ An example of that build process (taken from our `Dockerfile`), building and ins
 
 To build the main `pinsight` shared library, use the cmake and make utilities. OpenMP library path needs to be provided to
 cmake as the value for the OMPLIB_INSTALL variable. But only omp.h and ompt.h are needed to build libpinsight.so 
+
     git clone https://github.com/passlab/pinsight.git
-    mkdir build && cd build
+    cd pinsight && mkdir build && cd build
     cmake -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install ..
     make
 
