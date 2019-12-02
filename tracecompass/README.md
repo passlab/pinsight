@@ -54,3 +54,4 @@ MPI tool interface has the same mechanisms with OMPT, which is based on event/ca
 ## Tracecompass incubator project
 1. kernel callstack: https://archive.eclipse.org/tracecompass.incubator/doc/org.eclipse.tracecompass.incubator.kernel.doc.user/User-Guide.html
 1. scripting: https://archive.eclipse.org/tracecompass.incubator/doc/org.eclipse.tracecompass.incubator.scripting.doc.user/User-Guide.html
+1. Blog: [Trace Compass Scripting: Empowering Users With Their Trace Data Analysis](http://versatic.net/tracecompass/introducingEase.html)
