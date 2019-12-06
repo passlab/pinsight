@@ -29,44 +29,102 @@ int mpirank = 0;
 #include "pmpi_lttng_tracepoint.h"
 
 /**
- * enum to define code for each MPI methods, used in searching lexgion
+ * The idea to add an MPI method to the tracing framework of LTTng is via PMPI interface. Each an MPI method is
+ * implemented using the corresponding PMPI method. In general, before and after the PMPI call, we use LTTng-UST tracepoint to
+ * record the MPI call. Each MPI call record contains myrank (the MPI rank), codeptr (the address in the user
+ * code of the MPI call), and MPI method-specific fields. To facilitate runtime bookkeeping and to optimize tracing frequency,
+ * an MPI call and its address location (lexgion) are kept track in the runtime system so tracing can be turned on and
+ * off based on user-provided tracing rate (check README.md file).
+ *
+ * The implemention (in this file pmpi_mpi.c and pmpi_lttng_tracepoint.h file) uses two preprocesing
+ * macros (PMPI_CALL_PROLOGUE and PMPI_CALL_EPILOGUE), and LTTng TRACEPOINT_EVENT definitions are also macro based.
+ * Those macros are refactored nicely in such a way that using them is pretty straightforward by following the examples.
+ * Their implementations are however complicated to understand,
+ * But I hope most of those who will develop based on these files do not need to know that.
+ *
+ * To add an MPI method, e.g. MPI_Foo, to the tracing framework:
+ * 1. Add to the MPI_LEXGION_type_t enum an entry named MPI_Foo_LEXGION, must be exactly this name
+ *    because of the way it is used in the PMPI_CALL_PROLOGUE and PMPI_CALL_EPILOGUE macro
+ * 2. Define LTTng-UST TRACEPOINT_EVENTs in pmpi_lttng_tracepoint.h file for the MPI_Foo, using LTTng-UST TRACEPOINT_EVENT-related macro.
+ *    The two events should be named as MPI_Foo_begin and MPI_Foo_end, representing the event before the MPI_Foo call
+ *    and after the call. In the definition, the tracepoint call arguments (TP_ARGS), and the event record fields (TP_FIELDS)
+ *    should be selected and defined based on the parameters of the MPI_Foo call itself. First, decide what fields are
+ *    needed to be recorded in a trace record, and then decide what arguments are needed to pass to the trace recording.
+ *    To work with the PMPI_CALL_PROLOGUE and PMPI_CALL_EPILOGUE macro, the first TP_ARGS argument MUST be CODEPTR_ARG (codeptr),
+ *    and the first TP_FIELDS field MUST be COMMON_TP_FIELDS_PMPI (includes mpirank and codeptr).
+ *    The use of TRACEPOINT_EVENT_INSTANCE for defining MPI_Foo_end TRACEPOINT_EVENT is optional. It is used with the
+ *    definition of TRACEPOINT_EVENT_CLASS that is created for most the MPI_*_end events (the end events for most MPI methods).
+ *    Because most MPI_*_end events only need to record COMMON_TP_FIELDS_PMPI and a return value of the corresponding PMPI call, we
+ *    can use LTTng-UST TRACEPOINT_EVENT_CLASS feature to define a single event for all those records that have the same fields.
+ *    After this step, it is important to note the TP_ARGS definition of those arguments that will be passed to the
+ *    tracepoint call via PMPI_CALL_PROLOGUE
+ *
+ * 3. In this file, create the MPI_Foo implementation using the corresponding PMPI_Foo function, and then add calls to
+ *    PMPI_CALL_PROLOGUE and PMPI_CALL_EPILOGUE macros before and after the PMPI_Foo call. The arguments passed to the two
+ *    macros calls should match the parameters of the TP_ARGS arguments (not including CODEPTR_ARG) of the
+ *    TRACEPOINT_EVENT definition for MPI_Foo_begin and MPI_Foo_end.
+ *
+ * By following the above steps, it should be straightforward to add an MPI method to the tracing framework.
  */
-typedef enum MPI_Func_type {
-    MPI_Init_type = 0,
-    MPI_Init_thread_type,
-    MPI_Finalize_type,
-    MPI_Send_type,
-    MPI_Recv_type,
-    MPI_Barrier_type,
-    MPI_Reduce_type,
-    MPI_Allreduce_type,
-} MPI_Func_type_t;
+
+/**
+ * enum to define code for each MPI methods, used as one of the key of lexgion directory maintained by the runtime.
+ */
+typedef enum MPI_LEXGION_type {
+    MPI_Init_LEXGION = 0,
+    MPI_Init_thread_LEXGION,
+    MPI_Finalize_LEXGION,
+    MPI_Send_LEXGION,
+    MPI_Recv_LEXGION,
+    MPI_Barrier_LEXGION,
+    MPI_Reduce_LEXGION,
+    MPI_Allreduce_LEXGION,
+} MPI_LEXGION_type_t;
+
+/**
+ * This two macros are complicatedly refactored so we can have the code for MPI_* implemented cleanly.
+ * The two macros must be used together for each MPI function.
+ * The first argument of the macro is the MPI function name, and the rest arguments are basically
+ * the parameters of the MPI call. Those arguments will be passed to lttng tracepoint call and recorded.
+ *
+ * Those parameters needs to coordinated with the lttng MPI tracepoint definition in pmpi_lttng_tracepoint.h
+ *
+ * codeptr that is used by all MPI tracepoints are handled implicitly in this macro.
+ * mpirank that is recorded in a trace record is passed to tracepoint fields from a global variable.
+ */
+#define PMPI_CALL_PROLOGUE(MPI_FUNC, ...)                                 \
+    const void * codeptr_ra = __builtin_return_address(0);                          \
+    lexgion_t * lgp = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, codeptr_ra);          \
+    lgp->num_exes_after_last_trace ++;                                              \
+                                                                                        \
+    lexgion_set_trace_bit(lgp);                                                     \
+    if (trace_bit) {                                                                \
+        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_begin, codeptr_ra, __VA_ARGS__);   \
+    }
+
+#define PMPI_CALL_EPILOGUE(MPI_FUNC, ...)                                              \
+    lexgion_end(NULL);                                                              \
+    lgp->end_codeptr_ra = codeptr_ra;                                               \
+                                                                                        \
+    if (trace_bit) {                                                                \
+        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_end, codeptr_ra, __VA_ARGS__);   \
+        lexgion_post_trace_update(lgp);                                             \
+    }
 
 _EXTERN_C_ int PMPI_Init_thread( int *argc, char ***argv, int required, int *provided );
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int MPI_Init_thread( int *argc, char ***argv, int required, int *provided ) {
     unsigned int pid = getpid();
+    char hostname[32];
+    gethostname(hostname, 32);
 
-    const void * codeptr_ra = __builtin_return_address(0);
-    lexgion_t * lgp = lexgion_begin(MPI_LEXGION, MPI_Init_thread_type, codeptr_ra);
-    lgp->num_exes_after_last_trace ++;
-
-    lexgion_set_trace_bit(lgp);
-    if (trace_bit) {
-        tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_begin, pid);
-    }
+    PMPI_CALL_PROLOGUE(MPI_Init_thread, hostname, pid, required);
 
     int return_val = PMPI_Init_thread(argc, argv, required, provided);
     PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
     //printf("process %d rank: %d\n", pid, mpirank);
 
-    lexgion_end(NULL);
-    lgp->end_codeptr_ra = codeptr_ra;
-
-    if (trace_bit) {
-        tracepoint(lttng_pinsight_pmpi, MPI_Init_thread_end, pid, mpirank);
-        lexgion_post_trace_update(lgp);
-    }
+    PMPI_CALL_EPILOGUE(MPI_Init_thread, *provided, return_val);
 
     return return_val;
 }
@@ -75,66 +133,70 @@ _EXTERN_C_ int MPI_Init_thread( int *argc, char ***argv, int required, int *prov
 _EXTERN_C_ int PMPI_Init(int *argc, char ***argv);
 _EXTERN_C_ int MPI_Init(int *argc, char ***argv) {
     unsigned int pid = getpid();
-    tracepoint(lttng_pinsight_pmpi, MPI_Init_begin, pid);
+    char hostname[32];
+    gethostname(hostname, 32);
+
+    PMPI_CALL_PROLOGUE(MPI_Init, hostname, pid);
     int return_val = PMPI_Init(argc, argv);
     PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
+    PMPI_CALL_EPILOGUE(MPI_Init, return_val);
+
     //printf("process %d rank: %d\n", pid, mpirank);
-    tracepoint(lttng_pinsight_pmpi, MPI_Init_end, pid, mpirank);
     return return_val;
 }
 
 /* ================== C Wrappers for MPI_Finalize ================== */
 _EXTERN_C_ int PMPI_Finalize();
 _EXTERN_C_ int MPI_Finalize() {
-    tracepoint(lttng_pinsight_pmpi, MPI_Finalize_begin, mpirank);
+    PMPI_CALL_PROLOGUE(MPI_Finalize, 0);
     int return_val = PMPI_Finalize();
-    tracepoint(lttng_pinsight_pmpi, MPI_Finalize_end, mpirank);
+    PMPI_CALL_EPILOGUE(MPI_Finalize, return_val);
     return return_val;
 }
-
 
 /* ================== C Wrappers for MPI_Send ================== */
 _EXTERN_C_ int PMPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm);
 _EXTERN_C_ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
-    tracepoint(lttng_pinsight_pmpi, MPI_Send_begin, buf, count, dest, tag);
+    PMPI_CALL_PROLOGUE(MPI_Send, buf, count, dest, tag);
     int return_val = PMPI_Send(buf, count, datatype, dest, tag, comm);
-    tracepoint(lttng_pinsight_pmpi, MPI_Send_end, buf, count, dest, tag);
+    PMPI_CALL_EPILOGUE(MPI_Send, return_val);
+
     return return_val;
 }
 
 /* ================== C Wrappers for MPI_Recv ================== */
 _EXTERN_C_ int PMPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status);
 _EXTERN_C_ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
-    tracepoint(lttng_pinsight_pmpi, MPI_Recv_begin, buf, count, source, tag);
+    PMPI_CALL_PROLOGUE(MPI_Recv, buf, count, source, tag);
     int return_val = PMPI_Recv(buf, count, datatype, source, tag, comm, status);
-    tracepoint(lttng_pinsight_pmpi, MPI_Recv_end, buf, count, source, tag);
+    PMPI_CALL_EPILOGUE(MPI_Recv, return_val);
     return return_val;
 }
 
 /* ================== C Wrappers for MPI_Barrier ================== */
 _EXTERN_C_ int PMPI_Barrier(MPI_Comm comm);
 _EXTERN_C_ int MPI_Barrier(MPI_Comm comm) {
-    tracepoint(lttng_pinsight_pmpi, MPI_Barrier_begin, 0);
+    PMPI_CALL_PROLOGUE(MPI_Barrier, 0);
     int return_val = PMPI_Barrier(comm);
-    tracepoint(lttng_pinsight_pmpi, MPI_Barrier_end, 0);
+    PMPI_CALL_EPILOGUE(MPI_Barrier, return_val);
     return return_val;
 }
 
 /* ================== C Wrappers for MPI_Reduce ================== */
 _EXTERN_C_ int PMPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm);
 _EXTERN_C_ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm) {
-    tracepoint(lttng_pinsight_pmpi, MPI_Reduce_begin, sendbuf, recvbuf, count, root, (void*)op);
+    PMPI_CALL_PROLOGUE(MPI_Reduce, sendbuf, recvbuf, count, root, (void*)op);
     int return_val = PMPI_Reduce(sendbuf, recvbuf, count, datatype, op, root, comm);
-    tracepoint(lttng_pinsight_pmpi, MPI_Reduce_end, sendbuf, recvbuf, count, root, (void*)op);
+    PMPI_CALL_EPILOGUE(MPI_Reduce, return_val);
     return return_val;
 }
 
 /* ================== C Wrappers for MPI_Allreduce ================== */
 _EXTERN_C_ int PMPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm);
 _EXTERN_C_ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
-    tracepoint(lttng_pinsight_pmpi, MPI_Allreduce_begin, sendbuf, recvbuf, count, (void*) op);
+    PMPI_CALL_PROLOGUE(MPI_Allreduce, sendbuf, recvbuf, count, (void*) op);
     int return_val = PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
-    tracepoint(lttng_pinsight_pmpi, MPI_Allreduce_end, sendbuf, recvbuf, count, (void*)op);
+    PMPI_CALL_EPILOGUE(MPI_Allreduce, return_val);
     return return_val;
 }
 

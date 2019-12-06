@@ -64,9 +64,12 @@ extern unsigned int MAX_NUM_TRACES;
 extern unsigned int TRACE_SAMPLING_RATE;
 
 typedef enum LEXGION_CLASS {
-    OPENMP_LEXGION = 0,
-    MPI_LEXGION = 1,
-    CUDA_LEXGION = 2,
+    OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
+    MPI_LEXGION = 1,        /* P-MPI, e.g. https://www.open-mpi.org/faq/?category=perftools#PMPI */
+    CUDA_LEXGION = 2,       /* CUPTI based, https://docs.nvidia.com/cuda/cupti/index.html */
+    OPENCL_LEXGION = 3,     /* check clSetEventCallback, check https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clSetEventCallback.html */
+    ROCL_LEXGION = 4,       /* check https://github.com/ROCm-Developer-Tools/roctracer */
+    USER_LEXGION = 5,       /* user defined API for tracing */
 } LEXGION_CLASS_t;
 
 /**
@@ -74,11 +77,16 @@ typedef enum LEXGION_CLASS {
  * the runtime, e.g. a parallel region, a worksharing region, master/single region, task
  * region, target region, etc. lexgion in OpenMP are mostly translated to runtime calls.
  *
- * A lexgion should be identified by the codeptr_ra of OMPT callback and the type field together.
- * codeptr_ra is the binary address at the beginning of lexgion and type is the type of region.
- * end_codeptr_ra is the binary address at the end of the lexgion.
+ * For MPI, each MPI method represents a lexgion
  *
- * About the codeptr_ra of different regions, check the OpenMP 5.0 standard and
+ * There are so far six classes of lexgion, defined in LEXGION_CLASS_t enum. So far, we aim to implement
+ * MPI_LEXGION, OPENMP_LEXGION, and CUDA_LEXGION
+ *
+ * A lexgion should be identified by the codeptr, the type and class together. codeptr is the binary address of the
+ * first instruction of the lexgion (retun address of the runtime call), e.g. codeptr_ra in OMPT, return address of
+ * an MPI call, etc. end_codeptr_ra is the binary address at the end of the lexgion, which could be the same as codeptr.
+ *
+ * About the codeptr_ra of different regions of OpenMP when using OMPT, check the OpenMP 5.0 standard and
  * https://github.com/passlab/pinsight/issues/41. Issues/41 includes the following info:
  *
  * For parallel, codeptr_ra for parallel_begin, parallel_end, AND barrier_begin, wait_barrier_begin,
@@ -106,8 +114,9 @@ typedef struct lexgion {
      * A code region may be entered from multiple callpath.
      */
     const void *codeptr_ra; /* the codeptr_ra at the beginning of the lexgion */
-    int class; /* the class of the lexgionm, which could be OPENMP_LEXGION, MPI_LEXGION, CUDA_LEXGION */
-    int type; /* the type of a lexgion: parallel, master, singer, barrier, task, section, etc. we use trace record event id for this type */
+    int class; /* the class of the lexgion, which could be OPENMP_LEXGION, MPI_LEXGION, CUDA_LEXGION */
+    int type; /* the type of a lexgion in the class: e.g. parallel, master, singer, barrier, task, section, etc for OPENMP.
+               * For OpenMP, we use trace record event id as the type of each lexgion; For MPI, we define a macro for each MPI methods */
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
     /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
     volatile unsigned int counter; /* counter for total number of execution of the region */
