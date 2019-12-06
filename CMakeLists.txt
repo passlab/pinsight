@@ -10,12 +10,13 @@ set(PINSIGHT_VERSION_MAJOR 0)
 set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
-option(PINSIGHT_OPENMP "Build with OpenMP Support"       TRUE)
-option(PINSIGHT_MPI    "Build with MPI Support"          TRUE)
+option(PINSIGHT_OPENMP "Build with OpenMP support"       TRUE)
+option(PINSIGHT_MPI    "Build with MPI support"          TRUE)
 option(PINSIGHT_CUDA   "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
+        "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
 
 set(SOURCE_FILES
         src/env_config.c
@@ -24,14 +25,15 @@ set(SOURCE_FILES
         src/pinsight.c
         )
 
-## OpenMP runtime supporting OMPT
+## For OpenMP, PInsight requires OMPT support in an OpenMP runtime. But buidling PInsight only needs omp.h and ompt.h,
+## i.e. no need libomp.so, or -fopenmp flag when compiling or linking PInsight.
 if (PINSIGHT_OPENMP)
-# We only need ompt.h and omp.h, i.e. no need libomp.so. thus we do not need -fopenmp flag when compiling or linking. 
 #    find_package(OpenMP REQUIRED)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     # if not hardcode here, should be set in cmake as -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install
     #set(OMPLIB_INSTALL /home/yanyh/tools/llvm-openmp-install) #
     #link_directories(${OMPLIB_INSTALL}/lib)
+    option(OMPLIB_INSTALL "OpenMP runtime install path that provides omp.h and ompt.h"   "/home/yanyh/tools/llvm-openmp-install")
     include_directories(${OMPLIB_INSTALL}/include)
     list(APPEND SOURCE_FILES
             src/ompt_lttng_tracepoint.h
