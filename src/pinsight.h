@@ -65,11 +65,19 @@ extern unsigned int TRACE_SAMPLING_RATE;
 
 typedef enum LEXGION_CLASS {
     OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
-    MPI_LEXGION = 1,        /* P-MPI, e.g. https://www.open-mpi.org/faq/?category=perftools#PMPI */
-    CUDA_LEXGION = 2,       /* CUPTI based, https://docs.nvidia.com/cuda/cupti/index.html */
-    OPENCL_LEXGION = 3,     /* check clSetEventCallback, check https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clSetEventCallback.html */
-    ROCL_LEXGION = 4,       /* check https://github.com/ROCm-Developer-Tools/roctracer */
-    USER_LEXGION = 5,       /* user defined API for tracing */
+    MPI_LEXGION,        /* P-MPI, e.g. https://www.open-mpi.org/faq/?category=perftools#PMPI */
+    CUDA_LEXGION,       /* CUPTI based, https://docs.nvidia.com/cuda/cupti/index.html */
+                        /* CUPTI callback already has four domains of APIs for callbacks, thus here we directly create
+                         * alias for them so ...
+                         */
+    CUDA_CUPTI_CB_DOMAIN_DRIVER_API,
+    CUDA_CUPTI_CB_DOMAIN_RUNTIME_API,
+    CUDA_CUPTI_CB_DOMAIN_RESOURCE,
+    CUDA_CUPTI_CB_DOMAIN_SYNCHRONIZE,
+    CUDA_CUPTI_CB_DOMAIN_NVTX,  /* for Nvidia's own tools of profiling */
+    OPENCL_LEXGION,     /* check clSetEventCallback, check https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clSetEventCallback.html */
+    ROCL_LEXGION,       /* check https://github.com/ROCm-Developer-Tools/roctracer */
+    USER_LEXGION,       /* user defined API for tracing */
 } LEXGION_CLASS_t;
 
 /**

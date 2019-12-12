@@ -15,16 +15,15 @@ extern "C" {
 
 #ifndef _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H_DECLARE_ONCE
 #define _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H_DECLARE_ONCE
+#ifdef PINSIGHT_MPI
+extern int mpirank ;
+#endif
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
 extern __thread const void * parallel_codeptr;
 extern __thread unsigned int parallel_counter;
 extern __thread const void * task_codeptr;
 extern __thread unsigned int task_counter;
-#ifdef PINSIGHT_MPI
-#include <mpi.h>
-extern int mpirank ;
-#endif
 #endif
 
 /** Macros used to simplify the definition of LTTng TRACEPOINT_EVENT */
