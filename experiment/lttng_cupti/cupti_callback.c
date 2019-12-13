@@ -36,7 +36,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
                 cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
                 const char * kernelName = cbInfo->symbolName;
-    		printf("inside callback for kernelLaunch_begin: %s\n", kernelName);
+    		//printf("inside callback for kernelLaunch_begin: %s\n", kernelName);
                 tracepoint(lttng_pinsight_cuda, cudaKernelLaunch_begin, codeptr, kernelName);
             } else if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020) {
                 // Store parameters passed to cudaMemcpy
@@ -46,7 +46,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                 const void * src = funcParams->src;
                 unsigned int count = funcParams->count;
                 int kind = funcParams->kind;
-    		printf("inside callback for cudaMemcpy_begin: %s\n", funName);
+    		//printf("inside callback for cudaMemcpy_begin: %s\n", funName);
                 tracepoint(lttng_pinsight_cuda, cudaMemcpy_begin, codeptr, funName, dst, src, count, kind);
             }
         }
@@ -55,13 +55,13 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
                 cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
                 const char * kernelName = cbInfo->symbolName;
-    		printf("inside callback for kernelLaunch_end: %s\n", kernelName);
+    		//printf("inside callback for kernelLaunch_end: %s\n", kernelName);
                 tracepoint(lttng_pinsight_cuda, cudaKernelLaunch_end, codeptr, kernelName);
             } else if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020) {
                 // Store parameters passed to cudaMemcpy
                 const char * funName = cbInfo->functionName;
                 int return_val = *((int*)cbInfo->functionReturnValue);
-    		printf("inside callback for cudaMemcpy_end: %s\n", funName);
+    		//printf("inside callback for cudaMemcpy_end: %s\n", funName);
                 tracepoint(lttng_pinsight_cuda, cudaMemcpy_end, codeptr, funName, return_val);
             }
         }
