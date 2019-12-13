@@ -81,5 +81,5 @@ int main(int argc, char *argv[]) {
     free(h_C);
 
     cudaDeviceSynchronize();
-    return -1;
+    return 0;
 }
