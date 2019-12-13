@@ -1,7 +1,7 @@
 CUDA_INSTALL=/usr/local/cuda
 CUPTI_INSTALL=${CUDA_INSTALL}/extras/CUPTI
 
-CFLAGS+=-DPINSIGHT_MPI -DPINSIGHT_OPENMP -g --save-temps
+CFLAGS+=-DPINSIGHT_MPI -DPINSIGHT_OPENMP -g
 INCLUDES=-I${CUPTI_INSTALL}/include -I${CUDA_INSTALL}/include -I.
 
 LIBS= -L${CUDA_INSTALL}/lib64 -L${CUPTI_INSTALL}/lib64 -lcuda -lcudart -lcupti -ldl -llttng-ust -lstdc++
@@ -20,7 +20,7 @@ vecadd.o: vecadd.cu
 TRACE_FOLDER=vecadd_cuda_lttng_traces
 
 test: vecadd
-	lttng create ompt-tracing-session --output="${TRACE_FOLDER}"
+	lttng create cuda-tracing-session --output="${TRACE_FOLDER}"
 	# Create and enable event rules.
 	lttng enable-event --userspace lttng_pinsight_cuda:'*'
 	# Start LTTng tracing.
