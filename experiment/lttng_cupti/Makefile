@@ -1,7 +1,7 @@
 CUDA_INSTALL=/usr/local/cuda
 CUPTI_INSTALL=${CUDA_INSTALL}/extras/CUPTI
 
-CFLAGS+=-DPINSIGHT_MPI -DPINSIGHT_OPENMP
+CFLAGS+=-DPINSIGHT_MPI -DPINSIGHT_OPENMP -g --save-temps
 INCLUDES=-I${CUPTI_INSTALL}/include -I${CUDA_INSTALL}/include -I.
 
 LIBS= -L${CUDA_INSTALL}/lib64 -L${CUPTI_INSTALL}/lib64 -lcuda -lcudart -lcupti -ldl -llttng-ust -lstdc++

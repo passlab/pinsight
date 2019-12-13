@@ -48,7 +48,7 @@ shift 3
 rm -rf ${TRACING_OUTPUT_DEST}
 
 # Create a userspace session.
-lttng create ompt-tracing-session --output="${TRACING_OUTPUT_DEST}"
+lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
 # Create and enable event rules.
 lttng enable-event --userspace lttng_pinsight_ompt:'*'

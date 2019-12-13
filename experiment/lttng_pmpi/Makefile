@@ -12,7 +12,7 @@ jacobi_mpi_4np: jacobi_mpi_4np.c libpinsight_mpi.so
 
 TRACE_FOLDER=jacobi_mpi_4np_lttng_traces
 test: jacobi_mpi_4np
-	lttng create ompt-tracing-session --output="${TRACE_FOLDER}"
+	lttng create mpi-tracing-session --output="${TRACE_FOLDER}"
 	# Create and enable event rules.
 	lttng enable-event --userspace lttng_pinsight_mpi:'*'
 	# Start LTTng tracing.
