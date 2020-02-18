@@ -240,10 +240,6 @@ Configuration summary:
 
 ### Install with clang compiler
 ````
-yyan7@fornax:~/tools/scorep-6.0-build$ ../scorep-6.0/configure --prefix=/opt/tools/scorep-6.0-install-clang --with-libcudart=/usr/local/cuda --with-nocross-compiler-suite=clang
-
-...
-
 Configure command:
   ../scorep-6.0/configure       '--prefix=/opt/tools/scorep-6.0-install-clang' \
                                 '--with-libcudart=/usr/local/cuda' \
@@ -303,13 +299,15 @@ Configuration summary:
       Memory tracking support:  yes
       Compiler wrappers:        scorep-clang scorep-clang++ scorep-mpicc scorep-mpicxx scorep-oshcc scorep-nvcc 
       User library wrappers support:
-                                no
+                                yes
 
     Score-P (GCC plug-in):
       GCC plug-in support:      no, only GNU compilers supported
 
     Score-P (libwrap):
-      Library wrapper support:  no, llvm-config not found
+      Library wrapper support:  yes, using /opt/llvm/llvm-9.0.0-install/bin/llvm-config
+      C compiler used:          /opt/llvm/llvm-9.0.0-install/bin/clang
+      C++ compiler used:        /opt/llvm/llvm-9.0.0-install/bin/clang++
 
     Score-P (MPI backend):
       Link mode:                static=yes, shared=no
@@ -353,7 +351,7 @@ Configuration summary:
       Online access support:    yes
       Memory tracking support:  yes
       User library wrappers support:
-                                no
+                                yes
 
     Score-P (score):
       C compiler used:          clang 
@@ -401,7 +399,7 @@ Configuration summary:
       compiler instrumentation: yes, using nm
       Memory tracking support:  yes
       User library wrappers support:
-                                no
+                                yes
 
   CubeLib 4.4.4:
     Cube installed into:        /opt/tools/scorep-6.0-install-clang
@@ -471,6 +469,7 @@ Configuration summary:
       Python bindings support:  no, missing builtins module
       Running tests:            no
         Parallel tests:         yes
+
 ````
 ````
 make -j16
