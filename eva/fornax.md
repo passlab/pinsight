@@ -17,5 +17,5 @@ We will collect the following metrics between PInsight with those tools using LU
  * clang version 6.0.0
  
 #### Score-p installation
-`../scorep-6.0/configure --prefix=$HOME/tools/scorep-6.0-install --with-nocross-compiler-suite=clang`
-
+`../scorep-6.0/configure --prefix=/opt/tools/scorep-6.0-install-gcc --with-libcudart=/usr/local/cuda`
+`../scorep-6.0/configure --prefix=/opt/tools/scorep-6.0-install-clang --with-libcudart=/usr/local/cuda --with-nocross-compiler-suite=clang`
