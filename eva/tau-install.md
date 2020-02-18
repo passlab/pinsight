@@ -1,4 +1,4 @@
-### Install TAU with mpicc
+### Install TAU with mpicc/gcc
 
 ````
 yyan7@fornax:~/tools/tau-2.29$ sudo ./configure -c++=mpicxx -cc=mpicc -fortran=mpif90 -mpi -ompt -iowrapper -bfd=download -dwarf=download -otf=download -unwind=download -prefix=/opt/tools/tau-2.29-install-mpicc
@@ -248,5 +248,11 @@ Configuration complete!
    Please add  /opt/tools/tau-2.29-install-mpicc/x86_64/bin  to your path
    Type "make install" to begin compilation
 yyan7@fornax:~/tools/tau-2.29$
+
+````
+
+### Install with clang/clang++
+````
+sudo ./configure -c++=`which clang++` -cc=`which clang` -arch=x86_64 -ompt=download -bfd=download -dwarf=download -otf=download -unwind=download -prefix=/opt/tools/tau-2.29-install-clang
 
 ````
