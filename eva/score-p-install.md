@@ -231,12 +231,12 @@ Configuration summary:
       Running tests:            no
         Parallel tests:         yes
         
-     ````
+ ````
      
-     ````
+ ````
      make -j16;
      sudo make install
-     ````
+ ````
 
 ### Install with clang compiler
 ````
