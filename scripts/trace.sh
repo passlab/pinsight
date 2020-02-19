@@ -43,6 +43,7 @@ shift 3
 
 # --------------------------------------------------------
 # Main script
+export LD_LIBRARY_PATH=/home/yanyh/tools/llvm-openmp-install/lib:$LD_LIBRARY_PATH
 
 # Clean the trace folder first
 rm -rf ${TRACING_OUTPUT_DEST}
@@ -53,6 +54,9 @@ lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
 # Create and enable event rules.
 lttng enable-event --userspace lttng_pinsight_ompt:'*'
 lttng enable-event --userspace lttng_pinsight_pmpi:'*'
+#lttng enable-event --kernel --syscall open,write,read,close
+
+#lttng add-context --kernel --type=callstack-user --type=callstack-kernel
 
 # Start LTTng tracing.
 lttng start

@@ -128,21 +128,38 @@ typedef struct lexgion {
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
     /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
     volatile unsigned int counter; /* counter for total number of execution of the region */
+    unsigned int trace_counter; /* counter for total number of traced execution */
+    struct lexgion_trace_config * trace_config;
+    unsigned int num_exes_after_last_trace; /* counter to control the sampling */
+} lexgion_t;
 
+/**
+ * the struct for storing trace config of a lexgion. trace config can be updated at the runtime so PInsight can do dynamic
+ * tracing. Each time, PInsight needs to check the config of a lexgion, it checks the lexgion_trace_config object
+ * to find out the current trace rate, etc.
+ *
+ * All threads share a single config for each lexgion. Thus for each lexgion, tracing behavior for all threads are the same.
+ */
+typedef struct lexgion_trace_config {
+    volatile void *codeptr_ra; /* the codeptr of the lexgion */
+    volatile void * dummy;  /* NOTE: make sure I do not run into problems of compiling the code for 32 bit systems since the codeptr_ra
+                             * used __sync_bool_compare_and_swap to access it */
+    int trace_enable; /* dynamic tracing: to enable or disable tracing of the lexgion */
+
+    /* the following are for controlling tracing rate if trace is enabled */
     /* counter and count for sampling and fine-grained control of tracing. So far, we only do trace control for parallel region.
      * If a parallel region is traced, all constructs insides are traced. */
     unsigned int num_initial_traces;
     int sample_rate; /* the rate of tracing. Every sample_rate executions of the region, a trace is recorded.
                       * 0: no tracing; -1: trace all */
-    unsigned int num_exes_after_last_trace; /* counter to control the sampling */
     unsigned int max_num_traces;
-    unsigned int trace_counter; /* counter for total number of traced execution */
-} lexgion_t;
+} lexgion_trace_config_t;
 
-/* This macro check whether to trace or not: traces for the initial number of exes or when reaching sampling rate */
-#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_counter < lgp->num_initial_traces || \
-                            (lgp->trace_counter < lgp->max_num_traces && (lgp->sample_rate == -1 || \
-                                                    lgp->num_exes_after_last_trace == lgp->sample_rate));}
+/* This macro check whether to trace or not: trace_bit is set if trace_enable is set AND
+ * traces for the initial number of exes or when reaching sampling rate */
+#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->trace_enable && (lgp->trace_counter < lgp->trace_config->num_initial_traces || \
+                            (lgp->trace_counter < lgp->trace_config->max_num_traces && (lgp->trace_config->sample_rate == -1 || \
+                                                    lgp->num_exes_after_last_trace == lgp->trace_config->sample_rate)));}
 
 #define lexgion_post_trace_update(lgp) {lgp->trace_counter++; lgp->num_exes_after_last_trace=0;}
 
@@ -182,6 +199,7 @@ extern __thread unsigned int task_counter;
 extern __thread pinsight_thread_data_t pinsight_thread_data;
 extern __thread lexgion_t * ompt_implicit_task;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
+extern lexgion_trace_config_t lexgion_trace_config[]; //all threads share a single config for each lexgion */
 
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 
@@ -196,6 +214,7 @@ extern lexgion_t * top_lexgion_type(int class, int type, unsigned int * counter)
 extern lexgion_t * top_lexgion(unsigned int * counter);
 extern lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra);
 extern lexgion_t *lexgion_end(unsigned int * counter);
+extern void set_initial_lexgion_trace_config();
 
 #ifdef  __cplusplus
 };

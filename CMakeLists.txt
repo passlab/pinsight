@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.5)
 project(pinsight)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -31,9 +31,10 @@ if (PINSIGHT_OPENMP)
 #    find_package(OpenMP REQUIRED)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     # if not hardcode here, should be set in cmake as -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install
-    #set(OMPLIB_INSTALL /home/yanyh/tools/llvm-openmp-install) #
-    #link_directories(${OMPLIB_INSTALL}/lib)
-    option(OMPLIB_INSTALL "OpenMP runtime install path that provides omp.h and ompt.h"   "/home/yanyh/tools/llvm-openmp-install")
+    # only omp.h and ompt.h are needed for building
+    set(OMPLIB_INSTALL "/home/yanyh/tools/llvm-openmp-install" CACHE PATH
+            "Path to OMPT-capable OpenMP runtime installation that has omp.h and ompt.h under include folder")
+
     include_directories(${OMPLIB_INSTALL}/include)
     list(APPEND SOURCE_FILES
             src/ompt_lttng_tracepoint.h
@@ -45,7 +46,7 @@ endif()
 if (PINSIGHT_MPI)
     find_package(MPI REQUIRED)
     include_directories(${MPI_C_INCLUDE_PATH} ${MPI_CXX_INCLUDE_PATH})
-    list(APPEND PINSIGHT_EXTERNAL_LIBS ${MPI_C_LIBRARIES} ${MPI_CXX_LIBRARIES})
+    #list(APPEND PINSIGHT_EXTERNAL_LIBS ${MPI_C_LIBRARIES} ${MPI_CXX_LIBRARIES})
     list(APPEND SOURCE_FILES
             src/pmpi_lttng_tracepoint.h
             src/pmpi_mpi.c
@@ -54,6 +55,17 @@ endif()
 
 ## CUDA support, which requires cupti
 if (PINSIGHT_CUDA)
+    # CUPTI install location needs to be provided, which could be part of CUDA SDK install or a standaline install
+    set(CUDA_INSTALL "/usr/local/cuda" CACHE PATH "CUDA SDK install path that includes CUPTI under extras/CUPTI folder" )
+    set(CUPTI_INSTALL ${CUDA_INSTALL}/extras/CUPTI)
+
+    include_directories(${CUPTI_INSTALL}/include ${CUDA_INSTALL}/include)
+    #list(APPEND PINSIGHT_EXTERNAL_LIBS cupti)
+
+    list(APPEND SOURCE_FILES
+            src/cupti_lttng_tracepoint.h
+            src/cupti_callback.c
+            )
 endif()
 
 ## Energy tracing
@@ -64,11 +76,17 @@ endif()
 add_library(pinsight SHARED ${SOURCE_FILES})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(pinsight m dl lttng-ust)
+
 if (PINSIGHT_OPENMP)
 #	target_link_libraries(pinsight omp) # no need libomp.so for pinsight
 endif()
+
 if (PINSIGHT_MPI)
 	target_link_libraries(pinsight mpi)
+endif()
+
+if (PINSIGHT_CUDA)
+    target_link_libraries(pinsight ${CUPTI_INSTALL}/lib64/libcupti.so)
 endif()
 
 install(FILES
@@ -78,3 +96,28 @@ install(FILES
 install(TARGETS pinsight
         LIBRARY DESTINATION lib
         )
+
+message("============================================================")
+if (PINSIGHT_OPENMP)
+    message("Build with OpenMP Support:     TRUE")
+    message("    OMPLIB_INSTALL: ${OMPLIB_INSTALL}")
+else()
+    message("Build with OpenMP Support:     FALSE")
+endif()
+
+if (PINSIGHT_MPI)
+    message("Build with MPI Support:        TRUE")
+#    message("    MPI_C_INCLUDE_PATH: ${MPI_C_INCLUDE_PATH}")
+#    message("    MPI_CXX_INCLUDE_PATH: ${MPI_CXX_INCLUDE_PATH}")
+else()
+    message("Build with MPI Support:        FALSE")
+endif()
+
+if (PINSIGHT_CUDA)
+    message("Build with CUDA Support:       TRUE")
+    message("    CUDA_INSTALL: ${CUDA_INSTALL}")
+    message("    CUPTI_INSTALL: ${CUPTI_INSTALL}")
+else()
+    message("Build with CUDA Support:       FALSE")
+endif()
+message("============================================================")
