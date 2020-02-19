@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "pinsight.h"
 
 /* these are thread-local storage assuming that OpenMP runtime threads are 1:1 mapped to
@@ -15,9 +16,37 @@ __thread pinsight_thread_data_t pinsight_thread_data;
 __thread lexgion_t * ompt_implicit_task;
 __thread int trace_bit; /* 0 or 1 for enabling trace */
 
-unsigned int NUM_INITIAL_TRACES = DEFAULT_NUM_INITIAL_TRACES;
-unsigned int MAX_NUM_TRACES = DEFAULT_MAX_NUM_TRACES;
-unsigned int TRACE_SAMPLING_RATE = DEFAULT_TRACE_SAMPLING_RATE;
+lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
+
+static int set_initial_lexgion_trace_config_done = 0;
+/**
+ * This function is not thread safe, but it seems won't hurt calling by multiple threads
+ */
+__attribute__ ((constructor)) void set_initial_lexgion_trace_config() {
+    if (set_initial_lexgion_trace_config_done) return;
+
+    const char* pinsight_trace_config = getenv("PINSIGHT_TRACE_CONFIG");
+    unsigned int NUM_INITIAL_TRACES = DEFAULT_NUM_INITIAL_TRACES;
+    unsigned int MAX_NUM_TRACES = DEFAULT_MAX_NUM_TRACES;
+    unsigned int TRACE_SAMPLING_RATE = DEFAULT_TRACE_SAMPLING_RATE;
+    if (pinsight_trace_config != NULL) {
+        printf("PINSIGHT_TRACE_CONFIG: %s\n", pinsight_trace_config);
+        sscanf(pinsight_trace_config, "%d:%d:%d", &NUM_INITIAL_TRACES, &MAX_NUM_TRACES, &TRACE_SAMPLING_RATE);
+        printf("NUM_INITIAL_TRACES: %u, MAX_NUM_TRACES: %u, TRACE_SAMPLING_RATE: %u\n",
+               NUM_INITIAL_TRACES, MAX_NUM_TRACES, TRACE_SAMPLING_RATE);
+    }
+
+    int i;
+    for (i=0; i<MAX_NUM_LEXGIONS; i++) {
+        lexgion_trace_config[i].codeptr_ra = NULL;
+        lexgion_trace_config[i].trace_enable = 1;
+        lexgion_trace_config[i].max_num_traces = MAX_NUM_TRACES;
+        lexgion_trace_config[i].num_initial_traces = NUM_INITIAL_TRACES;
+        lexgion_trace_config[i].sample_rate = TRACE_SAMPLING_RATE;
+    }
+
+    set_initial_lexgion_trace_config_done = 1;
+}
 
 /** init thread data
  */
@@ -111,16 +140,18 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
  *
  */
 lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
+    if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
+        fprintf(stderr, "Max number of lex regions (%d) allowed in the source code reached\n",
+                MAX_NUM_LEXGIONS);
+        return NULL;
+    }
+
     int index;
 
     lexgion_t *lgp = find_lexgion(class, type, codeptr_ra, &index);
     if (lgp == NULL) {
         index = pinsight_thread_data.num_lexgions;
-        if (index == MAX_NUM_LEXGIONS) {
-            fprintf(stderr, "Max number of lex regions (%d) allowed in the source code reached\n",
-                    MAX_NUM_LEXGIONS);
-            return NULL;
-        }
+        pinsight_thread_data.num_lexgions++;
         lgp = &pinsight_thread_data.lexgions[index];
         lgp->codeptr_ra = codeptr_ra;
         //printf("%d: lexgion_begin(%d, %X): first time encountered %X\n", thread_id, i, codeptr_ra, lgp);
@@ -129,13 +160,34 @@ lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
 
         /* init counters for number of exes, traces, and sampling */
         lgp->counter = 0;
-        lgp->num_exes_after_last_trace = 0;
-        lgp->sample_rate = TRACE_SAMPLING_RATE;
         lgp->trace_counter = 0;
-        lgp->max_num_traces = MAX_NUM_TRACES;
-        lgp->num_initial_traces = NUM_INITIAL_TRACES;
+        lgp->num_exes_after_last_trace = 0;
 
-        pinsight_thread_data.num_lexgions++;
+        /* link with an/existing lexgion_trace_config object */
+        int i;
+        int done = 0;
+        while (!done) {
+            int unused_entry = MAX_NUM_LEXGIONS;
+            for (i = 0; i < MAX_NUM_LEXGIONS; i++) {
+                if (lexgion_trace_config[i].codeptr_ra == codeptr_ra) {/* one already exists, and we donot check class and type */
+                    /* trace_config already set before or by others, we just need to link */
+                    lgp->trace_config = &lexgion_trace_config[i];
+                    done = 1; /* to break the outer while loop */
+                    break;
+                } else if (lexgion_trace_config[i].codeptr_ra == NULL && unused_entry == MAX_NUM_LEXGIONS) {
+                    unused_entry = i;
+                }
+            }
+            if (i == MAX_NUM_LEXGIONS) {
+                lexgion_trace_config_t * config = &lexgion_trace_config[unused_entry]; /* we must have an unused entry */
+                /* data race here, we must protect updating codeptr by multiple threads, use cas to do it */
+                if (config->codeptr_ra == NULL && __sync_bool_compare_and_swap((uint64_t*)&config->codeptr_ra, NULL, codeptr_ra)) {
+                    /* a brand new one */
+                    lgp->trace_config = config;
+                    break;
+                } /* else, go back to the loop and check again */
+            }
+        }
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 
