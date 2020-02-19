@@ -1062,14 +1062,7 @@ int ompt_initialize(
   if (debug_on) {
     printf("0: NULL_POINTER=%p\n", NULL);
   }
-
-  const char* pinsight_trace_config = getenv("PINSIGHT_TRACE_CONFIG");
-  if (pinsight_trace_config != NULL) {
-      printf("PINSIGHT_TRACE_CONFIG: %s\n", pinsight_trace_config);
-      sscanf(pinsight_trace_config, "%d:%d:%d", &NUM_INITIAL_TRACES, &MAX_NUM_TRACES, &TRACE_SAMPLING_RATE);
-      printf("NUM_INITIAL_TRACES: %u, MAX_NUM_TRACES: %u, TRACE_SAMPLING_RATE: %u\n",
-             NUM_INITIAL_TRACES, MAX_NUM_TRACES, TRACE_SAMPLING_RATE);
-  }
+  set_initial_lexgion_trace_config();
 
 #ifdef PINSIGHT_ENERGY
   // Initialize RAPL subsystem.
