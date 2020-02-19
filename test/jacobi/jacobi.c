@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
     REAL alpha = 0.0543;
     REAL tol = 0.0000000001;
     REAL relax = 1.0;
-    int mits = 500;
+    int mits = 5000;
 
     fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
     fprintf(stderr, "\tn - grid dimension in x direction, default: %d\n", n);
@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
     memcpy(uomp, u, sizeof(REAL) * n * m);
 
     double elapsed = read_timer_ms();
-    //jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
+    jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
     elapsed = read_timer_ms() - elapsed;
     printf("seq elasped time(ms): %12.6g\n", elapsed);
     double mflops = (0.001 * mits * (n - 2) * (m - 2) * 13) / elapsed;
@@ -274,9 +274,10 @@ void jacobi_seq(int n, int m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_
                 error = error + resid * resid;
             }
         /* Error check */
-        if (k % 500 == 0)
-            printf("Finished %d iteration with error: %g\n", k, error);
+//        if (k % 500 == 0)
+//            printf("Finished %d iteration with error: %g\n", k, error);
         error = sqrt(error) / (n * m);
+        printf("%g\n", error);
 
         k = k + 1;
     } /*  End iteration loop */
