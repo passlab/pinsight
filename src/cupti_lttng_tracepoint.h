@@ -51,12 +51,12 @@ extern __thread int omp_thread_num;
     ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
     ctf_integer(unsigned int, cuda_codeptr, codeptr) \
     ctf_string(kernel_func, func_name)
-#elif defined(PINSIGHT_MPI) && not defined(PINSIGHT_OPENMP)
+#elif defined(PINSIGHT_MPI) && !defined(PINSIGHT_OPENMP)
 #define COMMON_TP_FIELDS_MPI_OMP \
     ctf_integer(unsigned int, mpirank, mpirank) \
     ctf_integer(unsigned int, cuda_codeptr, codeptr) \
     ctf_string(kernel_func, func_name)
-#elif not defined(PINSIGHT_MPI) && defined(PINSIGHT_OPENMP)
+#elif !defined(PINSIGHT_MPI) && defined(PINSIGHT_OPENMP)
 #define COMMON_TP_FIELDS_MPI_OMP \
     ctf_integer(unsigned int, global_thread_num, global_thread_num) \
     ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
