@@ -5,7 +5,7 @@
 	<!-- XSD definition: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.analysis.xml.core/src/org/eclipse/tracecompass/tmf/analysis/xml/core/module -->
 
 	<!-- The state provider assigns states from events -->
-	<stateProvider id="edu.sc.pinsight.stateProvider" version="0">
+	<stateProvider id="xxx.pinsight.omp.stateProvider" version="0">
 		<head>
 			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
 			<label value="PInsight OpenMP Trace Analysis" />
@@ -536,7 +536,7 @@
 	<!-- This is the definition of the time-graph view -->
 	<timeGraphView id="org.eclipse.linuxtools.tmf.analysis.xml.sstimeview">
 		<head>
-			<analysis id="edu.sc.pinsight.stateProvider" />
+			<analysis id="xxx.pinsight.omp.stateProvider" />
 			<label value="PInsight OpenMP Trace View" />
 		</head>
 	

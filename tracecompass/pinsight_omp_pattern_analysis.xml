@@ -5,7 +5,7 @@
 	<!-- XSD definition: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.analysis.xml.core/src/org/eclipse/tracecompass/tmf/analysis/xml/core/module -->
 
 	<!-- The pattern provider -->
-	<pattern id="edu.sc.pinsight.parallelPatternProvider" version="0">
+	<pattern id="xxx.pinsight.omp.parallelPatternProvider" version="0">
 		<head>
 			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
 			<label value="PInsight OpenMP Parallel Statistics" />
