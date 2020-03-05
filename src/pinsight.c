@@ -6,15 +6,15 @@
  * the system threads (PThread for example). If not, we should implement our own OpenMP
  * thread-local storage (not system TLS).
  */
-__thread int global_thread_num;
-__thread int omp_thread_num;
-__thread const void * parallel_codeptr;
-__thread unsigned int parallel_counter;
-__thread const void * task_codeptr;
-__thread unsigned int task_counter;
+__thread int global_thread_num = 0;
+__thread int omp_thread_num = 0;
+__thread const void * parallel_codeptr = NULL;
+__thread unsigned int parallel_counter = -1;
+__thread const void * task_codeptr = NULL;
+__thread unsigned int task_counter = -1;
+__thread lexgion_t * ompt_implicit_task = NULL;
 __thread pinsight_thread_data_t pinsight_thread_data;
-__thread lexgion_t * ompt_implicit_task;
-__thread int trace_bit; /* 0 or 1 for enabling trace */
+__thread int trace_bit = 0; /* 0 or 1 for enabling trace */
 
 lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
 

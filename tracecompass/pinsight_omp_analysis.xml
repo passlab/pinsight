@@ -607,11 +607,11 @@
 		<definedValue name="Processor 62" value="62" color="#BA55D3" /> <!-- mediumorchid, (186,85,211), -->
 		<definedValue name="Processor 63" value="63" color="#C71585" /> <!-- mediumvioletred, rgb(199,21,133) -->
 
-		<definedValue name="STATE_THREAD_STARTED" value="201" color="#FFFFE0" /> <!-- light yellow -->
-		<definedValue name="STATE_THREAD_IDLE" value="202" color="#FF00FF" /> <!-- FUCHSIA -->
-		<definedValue name="STATE_TRANSITION" value="209" color="#FFFFFF" /> <!-- white -->
+		<definedValue name="STATE_THREAD_STARTED" value="201" color="#FFFF00" /> <!-- yellow -->
+		<definedValue name="STATE_THREAD_IDLE" value="202" color="#999900" /> <!-- dark yellow 2 -->
+		<definedValue name="STATE_TRANSITION" value="209" color="#FFFF99" /> <!-- light yellow 2 -->
 
-		<definedValue name="STATE_IN_SEQUENTIAL" value="210" color="#FFFFFF" /> <!-- white or 0000FF for blue -->
+		<definedValue name="STATE_IN_SEQUENTIAL" value="210" color="#0000FF" /> <!-- 0000FF for blue -->
 
 		<!-- 220 - 249 are for those states in which threads are doing work -->
 		<definedValue name="STATE_IN_PARALLEL" value="220" color="#00FF00" /> <!-- lime -->
@@ -621,7 +621,7 @@
 		<!-- 250 - 269 are for those states in which threads are synchronizing -->
 		<definedValue name="STATE_IN_SYNC" value="251" color="#FF0000" /> <!-- red -->
 		<definedValue name="STATE_IN_SYNC_WAIT" value="252" color="#CD5C5C" /> <!-- indianred -->
-		<definedValue name="STATE_IN_JOIN_WAIT" value="260" color="#FFFF00"/> <!-- yellow -->
+		<definedValue name="STATE_IN_JOIN_WAIT" value="260" color="#8B0000"/> <!-- dark red -->
 
 		<definedValue name="STATE_THREAD_TERMINATED" value="300" color="#FFFFFF" /> <!-- white -->
 
@@ -643,35 +643,25 @@
 			</entry>
 		</entry>
 		-->
-		<entry path="Thread">
-			<display type="self" />
-			<entry path="*">
-				<display type="self" />
+		<entry path="Thread"><display type="self" />
+			<entry path="*"><display type="self" />
 			</entry>
 		</entry>
 
-		<entry path="Thread-CPU">
-			<display type="self" />
-			<entry path="*" displayText="true">
-				<display type="self" />
+		<entry path="Thread-CPU"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" />
 			</entry>
 		</entry>
 
-		<entry path="CPU">
-			<display type="self" />
-			<entry path="*">
-				<display type="self" />
+		<entry path="CPU"><display type="self" />
+			<entry path="*"><display type="self" />
 			</entry>
 		</entry>
 
-		<entry path="parallel_region">
-			<display type="self" />
-			<entry path="*">
-				<display type="self" />
-				<entry path="thread">
-					<display type="self" />
-					<entry path="*">
-						<display type="self" />
+		<entry path="parallel_region"><display type="self" />
+			<entry path="*"><display type="self" />
+				<entry path="thread"><display type="self" />
+					<entry path="*"><display type="self" />
 					</entry>
 				</entry>
 			</entry>
