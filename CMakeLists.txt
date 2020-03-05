@@ -11,7 +11,7 @@ set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
 option(PINSIGHT_OPENMP "Build with OpenMP support"       TRUE)
-option(PINSIGHT_MPI    "Build with MPI support"          TRUE)
+option(PINSIGHT_MPI    "Build with MPI support"          FALSE)
 option(PINSIGHT_CUDA   "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
 
@@ -23,6 +23,8 @@ set(SOURCE_FILES
         src/env_config.h
         src/pinsight.h
         src/pinsight.c
+        src/enter_exit_pinsight.c
+        src/enter_exit_pinsight_tracepoint.h
         )
 
 ## For OpenMP, PInsight requires OMPT support in an OpenMP runtime. But buidling PInsight only needs omp.h and ompt.h,
