@@ -51,12 +51,21 @@ rm -rf ${TRACING_OUTPUT_DEST}
 # Create a userspace session.
 lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
+#lttng add-context --kernel --type=callstack-user --type=callstack-kernel
+
 # Create and enable event rules.
+lttng enable-event --userspace lttng_pinsight_enter_exit:'*'
 lttng enable-event --userspace lttng_pinsight_ompt:'*'
 lttng enable-event --userspace lttng_pinsight_pmpi:'*'
 #lttng enable-event --kernel --syscall open,write,read,close
 
-#lttng add-context --kernel --type=callstack-user --type=callstack-kernel
+#lttng add-context --userspace --type=hostname
+#lttng add-context --userspace --type=ip
+#lttng add-context --userspace --type=vpid
+#lttng add-context --userspace --type=procname
+#lttng add-context --userspace --type=pthread_id
+#lttng add-context --userspace --type=vtid
+
 
 # Start LTTng tracing.
 lttng start
