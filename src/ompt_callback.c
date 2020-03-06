@@ -21,7 +21,6 @@ static int debug_on;
 
 #ifdef PINSIGHT_ENERGY
 #include "rapl.h"
-__thread lexgion_t * ompt_implicit_task = NULL;
 // --------------------------------------------------------
 // RAPL package values.
 static long long package_energy[MAX_PACKAGES];
@@ -36,6 +35,18 @@ extern int __kmpc_global_num_threads(void *);
 
 #define get_global_thread_num() __kmpc_global_thread_num(NULL)
 #define get_global_num_threads() __kmpc_global_num_threads(NULL)
+
+/* these are thread-local storage assuming that OpenMP runtime threads are 1:1 mapped to
+ * the system threads (PThread for example). If not, we should implement our own OpenMP
+ * thread-local storage (not system TLS).
+ */
+__thread const void * parallel_codeptr = NULL;
+__thread unsigned int parallel_counter = -1;
+__thread const void * task_codeptr = NULL;
+__thread unsigned int task_counter = -1;
+
+__thread int global_thread_num = 0;
+__thread int omp_thread_num = 0;
 
 static const char* ompt_thread_type_t_values[] = {
   NULL,
@@ -173,52 +184,52 @@ static void print_current_address()
  * @param thread_type
  * @param thread_data
  */
-#define OUTMOST_CODEPTR 0xFFFFFFFF
+#define INITIAL_PARALLEL 0xFFFFFF
 static void
 on_ompt_callback_thread_begin(
         ompt_thread_t thread_type,
-        ompt_data_t *thread_data)
-{
-  init_thread_data(get_global_thread_num() /*, thread_type */);
-  thread_data->value = global_thread_num;
-
-  //This is the codeptr for the first lexgion of each thread
-  const void * codeptr_ra = (void*)OUTMOST_CODEPTR;
-  lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_thread_begin, codeptr_ra);
-
-  parallel_codeptr = codeptr_ra;
-  parallel_counter = 1; /* the starting and implicit parallel region at the very beginning */
-  omp_thread_num = -1;
-  task_codeptr = codeptr_ra; //The same as this lexgion
-  task_counter = 1;
-
-  //initial task initialization is done at the task_create callback
+        ompt_data_t *thread_data) {
+    thread_data->ptr = (void*)init_thread_data(get_global_thread_num() /*, thread_type */);
+    if (thread_type == ompt_thread_initial) {
+        pinsight_thread_data.initial_thread = 1;
+        /* the implicit initial parallel region of the program */
+        lexgion_t * initial_parallel_region_lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL);
+        parallel_codeptr = initial_parallel_region_lgp->codeptr_ra;
+        parallel_counter = initial_parallel_region_lgp->counter; /* the starting and implicit parallel region at the very beginning */
+        omp_thread_num = 0;
+        task_codeptr = NULL; //This will be set in the implicit_task_begin callback for ompt_task_initial typed-task
+        task_counter = -1;
 #ifdef PINSIGHT_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
+        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
-  tracepoint(lttng_pinsight_ompt, thread_begin, (short)thread_type ENERGY_TRACEPOINT_CALL_ARGS);
+    } else {
+        pinsight_thread_data.initial_thread = 0;
+    }
+
+    //This is the codeptr for the first lexgion of each thread
+    //lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_thread_begin, codeptr_ra);
+
+    tracepoint(lttng_pinsight_ompt, thread_begin, (short)thread_type ENERGY_TRACEPOINT_CALL_ARGS);
 }
 
 static void
 on_ompt_callback_thread_end(
         ompt_data_t *thread_data)
 {
+    if (pinsight_thread_data.initial_thread) {
 #ifdef PINSIGHT_ENERGY
-  if (global_thread_num == 0) {
-    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-  }
+        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
-  unsigned int counter;
-  lexgion_t * lgp = lexgion_end(&counter);
-  assert(lgp->codeptr_ra == (void*)OUTMOST_CODEPTR);
-  task_codeptr = lgp->codeptr_ra;
-  task_counter = counter;
-  assert(counter == lgp->counter);
-  lgp->end_codeptr_ra = (void*)OUTMOST_CODEPTR;
-  tracepoint(lttng_pinsight_ompt, thread_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
-  lexgion_post_trace_update(lgp);
+        unsigned int counter;
+        lexgion_t * lgp = lexgion_end(&counter);
+        assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL);
+        task_codeptr = lgp->codeptr_ra;
+        task_counter = counter;
+        assert(counter == lgp->counter);
+        lgp->end_codeptr_ra = (void*)INITIAL_PARALLEL;
+        lexgion_post_trace_update(lgp);
+    }
+    tracepoint(lttng_pinsight_ompt, thread_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
 
   //print out lexgion summary */
   if (global_thread_num == 0) {
@@ -331,21 +342,27 @@ on_ompt_callback_parallel_end(
     tracepoint(lttng_pinsight_ompt, parallel_end, flag ENERGY_TRACEPOINT_CALL_ARGS);
     lexgion_post_trace_update(lgp);
   }
-  /* find the topmost parallel lexgion in the stack (in the nested parallel situation) */
+  /* find the topmost parallel lexgion in the stack (not considering the nested parallel or task-parallel situation) */
   unsigned int counter;
-  ompt_implicit_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_implicit_task, NULL); /* the nested situation */
+  lexgion_t * enclosing_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_implicit_task, &counter); /* not considering task->parallel nested */
+  task_codeptr = enclosing_task->codeptr_ra;
+  task_counter = counter;
   lexgion_t * enclosing_parallel = top_lexgion_type(OPENMP_LEXGION, ompt_callback_parallel_begin, &counter);
-  if (enclosing_parallel == NULL) {
-    parallel_codeptr = (void*) OUTMOST_CODEPTR;
-    parallel_counter = 1;
-  } else {
-    parallel_codeptr = enclosing_parallel->codeptr_ra;
-    parallel_counter = counter;
-    /* this is not necessarily the lgp-codeptr since the same region may be invoked more than once, e.g. in recursive parallel region
-     * lgp->counter is the counter for the most recent parallel of this region, but not necessarily this parallel_end one */
-  }
-  /* TODO: we need to store and restore the omp_thread_num, task_codeptr, task_counter in the nested parallel situation */
+  parallel_codeptr = enclosing_parallel->codeptr_ra;
+  parallel_counter = counter;
+  omp_thread_num = 0;
 
+    //TODO: nested parallel, or task-parallel support
+  /* Find the upper-level task lexgion instance in the stack in the nested parallel situation.
+  * There are two kinds of nested, i.e. parallel-parallel, task-parallel  nested. We only need to set
+  * the innermost master (task_codeptr, task_counter, ompt_implicit_task)
+  * to point to the right enclosing task.
+  *
+  * For parallel-parallel nested, the ompt_implicit_task, task_codeptr and task_counter should be set as for the implicit
+  * task of the outer parallel region.
+  *
+  * For task-parallel nested, the ompt_implicit_task should be set , task_codeptr and task_counter
+  * TODO: we need to store and restore the omp_thread_num, task_codeptr, task_counter in the nested parallel situation */
 }
 
 static void
@@ -360,6 +377,9 @@ on_ompt_callback_implicit_task(
   switch(endpoint)
   {
     case ompt_scope_begin: {
+      if (flags & ompt_task_initial) { //For the initial parallel region, there is no parallel_begin event, thus we set the parallel_data here
+          parallel_data->value = LEXGION_RECORD_UUID(INITIAL_PARALLEL, 1);
+      }
       parallel_codeptr = LEXGION_RECORD_CODEPTR_RA(parallel_data->value);
       parallel_counter = LEXGION_RECORD_COUNTER(parallel_data->value);
       task_codeptr = parallel_codeptr;
@@ -367,8 +387,8 @@ on_ompt_callback_implicit_task(
       omp_thread_num = thread_num;
       /* in this call back, parallel_data is NULL for ompt_scope_end endpoint, thus to know the parallel_data at the end,
        * we need to pass the needed fields of parallel_data in the scope_begin to the task_data */
+      lexgion_t*ompt_implicit_task = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
       task_data->value = parallel_data->value; // Here we just save the parallel_data to the task
-      ompt_implicit_task = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
       /* Here a new lexgion with the same codeptr as the parallel region is created, but this lexgion has implicit_task type
        */
       ompt_implicit_task->num_exes_after_last_trace++;
@@ -394,19 +414,9 @@ on_ompt_callback_implicit_task(
         tracepoint(lttng_pinsight_ompt, implicit_task_end, team_size ENERGY_TRACEPOINT_CALL_ARGS);
         lexgion_post_trace_update(lgp);
       }
-      /* find the topmost task lexgion instance in the stack (in the nested situation) */
-      unsigned int counter;
-      ompt_implicit_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_implicit_task, NULL); /* the nested situation */
-      lexgion_t * enclosing_task = top_lexgion_type(OPENMP_LEXGION, ompt_callback_task_create, &counter);
-      if (enclosing_task == NULL) {
-        task_codeptr = (void*) OUTMOST_CODEPTR;
-        task_counter = 1;
-      } else { /* NEED a test code that can triger this path, nested parallel region (?) */
-        task_codeptr = enclosing_task->codeptr_ra;
-        task_counter = counter;
-        /* this is not necessnarily the lgp-codeptr since the same region may be invoked more than once, e.g. in recursive parallel region
-         * lgp->counter is the counter for the most recent parallel of this region, but not necessnarily this parallel_end one */
-      }
+        /* for the nested situation (parallel-parallel, and task-parallel), popping back to the state of the enclosing
+         * is set by the parallel_end callback
+         */
       break;
     }
   }
