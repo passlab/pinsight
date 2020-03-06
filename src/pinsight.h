@@ -171,6 +171,7 @@ typedef struct lexgion_trace_config {
 typedef struct pinsight_thread_data {
     /* the stack for storing the lexgion */
     //lexgion_t *lexgion_stack;
+    int initial_thread;
 
     /* the runtime stack for lexgion instances */
     struct lexgion_stack {
@@ -197,7 +198,6 @@ extern __thread const void * task_codeptr;
 extern __thread unsigned int task_counter;
 
 extern __thread pinsight_thread_data_t pinsight_thread_data;
-extern __thread lexgion_t * ompt_implicit_task;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
 extern lexgion_trace_config_t lexgion_trace_config[]; //all threads share a single config for each lexgion */
 

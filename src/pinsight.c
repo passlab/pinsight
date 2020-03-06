@@ -2,17 +2,6 @@
 #include <stdlib.h>
 #include "pinsight.h"
 
-/* these are thread-local storage assuming that OpenMP runtime threads are 1:1 mapped to
- * the system threads (PThread for example). If not, we should implement our own OpenMP
- * thread-local storage (not system TLS).
- */
-__thread int global_thread_num = 0;
-__thread int omp_thread_num = 0;
-__thread const void * parallel_codeptr = NULL;
-__thread unsigned int parallel_counter = -1;
-__thread const void * task_codeptr = NULL;
-__thread unsigned int task_counter = -1;
-__thread lexgion_t * ompt_implicit_task = NULL;
 __thread pinsight_thread_data_t pinsight_thread_data;
 __thread int trace_bit = 0; /* 0 or 1 for enabling trace */
 
