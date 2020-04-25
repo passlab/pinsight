@@ -9,3 +9,4 @@
 1. [Complete software design loop with Theia and TraceCompass](https://wiki.eclipse.org/images/2/2b/EclipseConEurope2019-TSP-IDSL.pdf)
 1. [Video: Using Theia to take trace analysis and visualization to the next level
 ](https://www.youtube.com/watch?v=Fysg1mOadik)
+1. [Tracecompass trace server](https://github.com/tracecompass/tracecompass-incubator/tree/master/trace-server)
