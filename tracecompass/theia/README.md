@@ -7,3 +7,5 @@
 1. [Theia trace viewer extension](https://github.com/theia-ide/theia-trace-extension)
 1. [Introducing Trace Server Protocol](https://wiki.eclipse.org/images/b/bf/EclipseTSP-CommunityMeeting-28March2019.pdf)
 1. [Complete software design loop with Theia and TraceCompass](https://wiki.eclipse.org/images/2/2b/EclipseConEurope2019-TSP-IDSL.pdf)
+1. [Video: Using Theia to take trace analysis and visualization to the next level
+](https://www.youtube.com/watch?v=Fysg1mOadik)
