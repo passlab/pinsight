@@ -37,11 +37,13 @@ main() {
 }
 ```
 
-### Steps for launching and debugging a plugin under Eclipse (provided by Yaying)
+### Steps for launching and debugging a plugin under Eclipse (provided by Yaying), need more details. 
+1. Launch Eclipse IDE and open plugin
+![](images/launchEclipseApplication.png)
+2. Import trace data
+![](images/ImportTracingData.png)
+3. Add plugin
+![](images/addPlugin.png)
 
 
-Then process is launch first:
- Then import trace data
- 
-Then add plugin in the Eclipse.
  
