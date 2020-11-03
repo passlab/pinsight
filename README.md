@@ -92,6 +92,9 @@ To allow user's control of tracing of each parallel region, one can specify a sa
 #### Dump the trace data to text using babeltrace
 After tracing complete, you can use babeltrace tools to dump the trace data to text on the terminal
 
+
+------------------------------------
+
 #### Manual LTTng tracing session
 
 Since we're using LTTng, we have to set up a [tracing session][lttng-tracing-session], and enable some [event rules][lttng-event-rules] before starting tracing:
