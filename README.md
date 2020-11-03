@@ -20,7 +20,7 @@ LTTng has some special [setup instructions][lttng-install].
    [lttng-install]: https://lttng.org/docs/v2.10/#doc-installing-lttng
 
     # After following the LTTng setup instructions:
-    sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev
+    sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev babeltrace
 
 You will also need to have the [LLVM OpenMP runtime][llvm-openmp] installed and OMPT should be enabled to support runtime tracing. LLVM has combined modules into 
 one github repo. You will need to clone the whole repo. For installing OpenMP library, it may allow you just to install the runtime instead of the whole LLVM. 
@@ -87,6 +87,13 @@ To allow user's control of tracing of each parallel region, one can specify a sa
 1. ``PINSIGHT_TRACE_CONFIG=0:-1:-1``,  record all the traces. 
 1. ``PINSIGHT_TRACE_CONFIG=0:-1:10``, record 1 trace per 10 executions for all the executions. 
 1. ``PINSIGHT_TRACE_CONFIG=20:20:-1``, record the first 20 executions only
+
+
+#### Dump the trace data to text using babeltrace
+After tracing complete, you can use babeltrace tools to dump the trace data to text on the terminal
+
+
+------------------------------------
 
 #### Manual LTTng tracing session
 
