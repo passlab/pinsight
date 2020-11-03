@@ -12,7 +12,7 @@ set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
 option(PINSIGHT_OPENMP "Build with OpenMP support"       TRUE)
 option(PINSIGHT_MPI    "Build with MPI support"          FALSE)
-option(PINSIGHT_CUDA   "Build with CUDA support"         TRUE)
+option(PINSIGHT_CUDA   "Build with CUDA support"         FALSE)
 option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
@@ -34,7 +34,7 @@ if (PINSIGHT_OPENMP)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     # if not hardcode here, should be set in cmake as -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install
     # only omp.h and ompt.h are needed for building
-    set(OMPLIB_INSTALL "/home/yanyh/tools/llvm-openmp-install" CACHE PATH
+    set(OMPLIB_INSTALL "/home/yyan7/tools/llvm-openmp-install" CACHE PATH
             "Path to OMPT-capable OpenMP runtime installation that has omp.h and ompt.h under include folder")
 
     include_directories(${OMPLIB_INSTALL}/include)

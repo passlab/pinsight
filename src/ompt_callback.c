@@ -695,7 +695,7 @@ on_ompt_callback_sync_region_wait(
 #ifdef PINSIGHT_ENERGY
                             if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
-                            tracepoint(lttng_pinsight_ompt, parallel_join_sync_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
+                            tracepoint(lttng_pinsight_ompt, parallel_join_sync_wait_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
                         }
                     } else {
                         /* implicit barrier in worksharing, single, sections, and explicit barrier */
@@ -1072,7 +1072,7 @@ int ompt_initialize(
 //  register_callback_t(ompt_callback_mutex_released, ompt_callback_mutex_t);
 //  register_callback(ompt_callback_nest_lock);
   register_callback(ompt_callback_sync_region);
-//  register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
+  register_callback_t(ompt_callback_sync_region_wait, ompt_callback_sync_region_t);
 //  register_callback(ompt_callback_control_tool);
 //  register_callback(ompt_callback_flush);
 //  register_callback(ompt_callback_cancel);
