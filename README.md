@@ -22,11 +22,12 @@ LTTng has some special [setup instructions][lttng-install].
     # After following the LTTng setup instructions:
     sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev
 
-You will also need to build the [LLVM OpenMP runtime][llvm-openmp].
+You will also need to have the [LLVM OpenMP runtime][llvm-openmp] installed and OMPT should be enabled to support runtime tracing. LLVM has combined modules into 
+one github repo. You will need to clone the whole repo. For installing OpenMP library, it may allow you just to install the runtime instead of the whole LLVM. 
 
 An example of that build process (taken from our `Dockerfile`), building and installing to `/home/yanyh/tools/llvm-openmp-install`:
 
-    git clone https://github.com/llvm-mirror/openmp.git && \
+    git clone https://github.com/llvm-project/openmp.git && \
     cd openmp && \
     git remote update && \
     cd .. && \
@@ -41,7 +42,7 @@ An example of that build process (taken from our `Dockerfile`), building and ins
 
     make && make install
 
-   [llvm-openmp]: https://github.com/llvm-mirror/openmp
+   [llvm-openmp]: https://github.com/llvm/llvm-project/tree/master/openmp
 
 
 ### Build
