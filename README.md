@@ -1,13 +1,15 @@
-# OpenMP OMPT Event Tracing and Visualization
+# Event Tracing and Visualization for OpenMP, MPI and CUDA programs
 
 ## PInsight shared library
 
-The core of this project is a shared library called `pinsight`, which generates [LTTng][lttng] trace data for OpenMP [OMPT][ompt] events.
+The core of this project is a shared library called `pinsight`, which generates [LTTng][lttng] trace data for OpenMP [OMPT][ompt] events, MPI [PMPI events][pmpi], and CUDA [CUPTI events][cupti]. 
 
    [lttng]: https://lttng.org
    [ompt]: https://www.openmp.org/wp-content/uploads/ompt-tr.pdf
+   [pmpi]: https://www.open-mpi.org/faq/?category=perftools#PMPI
+   [cupti]: https://docs.nvidia.com/cuda/cupti/index.html
 
-### Install
+### Install for OpenMP OMPT event tracing
 
 To be able to build/run the OMPT event tracing library, you will need to install several dependencies.
 
@@ -23,7 +25,7 @@ LTTng has some special [setup instructions][lttng-install].
     sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev babeltrace
 
 You will also need to have the [LLVM OpenMP runtime][llvm-openmp] installed and OMPT should be enabled to support runtime tracing. LLVM has combined modules into 
-one github repo. You will need to clone the whole repo. For installing OpenMP library, it may allow you just to install the runtime instead of the whole LLVM. 
+one github repo. You will need to clone the whole repo. For installing OpenMP library, llvm should allow to install the runtime instead of the whole LLVM. You can use an already-installed Clang/LLVM that have the OMPT-enabled OpenMP runtime and the required header files (omp.h and ompt.h). 
 
 An example of that build process (taken from our `Dockerfile`), building and installing to `/home/yanyh/tools/llvm-openmp-install`:
 
@@ -47,15 +49,14 @@ An example of that build process (taken from our `Dockerfile`), building and ins
 
 ### Build
 
-To build the main `pinsight` shared library, use the cmake and make utilities. OpenMP library path needs to be provided to
-cmake as the value for the OMPLIB_INSTALL variable. But only omp.h and ompt.h are needed to build libpinsight.so 
+To build the main `pinsight` shared library, use the cmake and make utilities. A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
 
     git clone https://github.com/passlab/pinsight.git
     cd pinsight && mkdir build && cd build
-    cmake -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install ..
+    cmake -DOPENMP_INCLUDE_PATH=/home/yanyh/tools/llvm-openmp-install/include ..
     make
 
-The instructions above will result in `build/libpinsight.so` being located at `build/libpinsight.so`.
+The instructions above will result in `build/libpinsight.so` to be created. 
 
 
 ### Run
@@ -64,22 +65,111 @@ The instructions above will result in `build/libpinsight.so` being located at `b
 
 In the `scripts/` directory, a script called `trace.sh` is provided.
 This script helps make generating LTTng traces for MPI/OpenMP/CUDA programs easier.
-OpenMP OMP_NUM_THREADS should be set for the needed number of threads
-mpirun can be used as command to launch MPI applications. 
+OpenMP OMP_NUM_THREADS should be set for the needed number of threads for OpenMP program and
+mpirun can be used as command to launch MPI applications. The instruction of using `trace.sh` is as follows: 
+
+```
+Usage for this tracing script for use with PInsight:
+    trace.sh TRACEFILE_DEST TRACE_NAME PINSIGHT_LIB LD_LIBRARY_PATH_PREPEND PROG_AND_ARGS...
+
+Arguments:
+  TRACEFILE_DEST    Where to write the LTTng traces.
+  TRACE_NAME	    Give a proper name for the trace to be displayed in tracecompass.  
+  PINSIGHT_LIB      Full-path PInsight shared library file name to use with user application.
+  LD_LIBRARY_PATH_PREPEND   A list of paths separated by :. The list is prepended to 
+		    the LD_LIBRARY_PATH env. This argument can be used to provide
+	            path for the libraries used by the pinsight tracing, such as
+		    path for libomp.so or libmpi.so. If none is needed, e.g. the path are
+		    already set in the LD_LIBRARY_PATH, : should be provided for this arg.  
+
+Examples:
+    trace.sh ./traces/jacobi jacobi \ 
+      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib \
+      ./test/jacobi 2048 2048
+    
+    trace.sh ./traces/LULESH LULESH \ 
+      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib \ 
+      mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
+
+```
 
 Example using the `jacobi` application with `8` threads:
 
-    export OMP_NUM_THREADS=8
-    trace.sh traces/jacobi jacobi \
-      build/libpinsight.so \
-      ./jacobi 2048 2048
+```
+yyan7@yyan7-Ubuntu:~/tools/pinsight$ export OMP_NUM_THREADS=8
+yyan7@yyan7-Ubuntu:~/tools/pinsight$ ./scripts/trace.sh ./traces/jacobi jacobi ./build/libpinsight.so /home/yyan7/compiler/llvm-openmp-install/lib test/jacobi/jacobi 512
+Session jacobi-tracing-session created.
+Traces will be written in /home/yyan7/tools/pinsight/traces/jacobi
+UST event lttng_pinsight_enter_exit:* created in channel channel0
+UST event lttng_pinsight_ompt:* created in channel channel0
+UST event lttng_pinsight_pmpi:* created in channel channel0
+UST event lttng_pinsight_cuda:* created in channel channel0
+Tracing started for session jacobi-tracing-session
+Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]
+	n - grid dimension in x direction, default: 256
+	m - grid dimension in y direction, default: n if provided or 256
+	alpha - Helmholtz constant (always greater than 0.0), default: 0.0543
+	tol   - error tolerance for iterative solver, default: 1e-10
+	relax - Successice over relaxation parameter, default: 1
+	mits  - Maximum iterations for iterative solver, default: 5000
+jacobi 512 512 0.0543 1e-10 1 5000
+------------------------------------------------------------------------------------------------------
+Total Number of Iterations: 5001
+Residual: 2.35602684028891e-08
+seq elasped time(ms):        13806
+MFLOPS:      1224.58
+Total Number of Iterations: 5001
+Residual: 0.0269720666110516
+OpenMP (8 threads) elasped time(ms):         4064
+MFLOPS:      4160.06
+Solution Error: 0.000921275
+============================================================
+Lexgion report from thread 0: total 13 lexgions
+#	codeptr_ra	count	trace count	type	end_codeptr_ra
+1	0xffffff	1		1	3	0xffffff
+2	0xffffff	1		0	7	(nil)
+3	0x402405	1		1	3	0x402405
+4	0x402405	1		1	7	(nil)
+5	0x402544	1		1	20	0x402544
+6	0x40257e	1		1	23	0x40257e
+7	0x4010bd	5000		50	3	0x4010bd
+8	0x4010bd	5000		50	7	(nil)
+9	0x4012d9	5000		50	20	0x4013c5
+10	0x401176	5000		50	3	0x401176
+11	0x401176	5000		50	7	(nil)
+12	0x40159d	5000		50	20	0x4017c7
+13	0x401803	5000		50	23	0x401803
+-------------------------------------------------------------
+parallel lexgions (type 3) from thread 0
+#	codeptr_ra	count	trace count	type	end_codeptr_ra
+1	0xffffff	1		1	3	0xffffff
+2	0x402405	1		1	3	0x402405
+3	0x4010bd	5000		50	3	0x4010bd
+4	0x401176	5000		50	3	0x401176
+-------------------------------------------------------------
+sync lexgions (type 23) from thread 0
+#	codeptr_ra	count	trace count	type	end_codeptr_ra
+1	0x40257e	1		1	23	0x40257e
+2	0x401803	5000		50	23	0x401803
+-------------------------------------------------------------
+work lexgions (type 20) from thread 0
+#	codeptr_ra	count	trace count	type	end_codeptr_ra
+1	0x402544	1		1	20	0x402544
+2	0x4012d9	5000		50	20	0x4013c5
+3	0x40159d	5000		50	20	0x4017c7
+-------------------------------------------------------------
+master lexgions (type 21) from thread 0
+#	codeptr_ra	count	trace count	type	end_codeptr_ra
+============================================================
+Waiting for data availability.
+Tracing stopped for session jacobi-tracing-session
+Session jacobi-tracing-session destroyed
+yyan7@yyan7-Ubuntu:~/tools/pinsight$ 
 
-For jacobi on my vm:
-./scripts/trace.sh traces/jacobi jacobi build/libpinsight.so ./test/jacobi/jacobi 2048 2048
 
 For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
 
-     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so mpirun -np 8 ./test/LULESH/build/lulesh2.0 
+     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so /home/yanyh/tools/llvm-openmp-install:/opt/openmpi-install/lib mpirun -np 8 ./test/LULESH/build/lulesh2.0 
 
 #### Specifying tracing rate
 To allow user's control of tracing of each parallel region, one can specify a sampling rate, max number of traces, and initial number of traces of each parallel region using ``PINSIGHT_TRACE_CONFIG`` environment variable. The ``PINSIGHT_TRACE_CONFIG`` should be the form of ``<num_initial_traces>:<max_num_traces>:<trace_sampling_rate>``. Below are the examples of ``PINSIGHT_TRACE_CONFIG`` settings and their tracing behavior:
