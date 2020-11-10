@@ -277,7 +277,7 @@ void jacobi_seq(int n, int m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_
 //        if (k % 500 == 0)
 //            printf("Finished %d iteration with error: %g\n", k, error);
         error = sqrt(error) / (n * m);
-        printf("%g\n", error);
+     //   printf("%g\n", error);
 
         k = k + 1;
     } /*  End iteration loop */
@@ -330,8 +330,8 @@ void jacobi_omp(int n, int m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_
                 error = error + resid * resid;
             }
         /* Error check */
-        if (k % 500 == 0)
-            printf("Finished %d iteration with error: %g\n", k, error);
+     //   if (k % 500 == 0)
+      //      printf("Finished %d iteration with error: %g\n", k, error);
         error = sqrt(error) / (n * m);
 
         k = k + 1;

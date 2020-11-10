@@ -5,27 +5,32 @@
 
 USAGE=$(cat <<EOF
 Usage for this tracing script for use with PInsight:
-    trace.sh TRACEFILE_DEST TRACE_NAME PINSIGHT_LIB PROG_AND_ARGS...
+    trace.sh TRACEFILE_DEST TRACE_NAME PINSIGHT_LIB LD_LIBRARY_PATH_PREPEND PROG_AND_ARGS...
 
 Arguments:
   TRACEFILE_DEST    Where to write the LTTng traces.
   TRACE_NAME	    Give a proper name for the trace to be displayed in tracecompass.  
   PINSIGHT_LIB      Full-path PInsight shared library file name to use with user application.
+  LD_LIBRARY_PATH_PREPEND   A list of paths separated by :. The list is prepended to 
+		    the LD_LIBRARY_PATH env. This argument can be used to provide
+	            path for the libraries used by the pinsight tracing, such as
+		    path for libomp.so or libmpi.so. If none is needed, e.g. the path are
+		    already set in the LD_LIBRARY_PATH, : should be provided for this arg.  
 
 Examples:
     trace.sh ./traces/jacobi jacobi \\ 
-      /opt/pinsight/lib/libpinsight.so \\ 
-      ./jacobi 2048 2048
+      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib \\
+      ./test/jacobi 2048 2048
     
     trace.sh ./traces/LULESH LULESH \\ 
-      /opt/pinsight/lib/libpinsight.so \\ 
+      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmp-install/lib \\ 
       mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
 EOF
 )
 
 # Check to make sure user provided enough args.
 # If not, then exit early with usage info.
-if [ $# -lt 4 ]; then
+if [ $# -lt 5 ]; then
     echo "********************************************************************";
     echo "**  Error: Not enough arguments provided for the tracing script.  **";
     echo "********************************************************************";
@@ -39,33 +44,47 @@ fi
 TRACING_OUTPUT_DEST=$1
 TRACE_NAME=$2
 PINSIGHT_LIB=$3
-shift 3 
+LD_LIBRARY_PATH_PREPEND=$4
+shift 4 
 
-# --------------------------------------------------------
-# Main script
-export LD_LIBRARY_PATH=/home/yanyh/tools/llvm-openmp-install/lib:$LD_LIBRARY_PATH
+# setting LD_LIBRARY_PATH with the provided LD_LIBRARY_PATH_PREPEND
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH_PREPEND}X:$LD_LIBRARY_PATH
 
 # Clean the trace folder first
 rm -rf ${TRACING_OUTPUT_DEST}
 
+# --------------------------------------------------------
+# Main tracing commands
+
 # Create a userspace session.
 lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
-
-#lttng add-context --kernel --type=callstack-user --type=callstack-kernel
 
 # Create and enable event rules.
 lttng enable-event --userspace lttng_pinsight_enter_exit:'*'
 lttng enable-event --userspace lttng_pinsight_ompt:'*'
 lttng enable-event --userspace lttng_pinsight_pmpi:'*'
-#lttng enable-event --kernel --syscall open,write,read,close
+lttng enable-event --userspace lttng_pinsight_cuda:'*'
 
+# Experimental kernel trace events
+#lttng enable-event --kernel --syscall open,write,read,close
 #lttng add-context --userspace --type=hostname
 #lttng add-context --userspace --type=ip
 #lttng add-context --userspace --type=vpid
 #lttng add-context --userspace --type=procname
 #lttng add-context --userspace --type=pthread_id
 #lttng add-context --userspace --type=vtid
+#lttng add-context --userspace --type=tid
+#lttng add-context --userspace --type=pthread_id
+#lttng add-context --userspace --type=vtid
+#lttng add-context --userspace --type=perf:thread:cpu-migrations
+#lttng add-context --userspace --type=perf:thread:migrations
+#lttng add-context --userspace --type=perf:thread:cpu-cycles
+#lttng add-context --userspace --type=perf:thread:cycles
+#lttng add-context --userspace --type=perf:thread:instructions
 
+# For enabling callstack analysis
+#lttng add-context -u -t vpid -t vtid -t procname
+#lttng add-context --kernel --type=callstack-user --type=callstack-kernel
 
 # Start LTTng tracing.
 lttng start
@@ -73,10 +92,23 @@ lttng start
 # Run instrumented code.
 LD_PRELOAD=${PINSIGHT_LIB} "$@"
 
+# Enable callstack tracing
+# LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
+# LD_PRELOAD=${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
+
 # Stop LTTng tracing.
 lttng stop
 lttng destroy
 
 # change the folder name manually from 64-bit to something meaningful for tracecompass to display
 mv ${TRACING_OUTPUT_DEST}/ust/uid/${UID}/64-bit ${TRACING_OUTPUT_DEST}/ust/uid/${UID}/${TRACE_NAME} 
+
+# Simply dump using babletrace and grep of all the traces of each thread to the terminal
+#for (( i=0; i < $OMP_NUM_THREADS; i++ ));
+#for (( i=0; i < 56; i++ ));
+#do
+#   echo "=================== Thread $i events ============================================="
+   # only dump the first 20 matching records
+#   babeltrace ${TRACING_OUTPUT_DEST} | grep -m 20 "global_thread_num = $i,"
+#done
 

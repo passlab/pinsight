@@ -1,4 +1,4 @@
-include ../../environment.mk
+include ../environment.mk
 
 jacobi: jacobi.c
 	#clang -fopenmp -g -finstrument-functions -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
