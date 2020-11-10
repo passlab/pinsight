@@ -166,10 +166,13 @@ Tracing stopped for session jacobi-tracing-session
 Session jacobi-tracing-session destroyed
 yyan7@yyan7-Ubuntu:~/tools/pinsight$ 
 
+```
 
 For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
 
-     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so /home/yanyh/tools/llvm-openmp-install:/opt/openmpi-install/lib mpirun -np 8 ./test/LULESH/build/lulesh2.0 
+     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so \
+     /home/yanyh/tools/llvm-openmp-install:/opt/openmpi-install/lib \
+     mpirun -np 8 ./test/LULESH/build/lulesh2.0 
 
 #### Specifying tracing rate
 To allow user's control of tracing of each parallel region, one can specify a sampling rate, max number of traces, and initial number of traces of each parallel region using ``PINSIGHT_TRACE_CONFIG`` environment variable. The ``PINSIGHT_TRACE_CONFIG`` should be the form of ``<num_initial_traces>:<max_num_traces>:<trace_sampling_rate>``. Below are the examples of ``PINSIGHT_TRACE_CONFIG`` settings and their tracing behavior:
