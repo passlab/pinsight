@@ -23,7 +23,7 @@ Examples:
       ./test/jacobi 2048 2048
     
     trace.sh ./traces/LULESH LULESH \\ 
-      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmp-install/lib \\ 
+      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib \\
       mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
 EOF
 )
