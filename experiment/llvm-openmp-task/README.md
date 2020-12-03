@@ -8,6 +8,7 @@ For OpenMP 5.0 specification, task has three model events:
 
 1. The task-create event occurs when a thread encounters a construct that causes a new task to be created. The event occurs after the task is initialized but before it begins execution or is deferred.
 1. The task-dependences event occurs in a thread that encounters a task generating construct or a taskwait construct with adepend clause immediately after the task-create event for the new task or the taskwait-init event.
+1. The task-dependence event indicates an unfulfilled dependence for the generated task. This event occurs in a thread that observes the unfulfilled dependence before it is satisfied.
 1. The task-schedule event occurs in a thread when the thread switches tasks at a task scheduling point; no event occurs when switching to or from a merged task.
 
 It also has four tool callbacks for different events.
