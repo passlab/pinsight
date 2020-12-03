@@ -80,6 +80,8 @@ static ompt_get_partition_place_nums_t ompt_get_partition_place_nums;
 static ompt_get_proc_id_t ompt_get_proc_id;
 static ompt_enumerate_states_t ompt_enumerate_states;
 static ompt_enumerate_mutex_impls_t ompt_enumerate_mutex_impls;
+static ompt_get_target_info_t ompt_get_target_info;
+static ompt_get_num_devices_t ompt_get_num_devices;
 
 static void print_ids(int level)
 {
@@ -690,6 +692,8 @@ on_ompt_callback_task_create(
 
   format_task_type(type, buffer);
 
+  printf("task begin here");
+
   printf("%" PRIu64 ": ompt_event_task_create: parent_task_id=%" PRIu64 ", parent_task_frame.exit=%p, parent_task_frame.reenter=%p, new_task_id=%" PRIu64 ", codeptr_ra=%p, task_type=%s=%d, has_dependences=%s\n", ompt_get_thread_data()->value, encountering_task_data ? encountering_task_data->value : 0, encountering_task_frame ? encountering_task_frame->exit_frame.ptr : NULL, encountering_task_frame ? encountering_task_frame->enter_frame.ptr : NULL, new_task_data->value, codeptr_ra, buffer, type, has_dependences ? "yes" : "no");
 }
 
@@ -754,6 +758,141 @@ on_ompt_callback_control_tool(
   return 0; //success
 }
 
+static void
+on_ompt_callback_target(
+  ompt_target_t kind,
+  ompt_scope_endpoint_t endpoint,
+  int device_num,
+  ompt_data_t *task_data,
+  ompt_id_t target_id,
+  const void *codeptr_ra
+){
+  switch(endpoint)
+  {
+    case ompt_scope_begin:
+      switch(kind)
+	{
+	  case ompt_target:
+		  printf("this is scope begin, and ompt target");
+		  printf("%" PRIu64 ": ompt_event_target: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+		  break;
+	  case ompt_target_enter_data:
+		  printf("this is scope begin, and ompt enter target");
+		  printf("%" PRIu64 ": ompt_event_target_enter_data: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+		  break;
+	  case ompt_target_exit_data:
+		  printf("this is scope begin, and ompt exit target");
+		  printf("%" PRIu64 ": ompt_event_target_exit_data: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+		  break;
+	  case ompt_target_update:
+		  printf("this is scope begin, and ompt update target");
+		  printf("%" PRIu64 ": ompt_event_target_update: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+		  break;
+	}
+      break;
+    case ompt_scope_end:
+       switch(kind)
+        {
+          case ompt_target:
+                  printf("this is scope begin, and ompt target");
+                  printf("%" PRIu64 ": ompt_event_target: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+                  break;
+          case ompt_target_enter_data:
+                  printf("this is scope begin, and ompt enter target");
+                  printf("%" PRIu64 ": ompt_event_target_enter_data: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+                  break;
+          case ompt_target_exit_data:
+                  printf("this is scope begin, and ompt exit target");
+                  printf("%" PRIu64 ": ompt_event_target_exit_data: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+                  break;
+          case ompt_target_update:
+                  printf("this is scope begin, and ompt update target");
+                  printf("%" PRIu64 ": ompt_event_target_update: task_id=%" PRIu64 ", target_id=%" PRIu64 ", device_num=%d, codeptr_ra=%p\n", ompt_get_thread_data()->value, task_data->value, target_id,device_num, codeptr_ra);
+                  break;
+        }
+      break;
+  }
+}
+
+static void 
+on_ompt_callback_target_map(
+  ompt_id_t target_id,
+  unsigned int nitems,
+  void **host_addr,
+  void **device_addr,
+  size_t *bytes,
+  unsigned int *mapping_flags,
+  const void *codeptr_ra)
+{
+  printf("target map");
+}
+
+static void
+on_ompt_callback_target_submit(
+  ompt_id_t target_id,
+  ompt_id_t host_op_id,
+  unsigned int requested_num_teams)
+{
+  printf("target sumbit");
+}
+
+static void
+on_ompt_callback_target_data_op(
+  ompt_id_t target_id,
+  ompt_id_t host_op_id,
+  ompt_target_data_op_t optype,
+  void *src_addr,
+  int src_device_num,
+  void *dest_addr,
+  int dest_device_num,
+  size_t bytes,
+  const void *codeptr_ra)
+{
+  printf("traget op");
+}
+static void
+on_ompt_callback_device_initialize(
+  int device_num,
+  const char *type,
+  ompt_device_t *device,
+  ompt_function_lookup_t lookup,
+  const char *documentation)
+{
+  ompt_get_target_info = (ompt_get_target_info_t) lookup("ompt_get_target_info");
+  ompt_get_num_devices = (ompt_get_num_devices_t) lookup("ompt_get_num_devices");
+  register_callback(ompt_callback_target);
+  printf("initial device");
+}
+
+static void
+on_ompt_callback_device_finalize(
+  int device_num)
+{
+  printf("finalize device");
+}
+
+static void
+on_ompt_callback_device_load(
+  int device_num,
+  const char *filename,
+  int64_t offset_in_file,
+  void *vma_in_file,
+  size_t bytes,
+  void *host_addr,
+  void *device_addr,
+  uint64_t module_id)
+{
+  printf("load device");
+}
+
+static void
+on_ompt_callback_device_unload(
+  int device_num,
+  uint64_t module_id)
+{
+  printf("unload device");
+}
+
 int ompt_initialize(
   ompt_function_lookup_t lookup,
   int initial_device_num,
@@ -777,6 +916,8 @@ int ompt_initialize(
   ompt_get_proc_id = (ompt_get_proc_id_t) lookup("ompt_get_proc_id");
   ompt_enumerate_states = (ompt_enumerate_states_t) lookup("ompt_enumerate_states");
   ompt_enumerate_mutex_impls = (ompt_enumerate_mutex_impls_t) lookup("ompt_enumerate_mutex_impls");
+  ompt_get_target_info = (ompt_get_target_info_t) lookup("ompt_get_target_info");
+  ompt_get_num_devices = (ompt_get_num_devices_t) lookup("ompt_get_num_devices");
 
   register_callback(ompt_callback_mutex_acquire);
   register_callback_t(ompt_callback_mutex_acquired, ompt_callback_mutex_t);
@@ -800,6 +941,14 @@ int ompt_initialize(
   register_callback(ompt_callback_task_dependence);
   register_callback(ompt_callback_thread_begin);
   register_callback(ompt_callback_thread_end);
+  register_callback_t(ompt_callback_device_initialize,ompt_callback_device_initialize_t);
+  register_callback(ompt_callback_device_finalize);
+  register_callback(ompt_callback_device_load);
+  register_callback(ompt_callback_device_unload);
+  register_callback(ompt_callback_target);
+  register_callback(ompt_callback_target_map);
+  register_callback(ompt_callback_target_data_op);
+  register_callback(ompt_callback_target_submit);
   printf("0: NULL_POINTER=%p\n", (void*)NULL);
   return 1; //success
 }
