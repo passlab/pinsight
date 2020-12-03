@@ -25,11 +25,11 @@ Operation | Evaluates to true
 (flags & ompt_task_mergeable) | If the task is a mergeable task
 (flags& ompt_task_merged) | If the task is a merged task
 
-1. ompt_callback_dependences : A thread dispatches the ompt_callback_dependences callback for each occurrence of the task-dependences event to announce its dependences with respect to the list items in thedepend clause. This callback has type signatureompt_callback_dependences_t.
+2. ompt_callback_dependences : A thread dispatches the ompt_callback_dependences callback for each occurrence of the task-dependences event to announce its dependences with respect to the list items in thedepend clause. This callback has type signatureompt_callback_dependences_t.
 
-1. ompt_callback_task_dependence : A thread dispatches the ompt_callback_task_dependence callback for a task-dependence event to report a dependence between a predecessor task (src_task_data) and a dependent task (sink_task_data). This callback has type signatureompt_callback_task_dependence_t.
+3. ompt_callback_task_dependence : A thread dispatches the ompt_callback_task_dependence callback for a task-dependence event to report a dependence between a predecessor task (src_task_data) and a dependent task (sink_task_data). This callback has type signatureompt_callback_task_dependence_t.
 
-1. ompt_callback_task_schedule : A thread dispatches a registered ompt_callback_task_schedule callback for each occurrence of a task-schedule event in the context of the task that begins or resumes. This callback has the type signature ompt_callback_task_schedule_t. The argument prior_task_status is used to indicate the cause for suspending the prior task. This cause may be the completion of the prior task region, the encountering of a taskyield construct, or the encountering of an active cancellation point.
+4. ompt_callback_task_schedule : A thread dispatches a registered ompt_callback_task_schedule callback for each occurrence of a task-schedule event in the context of the task that begins or resumes. This callback has the type signature ompt_callback_task_schedule_t. The argument prior_task_status is used to indicate the cause for suspending the prior task. This cause may be the completion of the prior task region, the encountering of a taskyield construct, or the encountering of an active cancellation point.
 
 ### Difference between OpenMP 5.0 and OpenMP 5.1
 There is no difference discovered between OpenMP 5.0 and OpenMP 5.1
