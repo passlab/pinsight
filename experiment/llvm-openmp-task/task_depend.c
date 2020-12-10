@@ -1,5 +1,7 @@
 // Task dependencies are part of OpenMP 4.0, which is only supported in GCC 4.9 or newer.
 #include <stdio.h>
+#include "omp.h"
+#include "callback.h"
 int main()
 {
   int x = 1;
