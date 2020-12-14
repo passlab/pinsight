@@ -237,6 +237,9 @@ Shell variable example:
     export PINSIGHT_DEBUG_ENABLE=1
     # Normal tracing stuff from here on...
 
+#### Tracing CUDA program using CUPTI 
+
+
 ### Analysis
 
 This repo comes with a few Python scripts which can dump program statistics into CSV format for analysis.
