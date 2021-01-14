@@ -34,3 +34,22 @@ Operation | Evaluates to true
 
 ### Difference between OpenMP 5.0 and OpenMP 5.1
 There is no difference discovered between OpenMP 5.0 and OpenMP 5.1
+
+#### The difference between ompt_callback_task_dependence callback and ompt_callback_dependences callback:
+
+Whenever the depend clause appears (when a task-dependence event is generated), the thread will dispatch the ompt_callback_task_dependence callback. For example:
+```
+#omp task depend(in: a) depend(out: b,c), 
+```
+In this example, two ompt_callback_task_dependence callbacks will be dispatched. If two threads execute this code at the same time, four ompt_callback_task_dependence callbacks will be dispatched. 
+
+The dispatch of ompt_callback_dependences usually appears in the following situation: 
+```
+#omp parallel { 
+  #omp task depend(out: b) 
+    Code block 
+  #omp task depend(in: b) 
+    Code block
+}
+```
+When another thread wants to execute the second task but the first task is not finished, it will dispatch the ompt_callback_task_dependences callback to mark the dependency between the first and second tasks. When the first task has finished (ompt_callback_task_end is dispatched), ompt_callback_task_dependences will not be dispatched. In the above code, if 8 threads execute concurrent, the number of dispatches to ompt_callback_task_dependences callback may be any integer less than or equal to 8.
