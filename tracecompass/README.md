@@ -55,3 +55,42 @@ MPI tool interface has the same mechanisms with OMPT, which is based on event/ca
 1. kernel callstack: https://archive.eclipse.org/tracecompass.incubator/doc/org.eclipse.tracecompass.incubator.kernel.doc.user/User-Guide.html
 1. scripting: https://archive.eclipse.org/tracecompass.incubator/doc/org.eclipse.tracecompass.incubator.scripting.doc.user/User-Guide.html
 1. Blog: [Trace Compass Scripting: Empowering Users With Their Trace Data Analysis](http://versatic.net/tracecompass/introducingEase.html)
+
+## Using JavaFX in tracecompass view
+
+
+SampleView extends TmfView which extends Eclipse UI ViewPart. TMFview provides mechanisms to access trace data. 
+Adding JavaFX to tracecompass view is by the FXCanvas class. Below are the relevant links. You should be able to have some idea how to creating a SWT plugin that access traces via tracecompass. 
+* https://docs.oracle.com/javafx/2/api/javafx/embed/swt/FXCanvas.html
+* https://wiki.eclipse.org/Efxclipse/Tutorials/Tutorial2 (this could be the starting point)
+* https://docs.oracle.com/javafx/2/swt_interoperability/jfxpub-swt_interoperability.htm
+* http://www.java2s.com/Code/Java/JavaFX/JavaFXSWTIntegration.htm
+* Eclipse has a project for integrating JavaFX https://www.eclipse.org/efxclipse/index.html where you can find the Tutorial2 above. 
+* More website that may be helpful:https://blog.codecentric.de/en/2015/04/add-javafx-controls-swt-eclipse-4-application-eclipse-rcp-cookbook/
+* https://github.com/sxfszwr/JavaFx-SWT
+* https://www.eclipse.org/swt/
+* https://github.com/tracecompass/tracecompass/blob/master/tmf/org.eclipse.tracecompass.tmf.ui/src/org/eclipse/tracecompass/tmf/ui/views/TmfView.java
+* https://github.com/eclipse/eclipse.platform.ui/blob/master/bundles/org.eclipse.ui.workbench/Eclipse%20UI/org/eclipse/ui/part/ViewPart.java
+* Check the tracecompass developer guide, there is a section about component integration. With some source code of existing tracecompass view, you should be able to figure out how to let the view respond to the mouse event and react accordingly in other component. https://archive.eclipse.org/tracecompass/doc/org.eclipse.tracecompass.doc.dev/Component-Interaction.html#Component_Interaction
+* https://github.com/sshahriyar/org.eclipse.tracecompass/blob/master/org.eclipse.tracecompass.tmf.ui/src/org/eclipse/tracecompass/tmf/ui/views/TmfView.java
+the broadcast function is for sending the signal to other components via the an object of TmfTraceManager. That will trigger highlighting of trace records in other components of the interface. 
+
+
+## To enable 3D visualization on tracecompass
+Tracecompass uses Eclipse [SWTChart](http://www.swtchart.org/index.html) to create 2D chart. SWTChart uses [Eclipse SWT](https://www.eclipse.org/swt/) for widget. While there are Java library for creating 3D graphs, e.g. https://jogamp.org/, http://www.jzy3d.org/, Java 3D and [others](https://en.wikipedia.org/wiki/List_of_3D_graphics_libraries), the easiest for us is probably to extend SWT or SWTChart with OpenGL. The reason is that it will be easier integrate with Eclipse control and other library including Tracecompass and the way it handles CTF traces, which would yield high performance implementation. [The Tracecompass tutorial in the developer guide](https://help.eclipse.org/luna/index.jsp?topic=%2Forg.eclipse.linuxtools.tmf.help%2Fdoc%2FView-Tutorial.html) provides a starting point. 
+
+To use OpenGL in Eclipse SWT and SWTChart, we should read [SWT with OpenGL](https://www.eclipse.org/swt/opengl/) and [Using OpenGL with SWT(old, but very helpful)](https://www.eclipse.org/articles/Article-SWT-OpenGL/opengl.html). The article "[Graphics Context - Quick on the draw](https://www.eclipse.org/articles/Article-SWT-graphics/SWT_graphics.html)" provides basic background about drawing in SWT. 
+
+Our implementation only needs to support chart type, just like SWTChart, so it should be easier to do a general 3D visualization project. 
+
+### TODO items
+1. Follow the [The Tracecompass tutorial in the developer guide](https://help.eclipse.org/luna/index.jsp?topic=%2Forg.eclipse.linuxtools.tmf.help%2Fdoc%2FView-Tutorial.html) to create a sample view plugin using our trace data. The tutorial is based on older version of Eclipse. For the latest Eclipse, you have to manually edit SampleView class to extend TmfView and then make those changes of the source code. Source codes for Tracecompass's own views can be used as reference when you add source code: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.ui/src/org/eclipse/tracecompass/tmf/ui/views. [TmfChartView.java](https://github.com/tracecompass/tracecompass/blob/master/tmf/org.eclipse.tracecompass.tmf.ui/src/org/eclipse/tracecompass/tmf/ui/views/TmfChartView.java) file is a good place to start
+
+1. Explore adding OpenGL support in SWTChart, this could be done as standalone SWTChart experiment or in the sample view plugin.
+
+
+### Related work
+[Graphical Editing Framework 3D project](https://wiki.eclipse.org/GEF3D) seems to be dead since there is no activities for years. It is designed to enabling editing capability for 2D and 3D images in Eclipse. For [Eclipse Advanced Visualization Project](https://projects.eclipse.org/proposals/eclipse-advanced-visualization-project) led by ORNL, it is inactive for years. The attempt was to integrate HPC visualization tools (visiIt, paraView, etc) with Eclipse, thus can be considered as loose integration with Eclipse. It hard to enable control and interaction between the image rendered by 3rd party tools with the data presented in Eclipse. 
+
+With regards to Eclipse SWT, Oracle/Java has AWT, SWing, JavaFx and Java3D. But it seems those Java/Oracle-provided implementation are heavyweight while Eclipse SWT is lightweight. More research and study are needed if we need to know more detail. 
+
