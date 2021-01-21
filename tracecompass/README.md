@@ -56,7 +56,7 @@ MPI tool interface has the same mechanisms with OMPT, which is based on event/ca
 1. scripting: https://archive.eclipse.org/tracecompass.incubator/doc/org.eclipse.tracecompass.incubator.scripting.doc.user/User-Guide.html
 1. Blog: [Trace Compass Scripting: Empowering Users With Their Trace Data Analysis](http://versatic.net/tracecompass/introducingEase.html)
 
-## Using JavaFX in tracecompass view
+## Using JavaFX in tracecompass view and for JavaFX 3D visualization
 
 SampleView extends TmfView which extends Eclipse UI ViewPart. TMFview provides mechanisms to access trace data. 
 Adding JavaFX to tracecompass view is by the FXCanvas class. Below are the relevant links. You should be able to have some idea how to creating a SWT plugin that access traces via tracecompass. 
@@ -76,7 +76,7 @@ Adding JavaFX to tracecompass view is by the FXCanvas class. Below are the rele
 the broadcast function is for sending the signal to other components via the an object of TmfTraceManager. That will trigger highlighting of trace records in other components of the interface. 
 
 
-## To enable 3D visualization on tracecompass
+## To degvelopment 3D visualization in tracecompass using existing SWT
 Tracecompass uses Eclipse [SWTChart](http://www.swtchart.org/index.html) to create 2D chart. SWTChart uses [Eclipse SWT](https://www.eclipse.org/swt/) for widget. While there are Java library for creating 3D graphs, e.g. https://jogamp.org/, http://www.jzy3d.org/, Java 3D and [others](https://en.wikipedia.org/wiki/List_of_3D_graphics_libraries), the easiest for us is probably to extend SWT or SWTChart with OpenGL. The reason is that it will be easier integrate with Eclipse control and other library including Tracecompass and the way it handles CTF traces, which would yield high performance implementation. [The Tracecompass tutorial in the developer guide](https://help.eclipse.org/luna/index.jsp?topic=%2Forg.eclipse.linuxtools.tmf.help%2Fdoc%2FView-Tutorial.html) provides a starting point. 
 
 To use OpenGL in Eclipse SWT and SWTChart, we should read [SWT with OpenGL](https://www.eclipse.org/swt/opengl/) and [Using OpenGL with SWT(old, but very helpful)](https://www.eclipse.org/articles/Article-SWT-OpenGL/opengl.html). The article "[Graphics Context - Quick on the draw](https://www.eclipse.org/articles/Article-SWT-graphics/SWT_graphics.html)" provides basic background about drawing in SWT. 
