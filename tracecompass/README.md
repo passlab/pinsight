@@ -58,10 +58,10 @@ MPI tool interface has the same mechanisms with OMPT, which is based on event/ca
 
 ## Using JavaFX in tracecompass view
 
-
 SampleView extends TmfView which extends Eclipse UI ViewPart. TMFview provides mechanisms to access trace data. 
 Adding JavaFX to tracecompass view is by the FXCanvas class. Below are the relevant links. You should be able to have some idea how to creating a SWT plugin that access traces via tracecompass. 
 * https://docs.oracle.com/javafx/2/api/javafx/embed/swt/FXCanvas.html
+* http://blog.vogella.com/2019/11/15/add-javafx-controls-to-a-swt-eclipse-4-application-eclipse-rcp-cookbook-update/
 * https://wiki.eclipse.org/Efxclipse/Tutorials/Tutorial2 (this could be the starting point)
 * https://docs.oracle.com/javafx/2/swt_interoperability/jfxpub-swt_interoperability.htm
 * http://www.java2s.com/Code/Java/JavaFX/JavaFXSWTIntegration.htm
