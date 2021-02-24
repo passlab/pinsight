@@ -236,11 +236,17 @@ Shell variable example:
 ### Optimizing dynamic tracing to reduce unnecessnary and redundant tracing
 In comparison with static tracing that when tracing are started, no changes can be made to change tracing rate, position, etc. Dynamic tracing enables highly optimized tracing according to the needs and behavior of the program execution. We will allow the following configuration to enable and disable tracing in multiple granularity level. 
 
-##### Complete turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
+##### 1. Completely turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
 1. One approach is to use an env varabile and a global flag for setting and checking upon entry to each PInsight/OMPT/PMPI/CUPTI call, though this still introduces the overhead of making those calls and one step of checking. 
 2. Another approach is to completely shutdown/finalize the OMPT/PMPI/CUPTI for the program and unload/unlink the libpinsight.so. For OpenMP, this can be accomplished by ompt_finalize call, which turn off OMPT, thus the whole PInsight is turned off and the libpinsight.so can be unloaded. For MPI, this can be accomplished by unlinking libpinsight.so. For CUPTI, **TBD**. With this approach, the program does not expect to re-enable the tracing later on. 
 3. This approach can be used for enable/disable specific tracing of OpenMP, MPI or CUPTI. With this approach, we need to build three different librarys each for OpenMP/MPI/CUPTI. 
+4. This approach can also be used in the debugging situation that after the debuger and performance analysis know the configuration, and set the configuration, tracing can be disabled to eliminate the overhead otherwise that would be introduced with tracing
 
+##### 2. Completely disable OMPT/PMPIT/CUPTI for a specific code region. 
+1. A configuration mechiaism, e.g. env variable to allow PInsight to completely turn off tracing a code region 
+
+
+##### 3. Specifying trace sampling rate for the whole system or specific regions
 
 To allow user's control of tracing of each parallel region, one can specify a sampling rate, max number of traces, and initial number of traces of each parallel region using ``PINSIGHT_TRACE_CONFIG`` environment variable. The ``PINSIGHT_TRACE_CONFIG`` should be the form of ``<num_initial_traces>:<max_num_traces>:<trace_sampling_rate>``. Below are the examples of ``PINSIGHT_TRACE_CONFIG`` settings and their tracing behavior:
 1. ``PINSIGHT_TRACE_CONFIG=10:50:10``, This is the system default. It records the first 10 traces, then after that, records one trace per 10 executions and in total max 50 traces will be recorded. 
