@@ -12,6 +12,9 @@ Essentially it is the integration of LTTng + tracecompass + debugger (editor)
 2. [ptrace needs to be disabled in kernel](https://stackoverflow.com/questions/19215177/how-to-solve-ptrace-operation-not-permitted-when-trying-to-attach-gdb-to-a-pro) so you can attach a Eclipse debugger with a running LULESH process that is launched by the trace.sh script. If we need to launch the application from Eclipse in debugging mode directly, we need to configure in Eclipse to let lttng to create trace session, setting up trace event, etc and then launch the application. Or the lttng trace session can be started outside of the Eclipse.
 3. In Eclipse, after all the required plugins are installed (tracecompass, lttng, CDT, Debuging) etc. We can show the tracecompass view, debugger view, code editor in a single perspective, thanks to the flexible plugin architecture and interface design of Eclipse. See below screenshot
 
+![EclipsePInsight](EclipsePInsightDebugTracecompass2021-02-23-23-35-36.png)
+
+
 
 
 ### To enable performance debugging Eclipse/Tracecompass/LTTng
