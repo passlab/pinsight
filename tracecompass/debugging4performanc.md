@@ -10,7 +10,7 @@ Essentially it is the integration of LTTng + tracecompass + debugger (editor)
 ### Configuring LULESH and Eclipse debuger to connect a running LULESH process
 1. LULESH needs to be build with clang, modify Makefile to have 'MPICXX = OMPI_CC=clang OMPI_CXX=clang++ mpicxx -DUSE_MPI=1'
 2. [ptrace needs to be disabled in kernel](https://stackoverflow.com/questions/19215177/how-to-solve-ptrace-operation-not-permitted-when-trying-to-attach-gdb-to-a-pro) so you can attach a Eclipse debugger with a running LULESH process that is launched by the trace.sh script. If we need to launch the application from Eclipse in debugging mode directly, we need to configure in Eclipse to let lttng to create trace session, setting up trace event, etc and then launch the application. Or the lttng trace session can be started outside of the Eclipse.
-3. In Eclipse, after all the required plugins are installed (tracecompass, lttng, CDT, Debuging) etc. We can show the tracecompass view, debugger view, code editor in a single perspective, thanks to the flexible plugin architecture and interface design of Eclipse. See below screenshot
+3. In Eclipse, after all the required plugins are installed (tracecompass, lttng, CDT, Debuging) etc. We can show the tracecompass view, debugger view, code editor in a single perspective, thanks to the flexible plugin architecture and interface design of Eclipse. See below screenshot. In the current Eclipse setting, two projects need to be created, one for source code editing/debugging, and one for tracecompass. There are not connection between the two projects. 
 
 ![EclipsePInsight](EclipsePInsightDebugTracecompass2021-02-23-23-35-36.png)
 
