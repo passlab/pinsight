@@ -19,7 +19,7 @@ Essentially it is the integration of LTTng + tracecompass + debugger (editor)
 
 ### To enable performance debugging Eclipse/Tracecompass/LTTng
 1. In a debug session, i.e. if we want to trace and anlyze the traces recorded between two debugging breakpoints, traces needs to be recorded as fresh new one upon starting the beginning checkpoint, and then recorded at the ending checkpoint, then the traces can be anlyzed for just the execution between the two breakpoints. This is realized using [LTTng rotate](https://lttng.org/docs/#doc-session-rotation). `lttng rotate` needs to be called upon entering the beginning breakpoint and after the ending breakpoint. The traces recorded after the last rotate is the traces needed for the code executed between the two breakpoints. 
-2. [LTTng snapshot](https://lttng.org/docs/#doc-taking-a-snapshot) is a feature of LTTng that it allow to record traces from the beginning till the point the snapshot is taken. Same records can be recorded more than once if multiple snapshots are taken. Thus rotate is what we need. 
+2. [LTTng snapshot](https://lttng.org/docs/#doc-taking-a-snapshot) is another feature of LTTng that allows to record traces from the beginning till the point the snapshot is taken. Same records can be recorded more than once if multiple snapshots are taken. Thus rotate is what we need. 
 
 ### Related work
 1. [Implementing Debug behavior in the Eclipse IDE - Tutorial](https://www.vogella.com/tutorials/EclipseDebugFramework/article.html)
