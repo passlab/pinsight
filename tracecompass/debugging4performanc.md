@@ -23,3 +23,4 @@ Essentially it is the integration of LTTng + tracecompass + debugger (editor)
 
 ### Related work
 1. [Implementing Debug behavior in the Eclipse IDE - Tutorial](https://www.vogella.com/tutorials/EclipseDebugFramework/article.html)
+2. [Eclipse Event and Communication](https://www.vogella.com/tutorials/Eclipse4EventSystem/article.html). 
