@@ -19,8 +19,8 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
 
 set(SOURCE_FILES
-        src/env_config.c
-        src/env_config.h
+        src/lexgion_trace_config.c
+        src/lexgion_trace_config.h
         src/pinsight.h
         src/pinsight.c
         src/enter_exit_pinsight.c

@@ -7,7 +7,7 @@
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
-#include "env_config.h"
+#include "lexgion_trace_config.h"
 #include "pinsight.h"
 
 // --------------------------------------------------------
@@ -1096,7 +1096,6 @@ int ompt_initialize(
   if (debug_on) {
     printf("0: NULL_POINTER=%p\n", NULL);
   }
-  set_initial_lexgion_trace_config();
 
 #ifdef PINSIGHT_ENERGY
   // Initialize RAPL subsystem.

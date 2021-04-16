@@ -6,6 +6,7 @@
 #define PINSIGHT_PINSIGHT_H
 #include <stdint.h>
 #include "pinsight_config.h"
+#include "lexgion_trace_config.h"
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
@@ -31,37 +32,6 @@
 #define LEXGION_RECORD_CODEPTR_RA(uuid) ((void*)(uuid>>BITS_4_MAX_RECORDS_PER_LEXGION))
 #define LEXGION_RECORD_COUNTER(uuid) (uint32_t)uuid
 #define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) (uint32_t)(uint64_t)codeptr_ra
-
-/* Constant or variable for controlling sampling tracing */
-/* For sampling-based tracing, which allows user's control of tracing of each parallel region by specifying
- * a sampling rate, max number of traces, and initial number of traces using PINSIGHT_TRACE_CONFIG environment
- * variable. The PINSIGHT_TRACE_CONFIG should be in the form of
- * <num_initial_traces>:<max_num_traces>:<trace_sampling_rate>. Below are the example of setting PINSIGHT_TRACE_CONFIG
- * and its tracing behavior:
-        PINSIGH_TRACE_CONFIG=10:50:8, This is the system default. It records the first 10 traces,
-                then after that, record one trace per 10 execution and in total max 50 traces should be recorded.
-        PINSIGH_TRACE_CONFIG=<any_number>:-1:-1,  Record all the traces.
-        PINSIGHT_TRACE_CONFIG=0:-1:10, record 1 trace per 10 executions for all the executions.
-        PINSIGHT_TRACE_CONFIG=20:20:-1, record the first 20 iterations
-
- * In implementation, there are three global variables for the three configuration variables: NUM_INITIAL_TRACES,
- * MAX_NUM_TRACES, TRACE_SAMPLING_RATE.
- * NUM_INITIAL_TRACES specifies how many traces must be recorded from the beginning of the execution of the region.
- * MAX_NUM_TRACES specifies the total number of trace records LTTng will collect for the region.
- * TRACE_SAMPLING_RATE specifies the rate a trace will be recorded, e.g. every TRACE_SAMPLING_RATE of
- * executions of the region, a trace is recorded.
- * The three variables will be initialized from PINSIGHT_TRACE_CONFIG environment variable when OMPT is initialized.
- * For each region, they are copied to the corresponding variables of each region, thus the implementation has the
- * capability of setting different trace configuration for different regions.
- */
-
-#define DEFAULT_NUM_INITIAL_TRACES 10
-#define DEFAULT_MAX_NUM_TRACES 50
-#define DEFAULT_TRACE_SAMPLING_RATE 8
-
-extern unsigned int NUM_INITIAL_TRACES;
-extern unsigned int MAX_NUM_TRACES;
-extern unsigned int TRACE_SAMPLING_RATE;
 
 typedef enum LEXGION_CLASS {
     OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
@@ -133,33 +103,11 @@ typedef struct lexgion {
     unsigned int num_exes_after_last_trace; /* counter to control the sampling */
 } lexgion_t;
 
-/**
- * the struct for storing trace config of a lexgion. trace config can be updated at the runtime so PInsight can do dynamic
- * tracing. Each time, PInsight needs to check the config of a lexgion, it checks the lexgion_trace_config object
- * to find out the current trace rate, etc.
- *
- * All threads share a single config for each lexgion. Thus for each lexgion, tracing behavior for all threads are the same.
- */
-typedef struct lexgion_trace_config {
-    volatile void *codeptr_ra; /* the codeptr of the lexgion */
-    volatile void * dummy;  /* NOTE: make sure I do not run into problems of compiling the code for 32 bit systems since the codeptr_ra
-                             * used __sync_bool_compare_and_swap to access it */
-    int trace_enable; /* dynamic tracing: to enable or disable tracing of the lexgion */
-
-    /* the following are for controlling tracing rate if trace is enabled */
-    /* counter and count for sampling and fine-grained control of tracing. So far, we only do trace control for parallel region.
-     * If a parallel region is traced, all constructs insides are traced. */
-    unsigned int num_initial_traces;
-    int sample_rate; /* the rate of tracing. Every sample_rate executions of the region, a trace is recorded.
-                      * 0: no tracing; -1: trace all */
-    unsigned int max_num_traces;
-} lexgion_trace_config_t;
-
 /* This macro check whether to trace or not: trace_bit is set if trace_enable is set AND
  * traces for the initial number of exes or when reaching sampling rate */
-#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->trace_enable && (lgp->trace_counter < lgp->trace_config->num_initial_traces || \
-                            (lgp->trace_counter < lgp->trace_config->max_num_traces && (lgp->trace_config->sample_rate == -1 || \
-                                                    lgp->num_exes_after_last_trace == lgp->trace_config->sample_rate)));}
+#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->trace_enabled && (lgp->trace_counter < lgp->trace_config->initial_trace_count || \
+                            (lgp->trace_counter < lgp->trace_config->max_num_traces && (lgp->trace_config->tracing_rate == -1 || \
+                                                    lgp->num_exes_after_last_trace == lgp->trace_config->tracing_rate)));}
 
 #define lexgion_post_trace_update(lgp) {lgp->trace_counter++; lgp->num_exes_after_last_trace=0;}
 
@@ -201,6 +149,7 @@ extern __thread pinsight_thread_data_t pinsight_thread_data;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
 extern lexgion_trace_config_t lexgion_trace_config[]; //all threads share a single config for each lexgion */
 
+
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 
 #ifdef  __cplusplus
@@ -214,7 +163,12 @@ extern lexgion_t * top_lexgion_type(int class, int type, unsigned int * counter)
 extern lexgion_t * top_lexgion(unsigned int * counter);
 extern lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra);
 extern lexgion_t *lexgion_end(unsigned int * counter);
-extern void set_initial_lexgion_trace_config();
+
+//implemented in lexgion_trace_cnofig.c
+extern lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr);
+extern void print_lexgion_trace_config();
+extern void lexgion_trace_config_read();
+extern void initial_lexgion_trace_config();
 
 #ifdef  __cplusplus
 };
