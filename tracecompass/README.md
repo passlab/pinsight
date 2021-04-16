@@ -24,7 +24,7 @@ To be able to view the state changes in a reasonable way in TraceCompass, we hav
 *For those interested in further development with TraceCompass, the following resources may be useful.*
 
  Tracecompass is an Eclipse plugin and framework. Follow the steps from the wiki page for developing with it:
- * Set up Eclipse development environment.
+ * [Set up Eclipse development environment](https://wiki.eclipse.org/Trace_Compass/Development_Environment_Setup)
  * Clone [TraceCompass repo](https://git.eclipse.org/c/tracecompass/org.eclipse.tracecompass.git/about/).
  * Study the developer guide and browse the source code.
  * [Eclipse plugin tutorial](http://www.vogella.com/tutorials/EclipsePlugin/article.html).
