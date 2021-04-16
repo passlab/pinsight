@@ -1,0 +1,45 @@
+# This is the config file for specifying the tracing behavior for the lexgions
+# So far, PInsight recognizes the following keys (defined in lexgion_trace_config.h file):
+
+# static const char *lexgion_trace_config_keys[] = {
+#        "trace_enabled",          //true or false: for the first and global check before others, default TRUE
+#        "ompt_trace_enabled",     //true or false: to enable/disable OpenMP trace, default TRUE
+#        "pmpi_trace_enabled",     //true or false: to enable/disable MPI trace, default FALSE
+#        "cupti_trace_enabled",    //true or false: to enable/disable CUDA trace, default FALSE
+#        "trace_starts_at",        //integer: the number of execution of the region before tracing starts.
+#        "initial_trace_count",    //integer: the number of traces to be collected after the trace starts the first time
+#        "max_num_traces",         //integer: total number of traces to be collected
+#        "tracing_rate",           //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
+# };
+
+# Restrictions for using those keys to provide configuration:
+# 1) The value for each of the keys could be either an integer, TRUE or FALSE.
+# 2) Each setting should use one line and only one setting is allowed in a line.
+# 3) When providing the setting, e.g. trace_enabled = TRUE, at least one whitespace is required
+#    before and after the '='.
+
+# The default section of the config provides settings for those that are not specified explicitly in the config file
+
+[default]
+	trace_enabled = 1
+	ompt_trace_enabled = 1
+	pmpi_trace_enabled = 0
+	cupti_trace_enabled = 0
+	trace_starts_at = 0
+	initial_trace_count = 10
+	max_num_traces = 50
+	tracing_rate = 10
+
+[lexgion.0xffffff]
+	trace_starts_at = 10
+	initial_trace_count = 100
+	max_num_traces = 500
+	tracing_rate = 10
+
+[lexgion.0x40257e]
+    	trace_starts_at = 20
+    	initial_trace_count = 20
+    	max_num_traces = 200
+    	tracing_rate = 10
+
+
