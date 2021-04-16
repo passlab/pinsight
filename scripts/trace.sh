@@ -57,6 +57,7 @@ rm -rf ${TRACING_OUTPUT_DEST}
 # Main tracing commands
 
 # Create a userspace session.
+#lttng create ${TRACE_NAME}-tracing-session --snapshot --output="${TRACING_OUTPUT_DEST}"
 lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
 # Create and enable event rules.
