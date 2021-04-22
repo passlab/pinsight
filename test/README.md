@@ -8,6 +8,8 @@ Currently, we provide the following examples:
  - `jacobi` :: A finite difference solver, using the Jacobi iterative method.
  - `lulesh` :: A hydrodynamics modeling/simulation application, intended to be behaviorally similar to applications in the field.
 
+## Setting
+The variables in the environment.mk file must be correctly set to point to the right absolute path before the test. 
 
 ## Build
 

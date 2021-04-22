@@ -32,33 +32,40 @@ extern "C" {
  */
 #ifndef _TRACEPOINT_PMPI_LTTNG_TRACEPOINT_H_DECLARE_ONCE
 #define _TRACEPOINT_PMPI_LTTNG_TRACEPOINT_H_DECLARE_ONCE
-extern int mpirank ;
+extern int mpirank;
+extern __thread void * mpi_codeptr;
+#ifdef PINSIGHT_OPENMP
+extern __thread int global_thread_num;
+extern __thread int omp_thread_num;
 #endif
-
-// This MUST be the first argument of any tracepoint definition because the way
-// the PMPI_CALL_PROLOGUE and PMPI_CALL_EPILOGUE macros are defined, check pmpi_mpi.c file.
-#define CODEPTR_ARG \
-    const void *, codeptr
+#include <common_tp_fields_global_lttng_tracepoint.h>
+#endif
 
 //COMMON_TP_FIELDS_PMPI includes mpirank global variable, and codeptr passed by all the tracepoint call.
 // These fields will be added to all the trace records
+#ifdef PINSIGHT_OPENMP
 #define COMMON_TP_FIELDS_PMPI \
+    COMMON_TP_FIELDS_GLOBAL \
     ctf_integer(unsigned int, mpirank, mpirank) \
-    ctf_integer_hex(unsigned int, mpi_codeptr, codeptr)
+    ctf_integer(unsigned int, global_thread_num, global_thread_num) \
+    ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
+    ctf_integer_hex(unsigned int, mpi_codeptr, mpi_codeptr)
+#else
+#define COMMON_TP_FIELDS_PMPI \
+    COMMON_TP_FIELDS_GLOBAL \
+    ctf_integer(unsigned int, mpirank, mpirank) \
+    ctf_integer_hex(unsigned int, mpi_codeptr, mpi_codeptr)
+#endif
 
 /* int MPI_Init(int *argc, char ***argv) */
 TRACEPOINT_EVENT(
         lttng_pinsight_pmpi,
         MPI_Init_begin,
         TP_ARGS(
-            CODEPTR_ARG,
-            char *, hostname,
-            unsigned int,         pid
+            unsigned int,        useless
         ),
         TP_FIELDS(
             COMMON_TP_FIELDS_PMPI
-            ctf_string(hostname, hostname)
-            ctf_integer(unsigned int, pid, pid)
         )
 )
 
@@ -66,7 +73,6 @@ TRACEPOINT_EVENT(
         lttng_pinsight_pmpi,
         MPI_Init_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         ),
         TP_FIELDS(
@@ -80,15 +86,10 @@ TRACEPOINT_EVENT(
         lttng_pinsight_pmpi,
         MPI_Init_thread_begin,
         TP_ARGS(
-            CODEPTR_ARG,
-            char *, hostname,
-            unsigned int, pid,
             int, required
         ),
         TP_FIELDS(
             COMMON_TP_FIELDS_PMPI
-            ctf_string(hostname, hostname)
-            ctf_integer(unsigned int, pid, pid)
             ctf_integer(int, required, required)
         )
 )
@@ -97,7 +98,6 @@ TRACEPOINT_EVENT(
         lttng_pinsight_pmpi,
         MPI_Init_thread_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, provided,
             int, return_value
         ),
@@ -121,7 +121,6 @@ TRACEPOINT_EVENT_CLASS(
         lttng_pinsight_pmpi,
         MPI_Func_end_class,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         ),
 
@@ -136,7 +135,6 @@ TRACEPOINT_EVENT(
         lttng_pinsight_pmpi,
         MPI_Finalize_begin,
         TP_ARGS(
-            CODEPTR_ARG,
             int, useless_but_needed
         ),
         TP_FIELDS(
@@ -149,7 +147,6 @@ TRACEPOINT_EVENT_INSTANCE(
         MPI_Func_end_class,
         MPI_Finalize_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         )
 )
@@ -158,7 +155,6 @@ TRACEPOINT_EVENT_INSTANCE(
 TRACEPOINT_EVENT(
         lttng_pinsight_pmpi, MPI_Send_begin,
         TP_ARGS(
-            CODEPTR_ARG,
             const void *,  buf,
             unsigned int,  count,
             unsigned int,  dest,
@@ -181,7 +177,6 @@ TRACEPOINT_EVENT_INSTANCE(
         MPI_Func_end_class,
         MPI_Send_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         )
 )
@@ -200,7 +195,6 @@ typedef struct _MPI_Status {
 TRACEPOINT_EVENT(
         lttng_pinsight_pmpi, MPI_Recv_begin,
         TP_ARGS(
-            CODEPTR_ARG,
             const void *,  buf,
             unsigned int,  count,
             unsigned int,  source,
@@ -221,7 +215,6 @@ TRACEPOINT_EVENT_INSTANCE(
         MPI_Func_end_class,
         MPI_Recv_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         )
 )
@@ -230,7 +223,6 @@ TRACEPOINT_EVENT_INSTANCE(
 TRACEPOINT_EVENT(
         lttng_pinsight_pmpi, MPI_Barrier_begin,
         TP_ARGS(
-            CODEPTR_ARG,
             int, useless_but_needed
         ),
         TP_FIELDS(
@@ -243,7 +235,6 @@ TRACEPOINT_EVENT_INSTANCE(
         MPI_Func_end_class,
         MPI_Barrier_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         )
 )
@@ -253,7 +244,6 @@ TRACEPOINT_EVENT_INSTANCE(
 TRACEPOINT_EVENT(
         lttng_pinsight_pmpi, MPI_Reduce_begin,
         TP_ARGS(
-            CODEPTR_ARG,
             const void *,  sendbuf,
             const void *,  recvbuf,
             unsigned int,  count,
@@ -275,7 +265,6 @@ TRACEPOINT_EVENT_INSTANCE(
         MPI_Func_end_class,
         MPI_Reduce_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         )
 )
@@ -285,7 +274,6 @@ TRACEPOINT_EVENT_INSTANCE(
 TRACEPOINT_EVENT(
         lttng_pinsight_pmpi, MPI_Allreduce_begin,
         TP_ARGS(
-            CODEPTR_ARG,
             const void *,  sendbuf,
             const void *,  recvbuf,
             unsigned int,  count,
@@ -305,7 +293,6 @@ TRACEPOINT_EVENT_INSTANCE(
         MPI_Func_end_class,
         MPI_Allreduce_end,
         TP_ARGS(
-            CODEPTR_ARG,
             int, return_value
         )
 )
