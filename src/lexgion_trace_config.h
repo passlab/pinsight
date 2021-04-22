@@ -58,7 +58,7 @@ typedef struct lexgion_trace_config {/* all the config fields MUST be from the b
     int cupti_trace_enabled;    //true or false: to enable/disable CUDA trace, default FALSE
     int trace_starts_at;         //integer: the number of execution of the region before tracing starts. 
     int initial_trace_count;   //integer: the number of traces to be collected after the trace starts the first time
-    int max_num_traces;         //integer: total number of traces to be collected
+    unsigned int max_num_traces;         //integer: total number of traces to be collected
     int tracing_rate;           //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region. 
     
     const void *codeptr;    //codeptr as key
