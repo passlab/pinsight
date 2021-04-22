@@ -102,9 +102,9 @@ typedef struct lexgion {
     //fields for logging purpose
     /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
     volatile unsigned int counter; /* counter for total number of execution of the region */
-    int trace_counter; /* counter for total number of traced execution */
-    int first_trace_num; //the execution number when the first trace is recorded
-    int last_trace_num; //the execution number when the last trace is recorded
+    unsigned int trace_counter; /* counter for total number of traced execution */
+    unsigned int first_trace_num; //the execution number when the first trace is recorded
+    unsigned int last_trace_num; //the execution number when the last trace is recorded
 } lexgion_t;
 
 /* This macro check whether to trace or not: trace_bit is set if trace_enable is set AND
@@ -113,7 +113,7 @@ typedef struct lexgion {
                             (lgp->trace_counter < lgp->trace_config->initial_trace_count || \
                             (lgp->trace_counter < lgp->trace_config->max_num_traces && lgp->num_exes_after_last_trace == lgp->trace_config->tracing_rate));}
 
-#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; if (lgp->trace_counter == 1) lgp->first_trace_num = lgp->counter-1; lgp->num_exes_after_last_trace=0; lgp->last_trace_num = lgp->counter-1;}
+#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; if (lgp->trace_counter == 1) lgp->first_trace_num = lgp->counter-1; lgp->num_exes_after_last_trace=0; lgp->last_trace_num = lgp->counter;}
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16

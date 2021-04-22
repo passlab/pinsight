@@ -56,10 +56,10 @@ typedef struct lexgion_trace_config {/* all the config fields MUST be from the b
     int ompt_trace_enabled;      //true or false: to enable/disable OpenMP trace, default TRUE 
     int pmpi_trace_enabled;     //true or false: to enable/disable MPI trace, default FALSE
     int cupti_trace_enabled;    //true or false: to enable/disable CUDA trace, default FALSE
-    int trace_starts_at;         //integer: the number of execution of the region before tracing starts. 
-    int initial_trace_count;   //integer: the number of traces to be collected after the trace starts the first time
+    unsigned int trace_starts_at;         //integer: the number of execution of the region before tracing starts. 
+    unsigned int initial_trace_count;   //integer: the number of traces to be collected after the trace starts the first time
     unsigned int max_num_traces;         //integer: total number of traces to be collected
-    int tracing_rate;           //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region. 
+    unsigned int tracing_rate;           //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region. 
     
     const void *codeptr;    //codeptr as key
     volatile void * dummy;  /* NOTE: make sure I do not run into problems of compiling the code for 32 bit systems since the codeptr_ra
