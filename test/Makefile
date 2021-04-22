@@ -1,4 +1,4 @@
-include ../environment.mk
+include environment.mk
 
 # List of test case folders.
 TEST_CASES = hello jacobi lulesh
