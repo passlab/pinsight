@@ -23,6 +23,7 @@
 #endif /* _EXTERN_C_ */
 
 int mpirank = 0;
+__thread void * mpi_codeptr = NULL;
 
 #define TRACEPOINT_CREATE_PROBES
 #define TRACEPOINT_DEFINE
@@ -93,32 +94,28 @@ typedef enum MPI_LEXGION_type {
  * mpirank that is recorded in a trace record is passed to tracepoint fields from a global variable.
  */
 #define PMPI_CALL_PROLOGUE(MPI_FUNC, ...)                                 \
-    const void * codeptr_ra = __builtin_return_address(0);                          \
-    lexgion_t * lgp = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, codeptr_ra);          \
+    mpi_codeptr = __builtin_return_address(0);                          \
+    lexgion_t * lgp = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);          \
     lgp->num_exes_after_last_trace ++;                                              \
                                                                                         \
     lexgion_set_trace_bit(lgp);                                                     \
     if (trace_bit) {                                                                \
-        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_begin, codeptr_ra, __VA_ARGS__);   \
+        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_begin,  __VA_ARGS__);   \
     }
 
 #define PMPI_CALL_EPILOGUE(MPI_FUNC, ...)                                              \
     lexgion_end(NULL);                                                              \
-    lgp->end_codeptr_ra = codeptr_ra;                                               \
+    lgp->end_codeptr_ra = mpi_codeptr;                                               \
                                                                                         \
     if (trace_bit) {                                                                \
-        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_end, codeptr_ra, __VA_ARGS__);   \
+        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_end, __VA_ARGS__);   \
         lexgion_post_trace_update(lgp);                                             \
     }
 
 _EXTERN_C_ int PMPI_Init_thread( int *argc, char ***argv, int required, int *provided );
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int MPI_Init_thread( int *argc, char ***argv, int required, int *provided ) {
-    unsigned int pid = getpid();
-    char hostname[32];
-    gethostname(hostname, 32);
-
-    PMPI_CALL_PROLOGUE(MPI_Init_thread, hostname, pid, required);
+    PMPI_CALL_PROLOGUE(MPI_Init_thread, required);
 
     int return_val = PMPI_Init_thread(argc, argv, required, provided);
     PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
@@ -132,11 +129,7 @@ _EXTERN_C_ int MPI_Init_thread( int *argc, char ***argv, int required, int *prov
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int PMPI_Init(int *argc, char ***argv);
 _EXTERN_C_ int MPI_Init(int *argc, char ***argv) {
-    unsigned int pid = getpid();
-    char hostname[32];
-    gethostname(hostname, 32);
-
-    PMPI_CALL_PROLOGUE(MPI_Init, hostname, pid);
+    PMPI_CALL_PROLOGUE(MPI_Init, 0);
     int return_val = PMPI_Init(argc, argv);
     PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
     PMPI_CALL_EPILOGUE(MPI_Init, return_val);

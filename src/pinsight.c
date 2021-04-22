@@ -2,51 +2,8 @@
 #include <stdlib.h>
 #include "pinsight.h"
 
-/* these are thread-local storage assuming that OpenMP runtime threads are 1:1 mapped to
- * the system threads (PThread for example). If not, we should implement our own OpenMP
- * thread-local storage (not system TLS).
- */
-__thread int global_thread_num;
-__thread int omp_thread_num;
-__thread const void * parallel_codeptr;
-__thread unsigned int parallel_counter;
-__thread const void * task_codeptr;
-__thread unsigned int task_counter;
 __thread pinsight_thread_data_t pinsight_thread_data;
-__thread lexgion_t * ompt_implicit_task;
-__thread int trace_bit; /* 0 or 1 for enabling trace */
-
-lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
-
-static int set_initial_lexgion_trace_config_done = 0;
-/**
- * This function is not thread safe, but it seems won't hurt calling by multiple threads
- */
-__attribute__ ((constructor)) void set_initial_lexgion_trace_config() {
-    if (set_initial_lexgion_trace_config_done) return;
-
-    const char* pinsight_trace_config = getenv("PINSIGHT_TRACE_CONFIG");
-    unsigned int NUM_INITIAL_TRACES = DEFAULT_NUM_INITIAL_TRACES;
-    unsigned int MAX_NUM_TRACES = DEFAULT_MAX_NUM_TRACES;
-    unsigned int TRACE_SAMPLING_RATE = DEFAULT_TRACE_SAMPLING_RATE;
-    if (pinsight_trace_config != NULL) {
-        printf("PINSIGHT_TRACE_CONFIG: %s\n", pinsight_trace_config);
-        sscanf(pinsight_trace_config, "%d:%d:%d", &NUM_INITIAL_TRACES, &MAX_NUM_TRACES, &TRACE_SAMPLING_RATE);
-        printf("NUM_INITIAL_TRACES: %u, MAX_NUM_TRACES: %u, TRACE_SAMPLING_RATE: %u\n",
-               NUM_INITIAL_TRACES, MAX_NUM_TRACES, TRACE_SAMPLING_RATE);
-    }
-
-    int i;
-    for (i=0; i<MAX_NUM_LEXGIONS; i++) {
-        lexgion_trace_config[i].codeptr_ra = NULL;
-        lexgion_trace_config[i].trace_enable = 1;
-        lexgion_trace_config[i].max_num_traces = MAX_NUM_TRACES;
-        lexgion_trace_config[i].num_initial_traces = NUM_INITIAL_TRACES;
-        lexgion_trace_config[i].sample_rate = TRACE_SAMPLING_RATE;
-    }
-
-    set_initial_lexgion_trace_config_done = 1;
-}
+__thread int trace_bit = 0; /* 0 or 1 for enabling trace */
 
 /** init thread data
  */
@@ -162,35 +119,11 @@ lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
         lgp->counter = 0;
         lgp->trace_counter = 0;
         lgp->num_exes_after_last_trace = 0;
-
-        /* link with an/existing lexgion_trace_config object */
-        int i;
-        int done = 0;
-        while (!done) {
-            int unused_entry = MAX_NUM_LEXGIONS;
-            for (i = 0; i < MAX_NUM_LEXGIONS; i++) {
-                if (lexgion_trace_config[i].codeptr_ra == codeptr_ra) {/* one already exists, and we donot check class and type */
-                    /* trace_config already set before or by others, we just need to link */
-                    lgp->trace_config = &lexgion_trace_config[i];
-                    done = 1; /* to break the outer while loop */
-                    break;
-                } else if (lexgion_trace_config[i].codeptr_ra == NULL && unused_entry == MAX_NUM_LEXGIONS) {
-                    unused_entry = i;
-                }
-            }
-            if (i == MAX_NUM_LEXGIONS) {
-                lexgion_trace_config_t * config = &lexgion_trace_config[unused_entry]; /* we must have an unused entry */
-                /* data race here, we must protect updating codeptr by multiple threads, use cas to do it */
-                if (config->codeptr_ra == NULL && __sync_bool_compare_and_swap((uint64_t*)&config->codeptr_ra, NULL, codeptr_ra)) {
-                    /* a brand new one */
-                    lgp->trace_config = config;
-                    break;
-                } /* else, go back to the loop and check again */
-            }
-        }
+        lgp->trace_config = retrieve_lexgion_config(codeptr_ra);
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 
+    lgp->num_exes_after_last_trace++;
     lgp->counter++; //counter only increment
     push_lexgion(lgp, lgp->counter);
 

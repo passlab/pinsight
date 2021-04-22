@@ -17,6 +17,7 @@ extern "C" {
 #define _TRACEPOINT_OMPT_LTTNG_TRACEPOINT_H_DECLARE_ONCE
 #ifdef PINSIGHT_MPI
 extern int mpirank ;
+#include <common_tp_fields_global_lttng_tracepoint.h>
 #endif
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
@@ -30,6 +31,7 @@ extern __thread unsigned int task_counter;
 //COMMON_TP_FIELDS_OMPT are those fields in the thread-local storage. These fields will be added to all the trace records
 #if defined(PINSIGHT_MPI)
 #define COMMON_TP_FIELDS_OMPT \
+    COMMON_TP_FIELDS_GLOBAL \
     ctf_integer(unsigned int, mpirank, mpirank) \
     ctf_integer(unsigned int, global_thread_num, global_thread_num) \
     ctf_integer(unsigned int, omp_thread_num, omp_thread_num) \
@@ -81,7 +83,7 @@ extern __thread unsigned int task_counter;
             ENERGY_TP_ARGS                                                      \
         ),                                                                     \
         TP_FIELDS(                                                             \
-            ctf_integer(unsigned int, global_thread_num, global_thread_num) \
+            COMMON_TP_FIELDS_OMPT                                               \
             ENERGY_TP_FIELDS                                                \
         )                                                                      \
     )
@@ -145,28 +147,6 @@ TRACEPOINT_EVENT(
 
 TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_begin)
 TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_end)
-
-/**
- * parallel join begin and end
- * This is not an OMPT event, but we should be able to detect when each thread enters
- * into join barrier (before sync_region) and when it completes the joining (upon the parallel_end)
- */
-#define TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(event_name)                                    \
-    TRACEPOINT_EVENT(                                                          \
-        lttng_pinsight_ompt, event_name,                                            \
-        TP_ARGS(                                                               \
-            unsigned short,    useless                                     \
-            ENERGY_TP_ARGS                                                      \
-        ),                                                                     \
-        TP_FIELDS(                                                             \
-            COMMON_TP_FIELDS_OMPT                                                    \
-            ctf_integer(unsigned short, useless, useless)      \
-            ENERGY_TP_FIELDS                                                \
-        )                                                                      \
-    )
-
-TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_begin)
-TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_end)
 
 /**
  * thread worksharing work
@@ -239,10 +219,35 @@ TRACEPOINT_EVENT_OMPT_MASTER(master_end)
         )                                                                      \
     )
 
-TRACEPOINT_EVENT_OMPT_SYNC(sync_begin)
-TRACEPOINT_EVENT_OMPT_SYNC(sync_end)
-TRACEPOINT_EVENT_OMPT_SYNC(sync_wait_begin)
-TRACEPOINT_EVENT_OMPT_SYNC(sync_wait_end)
+TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_begin)
+TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_end)
+TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_wait_begin)
+TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_wait_end)
+
+/**
+ * parallel join begin and end
+ * There are OMPT event for sync_begin, sync_end, sync_wait_begin and sync_wait_end,
+ * We are able to detect when each thread enters
+ * into join barrier (before sync_region) and when it completes the joining (upon the parallel_end)
+ */
+#define TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(event_name)                                    \
+    TRACEPOINT_EVENT(                                                          \
+        lttng_pinsight_ompt, event_name,                                            \
+        TP_ARGS(                                                               \
+            unsigned short,    useless                                     \
+            ENERGY_TP_ARGS                                                      \
+        ),                                                                     \
+        TP_FIELDS(                                                             \
+            COMMON_TP_FIELDS_OMPT                                                    \
+            ctf_integer(unsigned short, useless, useless)      \
+            ENERGY_TP_FIELDS                                                \
+        )                                                                      \
+    )
+
+TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_sync_begin)
+TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_sync_end)
+TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_sync_wait_begin)
+TRACEPOINT_EVENT_OMPT_PARALLEL_JOIN(parallel_join_sync_wait_end)
 
 #ifdef __cplusplus
 }

@@ -11,7 +11,7 @@ set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
 option(PINSIGHT_OPENMP "Build with OpenMP support"       TRUE)
-option(PINSIGHT_MPI    "Build with MPI support"          TRUE)
+option(PINSIGHT_MPI    "Build with MPI support"          FALSE)
 option(PINSIGHT_CUDA   "Build with CUDA support"         FALSE)
 option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
 
@@ -19,10 +19,12 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
 
 set(SOURCE_FILES
-        src/env_config.c
-        src/env_config.h
+        src/lexgion_trace_config.c
+        src/lexgion_trace_config.h
         src/pinsight.h
         src/pinsight.c
+        src/enter_exit_pinsight.c
+        src/enter_exit_pinsight_tracepoint.h
         )
 
 ## For OpenMP, PInsight requires OMPT support in an OpenMP runtime. But buidling PInsight only needs omp.h and ompt.h,
@@ -32,10 +34,10 @@ if (PINSIGHT_OPENMP)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     # if not hardcode here, should be set in cmake as -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install
     # only omp.h and ompt.h are needed for building
-    set(OMPLIB_INSTALL "/home/yyan7/tools/llvm-openmp-install" CACHE PATH
-            "Path to OMPT-capable OpenMP runtime installation that has omp.h and ompt.h under include folder")
+    set(OPENMP_INCLUDE_PATH "/home/yyan7/tools/llvm-openmp-install/include" CACHE PATH
+            "Path to an include folder that contains omp.h and ompt.h headers for OpenMP support")
 
-    include_directories(${OMPLIB_INSTALL}/include)
+    include_directories(${OPENMP_INCLUDE_PATH})
     list(APPEND SOURCE_FILES
             src/ompt_lttng_tracepoint.h
             src/ompt_callback.c
@@ -100,7 +102,7 @@ install(TARGETS pinsight
 message("============================================================")
 if (PINSIGHT_OPENMP)
     message("Build with OpenMP Support:     TRUE")
-    message("    OMPLIB_INSTALL: ${OMPLIB_INSTALL}")
+    message("    OPENMP_INCLUDE_PATH: ${OPENMP_INCLUDE_PATH}")
 else()
     message("Build with OpenMP Support:     FALSE")
 endif()
