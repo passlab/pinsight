@@ -96,7 +96,7 @@ lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr) {
             if (config->codeptr == codeptr) {/* one already exists, and we donot check class and type */
                 /* trace_config already set before or by others, we just need to link */
                 done = 1; /* to break the outer while loop */
-                printf("Found the config for lexgion %p: %p, %d by thread %d\n", codeptr, config, i, global_thread_num);
+                //printf("Found the config for lexgion %p: %p, %d by thread %d\n", codeptr, config, i, global_thread_num);
                 break;
             } else if (config->codeptr == NULL && unused_entry == -1) {
                 unused_entry = i; //find the first unused entry
@@ -107,7 +107,7 @@ lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr) {
             /* data race here, we must protect updating codeptr by multiple threads, use cas to do it */
             if (config->codeptr == NULL && __sync_bool_compare_and_swap((uint64_t*)&config->codeptr, NULL, codeptr)) {
                 i = unused_entry;
-                printf("Allocate a config for lexgion %p: %p, %d by thread %d\n", config->codeptr, config, i, global_thread_num);
+                //printf("Allocate a config for lexgion %p: %p, %d by thread %d\n", config->codeptr, config, i, global_thread_num);
                 break;
             } /* else, go back to the loop and check again */
         }
@@ -265,7 +265,7 @@ void lexgion_trace_config_read() {
 
 void print_lexgion_trace_config() {
     int i;
-    printf("\n========================= PInsight Configuration ==========================================\n");
+    printf("\n=================== PInsight Lexgion Tracing Configuration ==============================\n");
     printf("[default]\n");
     lexgion_trace_config_t *config = &lexgion_trace_config[0];
 
@@ -277,7 +277,7 @@ void print_lexgion_trace_config() {
     for (j=1; j<MAX_NUM_LEXGIONS; j++) {
         lexgion_trace_config_t * config = &lexgion_trace_config[j];
         if (config->codeptr != NULL) {
-            printf("[lexgion.%p]: %p\n", config->codeptr, config);
+            printf("[lexgion.%p]\n", config->codeptr);
             for (i = 0; i < NUM_CONFIG_KEYS; i++) {
                 printf("\t%s = %d\n", lexgion_trace_config_keys[i], ((int*)config)[i]);
             }
