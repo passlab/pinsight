@@ -123,6 +123,7 @@ lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 
+    lgp->num_exes_after_last_trace++;
     lgp->counter++; //counter only increment
     push_lexgion(lgp, lgp->counter);
 
