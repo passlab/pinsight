@@ -41,13 +41,19 @@ static void lexgion_trace_config_sysdefault() {
     lexgion_trace_config[0].tracing_rate = 1;
     lexgion_trace_config[0].updated = 0;
     lexgion_trace_config[0].codeptr = NULL;
+
+    int i;
+    for (i=1; i<MAX_NUM_LEXGIONS; i++) {
+        lexgion_trace_config_t  * config = &lexgion_trace_config[i];
+        memcpy(config, lexgion_trace_config, sizeof(lexgion_trace_config_t));
+    }
 }
 
 /**
  * This function is not thread safe, but it seems won't hurt calling by multiple threads
  */
 __attribute__ ((constructor)) void initial_lexgion_trace_config() {
-//    lexgion_trace_config_sysdefault();
+    lexgion_trace_config_sysdefault();
     lexgion_trace_config_read();
     print_lexgion_trace_config();
 }
