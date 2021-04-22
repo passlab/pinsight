@@ -96,20 +96,24 @@ typedef struct lexgion {
     int type; /* the type of a lexgion in the class: e.g. parallel, master, singer, barrier, task, section, etc for OPENMP.
                * For OpenMP, we use trace record event id as the type of each lexgion; For MPI, we define a macro for each MPI methods */
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
-    /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
-    volatile unsigned int counter; /* counter for total number of execution of the region */
-    unsigned int trace_counter; /* counter for total number of traced execution */
     struct lexgion_trace_config * trace_config;
     unsigned int num_exes_after_last_trace; /* counter to control the sampling */
+
+    //fields for logging purpose
+    /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
+    volatile unsigned int counter; /* counter for total number of execution of the region */
+    int trace_counter; /* counter for total number of traced execution */
+    int first_trace_num; //the execution number when the first trace is recorded
+    int last_trace_num; //the execution number when the last trace is recorded
 } lexgion_t;
 
 /* This macro check whether to trace or not: trace_bit is set if trace_enable is set AND
  * traces for the initial number of exes or when reaching sampling rate */
-#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->trace_enabled && (lgp->trace_counter < lgp->trace_config->initial_trace_count || \
-                            (lgp->trace_counter < lgp->trace_config->max_num_traces && (lgp->trace_config->tracing_rate == -1 || \
-                                                    lgp->num_exes_after_last_trace == lgp->trace_config->tracing_rate)));}
+#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->trace_enabled && (lgp->trace_config->trace_starts_at <= lgp->counter) && \
+                            (lgp->trace_counter < lgp->trace_config->initial_trace_count || \
+                            (lgp->trace_counter < lgp->trace_config->max_num_traces && lgp->num_exes_after_last_trace == lgp->trace_config->tracing_rate));}
 
-#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; lgp->num_exes_after_last_trace=0;}
+#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; if (lgp->trace_counter == 1) lgp->first_trace_num = lgp->counter-1; lgp->num_exes_after_last_trace=0; lgp->last_trace_num = lgp->counter-1;}
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16
@@ -148,7 +152,6 @@ extern __thread unsigned int task_counter;
 extern __thread pinsight_thread_data_t pinsight_thread_data;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
 extern lexgion_trace_config_t lexgion_trace_config[]; //all threads share a single config for each lexgion */
-
 
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 

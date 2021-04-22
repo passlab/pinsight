@@ -212,6 +212,9 @@ on_ompt_callback_thread_begin(
     tracepoint(lttng_pinsight_ompt, thread_begin, (short)thread_type ENERGY_TRACEPOINT_CALL_ARGS);
 }
 
+#define PRINTF_LEXGION_HEADER printf("#\t\tcodeptr\t\ttype\tcount\t\ttrace count(first-last)\n")
+#define PRINTF_LEXGION_INFO(i, lgp) printf("%d\t%p-%p\t%d\t%d\t\t%d(%d-%d)\n", i, lgp->codeptr_ra, lgp->end_codeptr_ra == NULL ? (void*)0x100000 : lgp->end_codeptr_ra, lgp->type, lgp->counter, lgp->trace_counter, lgp->first_trace_num, lgp->last_trace_num)
+
 static void
 on_ompt_callback_thread_end(
         ompt_data_t *thread_data)
@@ -233,56 +236,56 @@ on_ompt_callback_thread_end(
 
   //print out lexgion summary */
   if (global_thread_num == 0) {
-    printf("============================================================\n");
+    printf("======================================================================================\n");
     printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.num_lexgions);
-    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
+    PRINTF_LEXGION_HEADER;
     int i;
     int count;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
-      lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
-      printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", i+1, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
+        lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
+        PRINTF_LEXGION_INFO((i+1), lgp);
     }
 
-    printf("-------------------------------------------------------------\n");
+    printf("----------------------------------------------------------------------------------------\n");
     printf("parallel lexgions (type %d) from thread 0\n", ompt_callback_parallel_begin);
-    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
+    PRINTF_LEXGION_HEADER;
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_parallel_begin)
-        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
+          PRINTF_LEXGION_INFO((i+1), lgp);
     }
 
-    printf("-------------------------------------------------------------\n");
+    printf("----------------------------------------------------------------------------------------\n");
     printf("sync lexgions (type %d) from thread 0\n", ompt_callback_sync_region);
-    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
+    PRINTF_LEXGION_HEADER;
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_sync_region)
-        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
+          PRINTF_LEXGION_INFO((i+1), lgp);
     }
 
-    printf("-------------------------------------------------------------\n");
+    printf("----------------------------------------------------------------------------------------\n");
     printf("work lexgions (type %d) from thread 0\n", ompt_callback_work);
-    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
+    PRINTF_LEXGION_HEADER;
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_work)
-        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
+          PRINTF_LEXGION_INFO((i+1), lgp);
     }
 
-    printf("-------------------------------------------------------------\n");
+    printf("----------------------------------------------------------------------------------------\n");
     printf("master lexgions (type %d) from thread 0\n", ompt_callback_master);
-    printf("#\tcodeptr_ra\tcount\ttrace count\ttype\tend_codeptr_ra\n");
+    PRINTF_LEXGION_HEADER;
     count = 1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_master)
-        printf("%d\t%p\t%d\t\t%d\t%d\t%p\n", count++, lgp->codeptr_ra, lgp->counter, lgp->trace_counter, lgp->type, lgp->end_codeptr_ra);
+          PRINTF_LEXGION_INFO((i+1), lgp);
     }
-    printf("============================================================\n");
+    printf("==========================================================================================\n");
 
   }
 }
@@ -298,7 +301,7 @@ on_ompt_callback_parallel_begin(
 {
 //  parallel_data->value = ompt_get_unique_id();
   lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
-  lgp->num_exes_after_last_trace ++;
+  //lgp->num_exes_after_last_trace ++;
 
   /* set up thread local for tracing */
   parallel_codeptr = codeptr_ra;
@@ -391,7 +394,7 @@ on_ompt_callback_implicit_task(
       task_data->value = parallel_data->value; // Here we just save the parallel_data to the task
       /* Here a new lexgion with the same codeptr as the parallel region is created, but this lexgion has implicit_task type
        */
-      ompt_implicit_task->num_exes_after_last_trace++;
+      //ompt_implicit_task->num_exes_after_last_trace++;
       lexgion_set_trace_bit(ompt_implicit_task);
       if (trace_bit) {
 #ifdef PINSIGHT_ENERGY

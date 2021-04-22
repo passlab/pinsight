@@ -30,16 +30,22 @@
 	max_num_traces = 50
 	tracing_rate = 10
 
-[lexgion.0xffffff]
-	trace_starts_at = 10
-	initial_trace_count = 100
-	max_num_traces = 500
+[lexgion.0x4010bd]
+	trace_starts_at = 20
+	initial_trace_count = 20
+	max_num_traces = 200
 	tracing_rate = 10
 
-[lexgion.0x40257e]
-    	trace_starts_at = 20
-    	initial_trace_count = 20
-    	max_num_traces = 200
-    	tracing_rate = 10
+[lexgion.0x4012d9]
+    	trace_starts_at = 30
+    	initial_trace_count = 30
+    	max_num_traces = 300
+    	tracing_rate = 5
+
+[lexgion.0x401176]
+    	trace_starts_at = 40
+    	initial_trace_count = 40
+    	max_num_traces = 400
+    	tracing_rate = 3
 
 
