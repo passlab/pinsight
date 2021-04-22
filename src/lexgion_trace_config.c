@@ -4,7 +4,7 @@
 #include <string.h>
 #include "pinsight.h"
 
-lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS+1]; //The first one is used for default
+lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS+1] = {{1,1,0,0,0,0, -1, 1, 0, 0, 0}}; //The first one is used for default
 
 /* Constant or variable for controlling sampling tracing */
 /* For sampling-based tracing, which allows user's control of tracing of each parallel region by specifying
@@ -30,16 +30,16 @@ lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS+1]; //The first one
  */
 
 static void lexgion_trace_config_sysdefault() {
-    //set the default for the global config
+    //set the default for the global config, which is full trace
     lexgion_trace_config[0].trace_enabled = 1;
     lexgion_trace_config[0].ompt_trace_enabled = 1;
     lexgion_trace_config[0].pmpi_trace_enabled = 0;
     lexgion_trace_config[0].cupti_trace_enabled = 0;
     lexgion_trace_config[0].trace_starts_at = 0;
-    lexgion_trace_config[0].initial_trace_count = 10;
+    lexgion_trace_config[0].initial_trace_count = 0;
     lexgion_trace_config[0].max_num_traces = -1;
     lexgion_trace_config[0].tracing_rate = 1;
-
+    lexgion_trace_config[0].updated = 0;
     lexgion_trace_config[0].codeptr = NULL;
 }
 
@@ -47,7 +47,7 @@ static void lexgion_trace_config_sysdefault() {
  * This function is not thread safe, but it seems won't hurt calling by multiple threads
  */
 __attribute__ ((constructor)) void initial_lexgion_trace_config() {
-    lexgion_trace_config_sysdefault();
+//    lexgion_trace_config_sysdefault();
     lexgion_trace_config_read();
     print_lexgion_trace_config();
 }
@@ -167,6 +167,7 @@ void lexgion_trace_config_copy(lexgion_trace_config_t * dest, lexgion_trace_conf
  * Read the config file and store the configuration into a lexgion_trace_config_t object
  */
 void lexgion_trace_config_read() {
+    int freshnewconfig = 1;
     /* read in config from config file if it is provided via lexgion_trace_configFILE env */
     const char* configFileName = getenv("PINSIGHT_LEXGION_TRACE_CONFIG");
     FILE *configFile;
@@ -176,11 +177,10 @@ void lexgion_trace_config_read() {
             fprintf(stderr, "Cannot open config file %s, ignore. \n", configFileName);
             return;
         }
-    } else return;
+    }
 
     //This is the default for fresh new config such that the config provided by the configFile will overwrite existing configuration
     //if this is false, it is incremental config
-    int freshnewconfig = 1;
 
     /* Read the config file and store the configuration into a lexgion_trace_config_t object */
     lexgion_trace_config_t *config; /* The very first one should be initialized from the system */
