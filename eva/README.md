@@ -53,9 +53,13 @@ Change in Makefile CXX compiler. For all the compilation, `-fopenmp, -g -O3` is 
               vi ~/.spack/linux/compilers.yaml and add /usr/bin/gfortran to f77 and fc compiler, otherwise, PAPI won't install
               spack spec hpctoolkit
               spack install hpctoolkit //take a long time
-              #set hpctookit path to PATH
+              
+      1. set hpctookit path to PATH
+              
               export PATH=/scratch/tmp/spack/opt/spack/linux-ubuntu18.04-nehalem/gcc-9.3.0/hpctoolkit-2021.03.01-mqum45fktw6nhpy57ggrsjhjq5tohiuh/bin:$PATH
-              #go to LULESH folder and follow instruction from http://hpctoolkit.org/man/hpctoolkit.html#section_2
+             
+      1. go to LULESH folder and follow instruction from http://hpctoolkit.org/man/hpctoolkit.html#section_2
+   
               hpcrun  -e CYCLES ./lulesh2.0-fresh 
               hpcrun  ./lulesh2.0-fresh 
               hpcrun  -t ./lulesh2.0-fresh 
