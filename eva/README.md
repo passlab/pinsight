@@ -19,3 +19,25 @@ We will collect the following metrics between PInsight with those tools using LU
 ### Hardware and Software Setup
 Check [fornax.md](fornax.md) file
 
+### LULESH
+Change in Makefile CXX compiler. For all the compilation, `-fopenmp, -g -O3` is the compiler flag, 32 threads are used by setting `OMP_NUM_THREADS=32`
+1. Standard compilation, use clang++ 12.0.0, MPI is disabled. This version is used for PInsight evaluation and baseline with no tool or tracing
+
+       CXX = clang++ -DUSE_MPI=0 //In Makefile
+       make  # produce lulesh2.0 executable
+       ./lulesh2.0   //baseline
+       export PINSIGHT_LEXGION_TRACE_CONFIG=src/lexgion_trace_config_LULESH_selective.txt # Setting lexgion trace config
+       ./scripts/trace.sh ./traces/LULESH LULESH build/libpinsight.so /opt/llvm/clang+llvm-12.0.0-x86_64-linux-gnu-ubuntu-16.04/ eva/proxyapps/LULESH/lulesh2.0 // PInsight evaluation. The LULESH itself output execution time info. 
+       change the configuration and run the trace.sh again to collect data
+       df -u traces/LULESH  # check trace file size
+  
+2.  score-p tracing compilation 
+
+        CXX = scorep --openmp --thread=omp --keep-files clang++ -DUSE_MPI=0
+        make  # produce lulesh2.0 executable
+        export SCOREP_ENABLE_TRACING=true   # enable score-p tracing
+        export SCOREP_TOTAL_MEMORY=15992000K  #Make sure buffer is bigger enough, max 4G
+        ./lulesh2.0   #score-p version
+        The execution produce a folder that contains traces and other info. use `du -h` command to check the trace file size. 
+     
+    
