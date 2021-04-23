@@ -10,7 +10,7 @@ We will collect the following metrics between PInsight with those tools using LU
 
 ### Hardware and Software Setup (fornax)
  * Intel(R) Xeon(R) CPU E5-2699 v3 @ 2.30GHz, Haswell, 256 GRAM, 2 CPUs for total 36 cores. 
- * Ubuntu 18.04.3 LTS, Linux kernel 4.15.0-76
+ * Ubuntu 18.04.3 LTS, Linux kernel 5.4.0
  * gcc/g++/gfortran: 7.4.0
  * CUDA version 10.0
  * Score-p 7.0, TAU 2.30
