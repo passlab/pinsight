@@ -13,9 +13,9 @@ We will collect the following metrics between PInsight with those tools using LU
  * Ubuntu 18.04.3 LTS, Linux kernel 4.15.0-76
  * gcc/g++/gfortran: 7.4.0
  * CUDA version 10.0
- * Score-p 6.0, TAU 2.29
- * clang version 9.0
+ * Score-p 7.0, TAU 2.30
+ * clang version 12.0.0
  
 #### Score-p installation
-`../scorep-6.0/configure --prefix=/opt/tools/scorep-6.0-install-gcc --with-libcudart=/usr/local/cuda`
-`../scorep-6.0/configure --prefix=/opt/tools/scorep-6.0-install-clang --with-libcudart=/usr/local/cuda --with-nocross-compiler-suite=clang`
+`../scorep-7.0/configure --prefix=/opt/tools/scorep-7.0-install-gcc --with-libcudart=/usr/local/cuda`
+`../scorep-7.0/configure --prefix=/opt/tools/scorep-7.0-install-clang --with-libcudart=/usr/local/cuda --with-nocross-compiler-suite=clang`
