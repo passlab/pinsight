@@ -183,7 +183,7 @@ void lexgion_trace_config_read() {
             fprintf(stderr, "Cannot open config file %s, ignore. \n", configFileName);
             return;
         }
-    }
+    } else return;
 
     //This is the default for fresh new config such that the config provided by the configFile will overwrite existing configuration
     //if this is false, it is incremental config
