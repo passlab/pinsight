@@ -215,6 +215,8 @@ on_ompt_callback_thread_begin(
 #define PRINTF_LEXGION_HEADER printf("#\t\tcodeptr\t\ttype\tcount\t\ttrace count(first-last)\n")
 #define PRINTF_LEXGION_INFO(i, lgp) printf("%d\t%p-%p\t%d\t%d\t\t%d(%d-%d)\n", i, lgp->codeptr_ra, lgp->end_codeptr_ra == NULL ? (void*)0x100000 : lgp->end_codeptr_ra, lgp->type, lgp->counter, lgp->trace_counter, lgp->first_trace_num, lgp->last_trace_num)
 
+#define PRINT_LEXGION_SUMMARY 1
+
 static void
 on_ompt_callback_thread_end(
         ompt_data_t *thread_data)
@@ -234,16 +236,17 @@ on_ompt_callback_thread_end(
     }
     tracepoint(lttng_pinsight_ompt, thread_end, 0 ENERGY_TRACEPOINT_CALL_ARGS);
 
+#ifdef PRINT_LEXGION_SUMMARY
   //print out lexgion summary */
   if (global_thread_num == 0) {
     printf("======================================================================================\n");
     printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.num_lexgions);
     PRINTF_LEXGION_HEADER;
     int i;
-    int count;
+    int count=1;
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
         lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
-        PRINTF_LEXGION_INFO((i+1), lgp);
+        PRINTF_LEXGION_INFO(count++, lgp);
     }
 
     printf("----------------------------------------------------------------------------------------\n");
@@ -253,7 +256,7 @@ on_ompt_callback_thread_end(
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_parallel_begin)
-          PRINTF_LEXGION_INFO((i+1), lgp);
+          PRINTF_LEXGION_INFO(count++, lgp);
     }
 
     printf("----------------------------------------------------------------------------------------\n");
@@ -263,7 +266,7 @@ on_ompt_callback_thread_end(
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_sync_region)
-          PRINTF_LEXGION_INFO((i+1), lgp);
+          PRINTF_LEXGION_INFO(count++, lgp);
     }
 
     printf("----------------------------------------------------------------------------------------\n");
@@ -273,7 +276,7 @@ on_ompt_callback_thread_end(
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_work)
-          PRINTF_LEXGION_INFO((i+1), lgp);
+          PRINTF_LEXGION_INFO(count++, lgp);
     }
 
     printf("----------------------------------------------------------------------------------------\n");
@@ -283,11 +286,12 @@ on_ompt_callback_thread_end(
     for (i=0; i<pinsight_thread_data.num_lexgions; i++) {
       lexgion_t* lgp = &pinsight_thread_data.lexgions[i];
       if (lgp->type == ompt_callback_master)
-          PRINTF_LEXGION_INFO((i+1), lgp);
+          PRINTF_LEXGION_INFO(count++, lgp);
     }
     printf("==========================================================================================\n");
 
   }
+#endif
 }
 
 static void
@@ -1081,7 +1085,7 @@ int ompt_initialize(
 //  register_callback(ompt_callback_cancel);
   //register_callback(ompt_callback_idle);  // Note: Obsoleted in TR7, as it was weird/impossible to implement correctly.
   register_callback(ompt_callback_implicit_task);
-  register_callback_t(ompt_callback_lock_init, ompt_callback_mutex_acquire_t);
+//  register_callback_t(ompt_callback_lock_init, ompt_callback_mutex_acquire_t);
 //  register_callback_t(ompt_callback_lock_destroy, ompt_callback_mutex_t);
   register_callback(ompt_callback_work);
   register_callback(ompt_callback_master);

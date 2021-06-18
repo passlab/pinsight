@@ -27,8 +27,8 @@
 	cupti_trace_enabled = 0
 	trace_starts_at = 0
 	initial_trace_count = 10
-	max_num_traces = 50
-	tracing_rate = 10
+	max_num_traces = 2000
+	tracing_rate = 1 
 
 [lexgion.0x4010bd]
 	trace_starts_at = 20
