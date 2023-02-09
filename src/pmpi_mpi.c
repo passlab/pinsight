@@ -25,9 +25,9 @@
 int mpirank = 0;
 __thread void * mpi_codeptr = NULL;
 
-#define TRACEPOINT_CREATE_PROBES
-#define TRACEPOINT_DEFINE
-#include "pmpi_lttng_tracepoint.h"
+#define LTTNG_UST_TRACEPOINT_CREATE_PROBES
+#define LTTNG_UST_TRACEPOINT_DEFINE
+#include "pmpi_lttng_ust_tracepoint.h"
 
 /**
  * The idea to add an MPI method to the tracing framework of LTTng is via PMPI interface. Each an MPI method is
@@ -100,7 +100,7 @@ typedef enum MPI_LEXGION_type {
                                                                                         \
     lexgion_set_trace_bit(lgp);                                                     \
     if (trace_bit) {                                                                \
-        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_begin,  __VA_ARGS__);   \
+        lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_begin,  __VA_ARGS__);   \
     }
 
 #define PMPI_CALL_EPILOGUE(MPI_FUNC, ...)                                              \
@@ -108,7 +108,7 @@ typedef enum MPI_LEXGION_type {
     lgp->end_codeptr_ra = mpi_codeptr;                                               \
                                                                                         \
     if (trace_bit) {                                                                \
-        tracepoint(lttng_pinsight_pmpi, MPI_FUNC##_end, __VA_ARGS__);   \
+        lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_end, __VA_ARGS__);   \
         lexgion_post_trace_update(lgp);                                             \
     }
 
