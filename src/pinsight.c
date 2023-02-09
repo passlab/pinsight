@@ -125,6 +125,9 @@ lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
 
     lgp->num_exes_after_last_trace++;
     lgp->counter++; //counter only increment
+    if (lgp->counter >= 0xFFFF) {
+        printf("trace record overflow, more than 2^^16 traces are recorded for lexgion: %x\n", codeptr_ra);
+    }
     push_lexgion(lgp, lgp->counter);
 
     return lgp;

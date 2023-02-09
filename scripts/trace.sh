@@ -61,10 +61,10 @@ rm -rf ${TRACING_OUTPUT_DEST}
 lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
 # Create and enable event rules.
-lttng enable-event --userspace lttng_pinsight_enter_exit:'*'
-lttng enable-event --userspace lttng_pinsight_ompt:'*'
-lttng enable-event --userspace lttng_pinsight_pmpi:'*'
-lttng enable-event --userspace lttng_pinsight_cuda:'*'
+lttng enable-event --userspace pinsight_enter_exit_lttng_ust:'*'
+lttng enable-event --userspace ompt_pinsight_lttng_ust:'*'
+lttng enable-event --userspace pmpi_pinsight_lttng_ust:'*'
+lttng enable-event --userspace cupti_pinsight_lttng_ust:'*'
 
 # Experimental kernel trace events
 #lttng enable-event --kernel --syscall open,write,read,close
