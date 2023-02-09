@@ -91,7 +91,9 @@ lttng enable-event --userspace cupti_pinsight_lttng_ust:'*'
 lttng start
 
 # Run instrumented code.
-LD_PRELOAD=${PINSIGHT_LIB} "$@"
+# OMP_TOOL_LIBRARIES is the workaround to use the Ubuntu-distributed LLVM OpenMP runtime for OMPT
+# https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1899199
+LD_PRELOAD=${PINSIGHT_LIB} OMP_TOOL_LIBRARIES=$LD_PRELOAD "$@"
 
 # Enable callstack tracing
 # LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
