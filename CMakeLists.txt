@@ -11,7 +11,7 @@ set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
 option(PINSIGHT_OPENMP "Build with OpenMP support"       TRUE)
-option(PINSIGHT_MPI    "Build with MPI support"          FALSE)
+option(PINSIGHT_MPI    "Build with MPI support"          TRUE)
 option(PINSIGHT_CUDA   "Build with CUDA support"         FALSE)
 option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
 
@@ -23,8 +23,8 @@ set(SOURCE_FILES
         src/lexgion_trace_config.h
         src/pinsight.h
         src/pinsight.c
-        src/enter_exit_pinsight.c
-        src/enter_exit_pinsight_tracepoint.h
+        src/enter_exit.c
+        src/enter_exit_lttng_ust_tracepoint.h
         )
 
 ## For OpenMP, PInsight requires OMPT support in an OpenMP runtime. But buidling PInsight only needs omp.h and ompt.h,
@@ -34,12 +34,12 @@ if (PINSIGHT_OPENMP)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     # if not hardcode here, should be set in cmake as -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install
     # only omp.h and ompt.h are needed for building
-    set(OPENMP_INCLUDE_PATH "/home/yyan7/tools/llvm-openmp-install/include" CACHE PATH
-            "Path to an include folder that contains omp.h and ompt.h headers for OpenMP support")
+    set(OPENMP_INCLUDE_PATH "/usr/lib/llvm-14/lib/clang/14.0.0/includeno" CACHE PATH
+            "Path to an include folder that contains omp.h and omp-tools.h headers for OpenMP support")
 
     include_directories(${OPENMP_INCLUDE_PATH})
     list(APPEND SOURCE_FILES
-            src/ompt_lttng_tracepoint.h
+            src/ompt_lttng_ust_tracepoint.h
             src/ompt_callback.c
             )
 endif()
@@ -50,7 +50,7 @@ if (PINSIGHT_MPI)
     include_directories(${MPI_C_INCLUDE_PATH} ${MPI_CXX_INCLUDE_PATH})
     #list(APPEND PINSIGHT_EXTERNAL_LIBS ${MPI_C_LIBRARIES} ${MPI_CXX_LIBRARIES})
     list(APPEND SOURCE_FILES
-            src/pmpi_lttng_tracepoint.h
+            src/pmpi_lttng_ust_tracepoint.h
             src/pmpi_mpi.c
             )
 endif()
@@ -65,7 +65,7 @@ if (PINSIGHT_CUDA)
     #list(APPEND PINSIGHT_EXTERNAL_LIBS cupti)
 
     list(APPEND SOURCE_FILES
-            src/cupti_lttng_tracepoint.h
+            src/cupti_lttng_ust_tracepoint.h
             src/cupti_callback.c
             )
 endif()

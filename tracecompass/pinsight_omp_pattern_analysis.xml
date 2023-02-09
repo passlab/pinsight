@@ -56,11 +56,11 @@
 
 			<fsm id="FSM_parallel_master" initial="master_in_sequential"><!-- consuming="false" -->
 				<state id="master_in_sequential">
-					<transition event="lttng_pinsight_ompt:parallel_begin"
+					<transition event="ompt_pinsight_lttng_ust:parallel_begin"
 								target="master_in_parallel" action="on_parallel_begin" saveStoredFields="true" />
 				</state>
 				<state id="master_in_parallel">
-					<transition event="lttng_pinsight_ompt:parallel_end" cond="parallel_codeptr_cond" target="parallel_end"
+					<transition event="ompt_pinsight_lttng_ust:parallel_end" cond="parallel_codeptr_cond" target="parallel_end"
 								action="on_parallel_end" saveStoredFields="true" clearStoredFields="true" />
 				</state>
 				<final id="parallel_end" />
