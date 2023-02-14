@@ -48,7 +48,9 @@ LD_LIBRARY_PATH_PREPEND=$4
 shift 4 
 
 # setting LD_LIBRARY_PATH with the provided LD_LIBRARY_PATH_PREPEND
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH_PREPEND}X:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH_PREPEND}:$LD_LIBRARY_PATH
+
+echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
 # Clean the trace folder first
 rm -rf ${TRACING_OUTPUT_DEST}
@@ -93,7 +95,8 @@ lttng start
 # Run instrumented code.
 # OMP_TOOL_LIBRARIES is the workaround to use the Ubuntu-distributed LLVM OpenMP runtime for OMPT
 # https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1899199
-LD_PRELOAD=${PINSIGHT_LIB} OMP_TOOL_LIBRARIES=$LD_PRELOAD "$@"
+#LD_PRELOAD=${PINSIGHT_LIB} "$@"
+OMP_TOOL_LIBRARIES=${PINSIGHT_LIB} "$@"
 
 # Enable callstack tracing
 # LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"

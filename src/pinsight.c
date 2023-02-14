@@ -57,6 +57,12 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
     if (pinsight_thread_data.recent_lexgion < 0 || pinsight_thread_data.num_lexgions <= 0) return NULL;
     int i;
     lexgion_t * lgp;
+
+    //sanity check for the way of 64-bit uuid is created [codeptr_ra][counter] (32 bits each)
+    if ((uint64_t)codeptr_ra >= 0xFFFFFFFF) {
+        fprintf(stderr, "FATAL: codeptr_ra (%p) are greater than 2^^32, which is fatal because we "
+                "rely on 32-bit codeptr_ra address to create uuid for a region\n", codeptr_ra);
+    }
     /* search forward from the most recent one */
     for (i=pinsight_thread_data.recent_lexgion; i<pinsight_thread_data.num_lexgions; i++) {
         if (class == pinsight_thread_data.lexgions[i].class &&
@@ -68,7 +74,7 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
         } else if (codeptr_ra != pinsight_thread_data.lexgions[i].codeptr_ra) {
             /* this is where we check whether the uuid approach will work or not */
             if (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) == CODEPTR_RA_4UUID_PREFIX(pinsight_thread_data.lexgions[i].codeptr_ra)) {
-                fprintf(stderr, "Two different codeptr_ra (%p and %p) are rounded to the same UUID prefix\n",
+                fprintf(stderr, "FATAL: Two different codeptr_ra (%p and %p) are rounded to the same UUID prefix\n",
                 codeptr_ra, pinsight_thread_data.lexgions[i].codeptr_ra);
             }
         }
@@ -84,7 +90,7 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
         } else if (codeptr_ra != pinsight_thread_data.lexgions[i].codeptr_ra) {
             /* this is where we check whether the uuid approach will work or not */
             if (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) == CODEPTR_RA_4UUID_PREFIX(pinsight_thread_data.lexgions[i].codeptr_ra)) {
-                fprintf(stderr, "Two different codeptr_ra (%p and %p) are rounded to the same UUID prefix\n",
+                fprintf(stderr, "FATAL: Two different codeptr_ra (%p and %p) are rounded to the same UUID prefix\n",
                         codeptr_ra, pinsight_thread_data.lexgions[i].codeptr_ra);
             }
         }
@@ -125,8 +131,8 @@ lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
 
     lgp->num_exes_after_last_trace++;
     lgp->counter++; //counter only increment
-    if (lgp->counter >= 0xFFFF) {
-        printf("trace record overflow, more than 2^^16 traces are recorded for lexgion: %x\n", codeptr_ra);
+    if (lgp->counter >= 0xFFFFFFFF) {
+        fprintf(stderr, "FATAL: Trace record overflow, more than 2^^16 traces (%d) would be recorded for lexgion: %p\n", lgp->counter, codeptr_ra);
     }
     push_lexgion(lgp, lgp->counter);
 

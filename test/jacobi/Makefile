@@ -2,7 +2,7 @@ include ../environment.mk
 
 jacobi: jacobi.c
 	#clang -fopenmp -g -finstrument-functions -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
-	clang -fopenmp -g -I$(OMP_BASE_PATH)/include -g $^ -o $@ -lm
+	clang -fopenmp -g -I$(OMP_BASE_PATH)/include -g -lomp -L/home/yyan7/compiler/llvm-project-install/lib $^ -o $@ -lm
 
 objdump:
 	objdump -d jacobi > jacobi.objdump
