@@ -12,8 +12,8 @@
 #define MAX_NUM_LEXGIONS 256
 
 /* the following two should add up 64 since we will combine the two number as uuid */
-#define BITS_4_MAX_RECORDS_PER_LEXGION 16
-#define BITS_4_CODEPTR_RA 48
+#define BITS_4_MAX_RECORDS_PER_LEXGION 32
+#define BITS_4_CODEPTR_RA 32
 
 #define MAX_RECORDS_PER_LEXGION (2<<BITS_4_MAX_RECORDS_PER_LEXGION-1)
 /**
@@ -28,10 +28,10 @@
  *
  * NOTE: we need to change the following implementation if it is not 32:32 split.
  */
-#define LEXGION_RECORD_UUID(codeptr_ra, counter) (uint64_t)((uint64_t)codeptr_ra<<BITS_4_MAX_RECORDS_PER_LEXGION | (uint16_t)counter)
+#define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) (((uint64_t)(codeptr_ra)) << BITS_4_MAX_RECORDS_PER_LEXGION)
+#define LEXGION_RECORD_UUID(codeptr_ra, counter) (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) | (uint32_t)counter)
 #define LEXGION_RECORD_CODEPTR_RA(uuid) ((void*)(uuid>>BITS_4_MAX_RECORDS_PER_LEXGION))
-#define LEXGION_RECORD_COUNTER(uuid) (uint16_t)uuid
-#define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) codeptr_ra && 0x0000FFFFFFFFFFFF
+#define LEXGION_RECORD_COUNTER(uuid) (uint32_t)uuid
 
 typedef enum LEXGION_CLASS {
     OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
