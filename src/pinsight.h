@@ -12,8 +12,8 @@
 #define MAX_NUM_LEXGIONS 256
 
 /* the following two should add up 64 since we will combine the two number as uuid */
-#define BITS_4_MAX_RECORDS_PER_LEXGION 32
-#define BITS_4_CODEPTR_RA 32
+#define BITS_4_MAX_RECORDS_PER_LEXGION 16
+#define BITS_4_CODEPTR_RA 48
 
 #define MAX_RECORDS_PER_LEXGION (2<<BITS_4_MAX_RECORDS_PER_LEXGION-1)
 /**
@@ -29,9 +29,9 @@
  * NOTE: we need to change the following implementation if it is not 32:32 split.
  */
 #define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) (((uint64_t)(codeptr_ra)) << BITS_4_MAX_RECORDS_PER_LEXGION)
-#define LEXGION_RECORD_UUID(codeptr_ra, counter) (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) | (uint32_t)counter)
+#define LEXGION_RECORD_UUID(codeptr_ra, counter) (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) | (uint16_t)counter)
 #define LEXGION_RECORD_CODEPTR_RA(uuid) ((void*)(uuid>>BITS_4_MAX_RECORDS_PER_LEXGION))
-#define LEXGION_RECORD_COUNTER(uuid) (uint32_t)uuid
+#define LEXGION_RECORD_COUNTER(uuid) (uint16_t)uuid
 
 typedef enum LEXGION_CLASS {
     OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
@@ -86,6 +86,9 @@ typedef enum LEXGION_CLASS {
  * 2). implicit barrier, e.g. parallel.
  * Becasue of that, the events for those constructs may use the same codeptr_ra for the callback, thus we need further
  * check the type so we know whether we need to create two different lexgion objects
+ *
+ * This is per-thread data structure, i.e. for the same code region, an object is created for each thread when it is needed.
+ * No two threads share the same object of the same code region
  * */
 typedef struct lexgion {
     /* we use the binary address and type of the lexgion as key for each lexgion.
@@ -115,6 +118,16 @@ typedef struct lexgion {
 
 #define lexgion_post_trace_update(lgp) {lgp->trace_counter++; if (lgp->trace_counter == 1) lgp->first_trace_num = lgp->counter-1; lgp->num_exes_after_last_trace=0; lgp->last_trace_num = lgp->counter;}
 
+/**
+ * The runtime instance/frame/record of a lexgion of a thread
+ */
+typedef struct lexgion_record_t {
+    lexgion_t *lgp;
+    unsigned int counter; /* this counter is the counter of lgp when an lexgion instance is created and
+                           * pushed to the stack */
+   int tracing; /* a flag to indicate whether to trace this instance or not */
+} lexgion_record_t;
+
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16
 /**
@@ -126,12 +139,7 @@ typedef struct pinsight_thread_data {
     int initial_thread;
 
     /* the runtime stack for lexgion instances */
-    struct lexgion_stack {
-        lexgion_t *lgp;
-        unsigned int counter; /* this counter is the counter of lgp when an lexgion instance is created and
-                               * pushed to the stack */
-        int tracing; /* a flag to indicate whether to trace this instance or not */
-    } lexgion_stack[MAX_LEXGION_STACK_DEPTH];
+    struct lexgion_record_t lexgion_stack[MAX_LEXGION_STACK_DEPTH];
     int stack_top;
 
     /* this is the lexgion cache runtime stores, a lexgion is added to the array when the runtime encounters it.
@@ -144,6 +152,11 @@ typedef struct pinsight_thread_data {
 /* information to put in the event records */
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
+//These two are used for book-keeping within runtime
+extern __thread lexgion_record_t * enclosing_parallel_lexgion_record;
+extern __thread lexgion_record_t * enclosing_task_lexgion_record;
+
+//These are used for lttng to copy to the trace record, they are redundant
 extern __thread const void * parallel_codeptr;
 extern __thread unsigned int parallel_counter;
 extern __thread const void * task_codeptr;
@@ -160,11 +173,11 @@ extern "C" {
 #endif
 
 extern pinsight_thread_data_t * init_thread_data(int _thread_num);
-extern void push_lexgion(lexgion_t * lexgion, unsigned int counter);
+extern lexgion_record_t * push_lexgion(lexgion_t * lexgion, unsigned int counter);
 extern lexgion_t * pop_lexgion(unsigned int * counter);
-extern lexgion_t * top_lexgion_type(int class, int type, unsigned int * counter);
-extern lexgion_t * top_lexgion(unsigned int * counter);
-extern lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra);
+extern lexgion_record_t * top_lexgion() ;
+extern lexgion_record_t * top_lexgion_type(int class, int type);
+extern lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra);
 extern lexgion_t *lexgion_end(unsigned int * counter);
 
 //implemented in lexgion_trace_cnofig.c
