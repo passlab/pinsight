@@ -95,7 +95,8 @@ typedef enum MPI_LEXGION_type {
  */
 #define PMPI_CALL_PROLOGUE(MPI_FUNC, ...)                                 \
     mpi_codeptr = __builtin_return_address(0);                          \
-    lexgion_t * lgp = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);          \
+    lexgion_record_t * record = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);          \
+    lexgion_t * lgp = record->lgp;                                              \
     lgp->num_exes_after_last_trace ++;                                              \
                                                                                         \
     lexgion_set_trace_bit(lgp);                                                     \
