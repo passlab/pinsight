@@ -22,15 +22,17 @@ pinsight_thread_data_t * init_thread_data(int _thread_num) {
  * @param lgp
  * @param counter
  */
-void push_lexgion(lexgion_t * lgp, unsigned int counter) {
+lexgion_record_t * push_lexgion(lexgion_t * lgp, unsigned int counter) {
     int top = pinsight_thread_data.stack_top+1;
     if (top == MAX_LEXGION_STACK_DEPTH) {
        fprintf(stderr, "thread %d lexgion stack overflow\n", global_thread_num);
-       return;
+       return NULL;
     }
-    pinsight_thread_data.lexgion_stack[top].lgp = lgp;
-    pinsight_thread_data.lexgion_stack[top].counter = counter;
+    lexgion_record_t * record = &pinsight_thread_data.lexgion_stack[top];
+    record->lgp = lgp;
+    record->counter = counter;
     pinsight_thread_data.stack_top++;
+    return record;
 }
 
 /**
@@ -59,7 +61,7 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
     lexgion_t * lgp;
 
     //sanity check for the way of 64-bit uuid is created [codeptr_ra][counter] (32 bits each)
-    if ((uint64_t)codeptr_ra >= 0xFFFFFFFF) {
+    if ((uint64_t)codeptr_ra >= 0xFFFFFFFFFFFF) {
         fprintf(stderr, "FATAL: codeptr_ra (%p) are greater than 2^^32, which is fatal because we "
                 "rely on 32-bit codeptr_ra address to create uuid for a region\n", codeptr_ra);
     }
@@ -102,7 +104,7 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
  * This is a thread-specific call
  *
  */
-lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
+lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
         fprintf(stderr, "Max number of lex regions (%d) allowed in the source code reached\n",
                 MAX_NUM_LEXGIONS);
@@ -131,12 +133,11 @@ lexgion_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
 
     lgp->num_exes_after_last_trace++;
     lgp->counter++; //counter only increment
-    if (lgp->counter >= 0xFFFFFFFF) {
+    if (lgp->counter >= 0xFFFF) {
         fprintf(stderr, "FATAL: Trace record overflow, more than 2^^16 traces (%d) would be recorded for lexgion: %p\n", lgp->counter, codeptr_ra);
     }
-    push_lexgion(lgp, lgp->counter);
 
-    return lgp;
+    return push_lexgion(lgp, lgp->counter);
 }
 
 /**
@@ -155,25 +156,23 @@ lexgion_t *lexgion_end(unsigned int * counter) {
  * @param counter
  * @return
  */
-lexgion_t * top_lexgion_type(int class, int type, unsigned int * counter) {
+lexgion_record_t * top_lexgion_type(int class, int type) {
     int top = pinsight_thread_data.stack_top;
     while (top >=0) {
-        lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+    	lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
+    	lexgion_t * lgp = record->lgp;
         if (lgp->class == class && lgp->type == type) {
-            if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
-            return lgp;
+            return record;
         }
         top--;
     }
     return NULL;
 }
 
-lexgion_t * top_lexgion(unsigned int * counter) {
+lexgion_record_t * top_lexgion() {
     int top = pinsight_thread_data.stack_top;
     if (top >=0) {
-        lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-        if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
-        return lgp;
+        return &pinsight_thread_data.lexgion_stack[top];
     }
     return NULL;
 }
