@@ -186,26 +186,30 @@ static void print_current_address()
  * @param thread_type
  * @param thread_data
  */
-#define INITIAL_PARALLEL 0xFFFFFF
+#define INITIAL_PARALLEL 0xFFFFFFFFFFFF
 static void
 on_ompt_callback_thread_begin(
         ompt_thread_t thread_type,
         ompt_data_t *thread_data) {
     thread_data->ptr = (void*)init_thread_data(get_global_thread_num() /*, thread_type */);
+#ifdef PINSIGHT_ENERGY
+    rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+#endif
+    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_begin, (short)thread_type ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
     if (thread_type == ompt_thread_initial) {
         pinsight_thread_data.initial_thread = 1;
-        /* the implicit initial parallel region of the program */
-        enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL);
-        omp_thread_num = 0;
-        enclosing_task_lexgion_record = NULL; //This will be set in the implicit_task_begin callback for ompt_task_initial typed-task
 
-        parallel_codeptr = enclosing_parallel_lexgion_record->lgp;
-        parallel_counter = enclosing_parallel_lexgion_record->counter;
-        task_codeptr = NULL;
-        task_counter = -1;
-#ifdef PINSIGHT_ENERGY
-        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-#endif
+        /* the implicit initial parallel region of the program */
+        //enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL);
+        //lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, (short)thread_type ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+        //parallel_codeptr = (void*)INITIAL_PARALLEL;
+        //parallel_counter = enclosing_parallel_lexgion_record->counter;
+        on_ompt_callback_parallel_begin(NULL, NULL, &pinsight_thread_data.lexgion_stack[0], 1, ompt_parallel_team || ompt_parallel_invoker_runtime, INITIAL_PARALLEL);
+        omp_thread_num = 0;
+
+        enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, (void*)INITIAL_PARALLEL);
+        task_codeptr = (void*)INITIAL_PARALLEL;
+        task_counter = enclosing_task_lexgion_record->counter;
     } else {
         pinsight_thread_data.initial_thread = 0;
     }
@@ -213,7 +217,6 @@ on_ompt_callback_thread_begin(
     //This is the codeptr for the first lexgion of each thread
     //lexgion_t * lgp = lexgion_begin(OPENMP_LEXGION, ompt_callback_thread_begin, codeptr_ra);
 
-    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_begin, (short)thread_type ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 }
 
 #define PRINTF_LEXGION_HEADER printf("#\t\tcodeptr\t\ttype\tcount\t\ttrace count(first-last)\n")
@@ -226,9 +229,6 @@ on_ompt_callback_thread_end(
         ompt_data_t *thread_data)
 {
     if (pinsight_thread_data.initial_thread) {
-#ifdef PINSIGHT_ENERGY
-        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-#endif
         unsigned int counter;
         lexgion_t * lgp = lexgion_end(&counter);
         assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL);
@@ -237,8 +237,12 @@ on_ompt_callback_thread_end(
         assert(counter == lgp->counter);
         lgp->end_codeptr_ra = (void*)INITIAL_PARALLEL;
         lexgion_post_trace_update(lgp);
+    } else {
     }
-    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+#ifdef PINSIGHT_ENERGY
+        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+#endif
+        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 
 #ifdef PRINT_LEXGION_SUMMARY
   //print out lexgion summary */
@@ -330,8 +334,9 @@ on_ompt_callback_parallel_begin(
       rapl_sysfs_read_packages(package_energy); // Read package energy counters.
     }
 #endif
-    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, requested_team_size, flag,
-               parent_task_frame->enter_frame.ptr ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+    void * enter_frame_ptr = (parent_task_frame == NULL) ? NULL : parent_task_frame->enter_frame.ptr;
+    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, requested_team_size, flag, enter_frame_ptr
+               ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
   }
 }
 
@@ -343,6 +348,7 @@ on_ompt_callback_parallel_end(
         const void *codeptr_ra)
 {
   lexgion_t * lgp = lexgion_end(NULL); //pop up the current parallel lexgion record
+  assert(parallel_data->ptr == enclosing_parallel_lexgion_record);
   lgp->end_codeptr_ra = codeptr_ra;
   //turn off this assertation. LLVM openmp runtime has a bug that for serialized parallel region, codeptr_ra for parallel_end callback is NULL 
   //assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
@@ -360,6 +366,7 @@ on_ompt_callback_parallel_end(
   /* find the topmost parallel lexgion in the lexgion record stack including nest parallel-parallel regions,
    * but not considering the explicit task-parallel situation) */
   enclosing_task_lexgion_record = top_lexgion_type(OPENMP_LEXGION, ompt_callback_implicit_task); /* not considering task->parallel nested */
+  assert(enclosing_task_lexgion_record->ptr == parent_task);
   task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
   task_counter = enclosing_task_lexgion_record->counter;
   enclosing_parallel_lexgion_record = top_lexgion_type(OPENMP_LEXGION, ompt_callback_parallel_begin);
