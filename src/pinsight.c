@@ -60,11 +60,6 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
     int i;
     lexgion_t * lgp;
 
-    //sanity check for the way of 64-bit uuid is created [codeptr_ra][counter] (32 bits each)
-    if ((uint64_t)codeptr_ra >= 0xFFFFFFFFFFFF) {
-        fprintf(stderr, "FATAL: codeptr_ra (%p) are greater than 2^^32, which is fatal because we "
-                "rely on 32-bit codeptr_ra address to create uuid for a region\n", codeptr_ra);
-    }
     /* search forward from the most recent one */
     for (i=pinsight_thread_data.recent_lexgion; i<pinsight_thread_data.num_lexgions; i++) {
         if (class == pinsight_thread_data.lexgions[i].class &&
@@ -73,12 +68,6 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
             *index = i;
             lgp = &pinsight_thread_data.lexgions[i];
             return lgp;
-        } else if (codeptr_ra != pinsight_thread_data.lexgions[i].codeptr_ra) {
-            /* this is where we check whether the uuid approach will work or not */
-            if (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) == CODEPTR_RA_4UUID_PREFIX(pinsight_thread_data.lexgions[i].codeptr_ra)) {
-                fprintf(stderr, "FATAL: Two different codeptr_ra (%p and %p) are rounded to the same UUID prefix\n",
-                codeptr_ra, pinsight_thread_data.lexgions[i].codeptr_ra);
-            }
         }
     }
     /* search from 0 to most recent one */
@@ -89,12 +78,6 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
             *index = i;
             lgp = &pinsight_thread_data.lexgions[i];
             return lgp;
-        } else if (codeptr_ra != pinsight_thread_data.lexgions[i].codeptr_ra) {
-            /* this is where we check whether the uuid approach will work or not */
-            if (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) == CODEPTR_RA_4UUID_PREFIX(pinsight_thread_data.lexgions[i].codeptr_ra)) {
-                fprintf(stderr, "FATAL: Two different codeptr_ra (%p and %p) are rounded to the same UUID prefix\n",
-                        codeptr_ra, pinsight_thread_data.lexgions[i].codeptr_ra);
-            }
         }
     }
     return NULL;
