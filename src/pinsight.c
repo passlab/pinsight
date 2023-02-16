@@ -134,7 +134,7 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     lgp->num_exes_after_last_trace++;
     lgp->counter++; //counter only increment
     if (lgp->counter >= 0xFFFF) {
-        fprintf(stderr, "FATAL: Trace record overflow, more than 2^^16 traces (%d) would be recorded for lexgion: %p\n", lgp->counter, codeptr_ra);
+        //fprintf(stderr, "FATAL: Trace record overflow, more than 2^^16 traces (%d) would be recorded for lexgion: %p\n", lgp->counter, codeptr_ra);
     }
 
     return push_lexgion(lgp, lgp->counter);
