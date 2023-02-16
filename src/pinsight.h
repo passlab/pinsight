@@ -11,28 +11,6 @@
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
 
-/* the following two should add up 64 since we will combine the two number as uuid */
-#define BITS_4_MAX_RECORDS_PER_LEXGION 16
-#define BITS_4_CODEPTR_RA 48
-
-#define MAX_RECORDS_PER_LEXGION (2<<BITS_4_MAX_RECORDS_PER_LEXGION-1)
-/**
- * The trace record for a lexgion, e.g. parallel region, task, etc has a 64-bit unique ID
- * created by combining the codeptr_ra (the binary address of the runtime call of the lexgion)
- * and a counter, which is sequence number counted from 0 for the runtime instances of the lexgion.
- * The unique id (uuid) is uint64_t type of [codeptr_ra][counter] format and each of the two
- * fields (codeptr_ra and counter) is 32 bits (the above BITS_4_MAX_RECORDS_PER_LEXGION and BITS_4_CODEPTR_RA macros).
- * 32-bit uint32_t should be sufficient for the counter field (max 2**32-1, i.e. 4,294,967,295).
- * For codeptr_ra, 32-bit is likely to be ok in a 64-bit systems since most of the codeptr_ra are 24 bits.
- * The code has overflow checking and it reports error when two different codeptr_ra are truncated to the same 32-bit number.
- *
- * NOTE: we need to change the following implementation if it is not 32:32 split.
- */
-#define CODEPTR_RA_4UUID_PREFIX(codeptr_ra) (((uint64_t)(codeptr_ra)) << BITS_4_MAX_RECORDS_PER_LEXGION)
-#define LEXGION_RECORD_UUID(codeptr_ra, counter) (CODEPTR_RA_4UUID_PREFIX(codeptr_ra) | (uint16_t)counter)
-#define LEXGION_RECORD_CODEPTR_RA(uuid) ((void*)(uuid>>BITS_4_MAX_RECORDS_PER_LEXGION))
-#define LEXGION_RECORD_COUNTER(uuid) (uint16_t)uuid
-
 typedef enum LEXGION_CLASS {
     OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
     MPI_LEXGION,        /* P-MPI, e.g. https://www.open-mpi.org/faq/?category=perftools#PMPI */
