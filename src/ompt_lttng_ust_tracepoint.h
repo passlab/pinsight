@@ -200,8 +200,8 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_WORK(work_end)
 LTTNG_UST_TRACEPOINT_EVENT_OMPT_MASKED(masked_begin)
 LTTNG_UST_TRACEPOINT_EVENT_OMPT_MASKED(masked_end)
 
-/* synchronization, e.g. barrier, taskwait, taskgroup, related tracepoint */
-#define LTTNG_UST_TRACEPOINT_EVENT_OMPT_SYNC(event_name)                                    \
+/* synchronization: explicit barrier */
+#define LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_EXPLICIT_SYNC(event_name)                                    \
     LTTNG_UST_TRACEPOINT_EVENT(                                                          \
         ompt_pinsight_lttng_ust, event_name,                                            \
         LTTNG_UST_TP_ARGS(                                                               \
@@ -219,10 +219,33 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_MASKED(masked_end)
         )                                                                      \
     )
 
-LTTNG_UST_TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_begin)
-LTTNG_UST_TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_end)
-LTTNG_UST_TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_wait_begin)
-LTTNG_UST_TRACEPOINT_EVENT_OMPT_SYNC(barrier_sync_wait_end)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_EXPLICIT_SYNC(barrier_explicit_sync_begin)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_EXPLICIT_SYNC(barrier_explicit_sync_end)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_EXPLICIT_SYNC(barrier_explicit_sync_wait_begin)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_EXPLICIT_SYNC(barrier_explicit_sync_wait_end)
+
+/* synchronization, e.g. implicit barrier for parallel/teams/for, etc. not sure taskwait and taskgroup yet */
+#define LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_IMPLICIT_SYNC(event_name)                                    \
+    LTTNG_UST_TRACEPOINT_EVENT(                                                          \
+        ompt_pinsight_lttng_ust, event_name,                                            \
+        LTTNG_UST_TP_ARGS(                                                               \
+            unsigned short,    kind,                                     \
+            const void *,  sync_codeptr                                          \
+            ENERGY_LTTNG_UST_TP_ARGS                                                      \
+        ),                                                                     \
+        LTTNG_UST_TP_FIELDS(                                                             \
+            COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
+            lttng_ust_field_integer(unsigned short, kind, kind)      \
+            lttng_ust_field_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
+            ENERGY_LTTNG_UST_TP_FIELDS                                                \
+        )                                                                      \
+    )
+
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_IMPLICIT_SYNC(barrier_implicit_sync_begin)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_IMPLICIT_SYNC(barrier_implicit_sync_end)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_IMPLICIT_SYNC(barrier_implicit_sync_wait_begin)
+LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_IMPLICIT_SYNC(barrier_implicit_sync_wait_end)
+
 
 /**
  * parallel join begin and end
