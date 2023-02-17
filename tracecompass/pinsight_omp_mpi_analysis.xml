@@ -436,7 +436,7 @@
 			</stateChange>
 		</eventHandler>
 
-		<eventHandler eventName="ompt_pinsight_lttng_ust:master_begin">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_begin">
 			<stateChange>
 				<stateAttribute type="location" value="HostProcessThread"/>
 				<stateValue type="int" value="$STATE_IN_OMP_MASTER" />
@@ -455,8 +455,8 @@
 			</stateChange>
 		</eventHandler>
 
-		<!-- after a master, thread goes back to the implicit task -->
-		<eventHandler eventName="ompt_pinsight_lttng_ust:master_end">
+		<!-- after a masked, thread goes back to the implicit task -->
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_end">
 			<stateChange>
 				<stateAttribute type="location" value="HostProcessThread"/>
 				<stateValue type="int" value="$STATE_IN_OMP_IMPLICIT_TASK" />

@@ -26,8 +26,9 @@
 
 		<!-- 250 - 269 are for those states in which threads are synchronizing -->
 		<definedValue name="STATE_IN_SYNC" value="251" />
-		<definedValue name="STATE_IN_SYNC_WAIT" value="252" />
-		<definedValue name="STATE_IN_JOIN_WAIT" value="260" />
+		<definedValue name="STATE_IN_PARALLEL_JOIN_SYNC_WAIT" value="252" />
+		<definedValue name="STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" value="253" />
+		<definedValue name="STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" value="254" />
 
 		<definedValue name="STATE_THREAD_TERMINATED" value="300" />
 
@@ -63,7 +64,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_THREAD_STARTED" />
@@ -96,7 +97,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_THREAD_TERMINATED" />
@@ -129,7 +130,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_PARALLEL" />
@@ -162,43 +163,10 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
-			</stateChange>
-		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_begin">
-			<stateChange>
-				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
-				<stateValue type="int" value="$STATE_IN_JOIN_WAIT" />
-			</stateChange>
-			<stateChange>
-				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
-				<stateValue type="eventField" value="cpu" />
-			</stateChange>
-			<stateChange>
-				<stateAttribute type="constant" value="CPU" />
-				<stateAttribute type="eventField" value="cpu" />
-				<stateValue type="int" value="$STATE_IN_JOIN_WAIT" />
-			</stateChange>
-			<stateChange>
-				<stateAttribute type="constant" value="parallel_region" />
-				<stateAttribute type="eventField" value="parallel_codeptr" />
-				<stateAttribute type="constant" value="thread" />
-				<stateAttribute type="eventField" value="omp_thread_num" />
-				<stateValue type="int" value="$STATE_IN_JOIN_WAIT" />
-			</stateChange>
-			<stateChange>
-				<stateAttribute type="constant" value="parallel_instance" />
-				<stateAttribute type="eventField" value="parallel_codeptr" />
-				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
-				<stateAttribute type="constant" value="thread" />
-				<stateAttribute type="eventField" value="omp_thread_num" />
-				<stateValue type="int" value="$STATE_IN_JOIN_WAIT" />
 			</stateChange>
 		</eventHandler>
 		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_begin">
@@ -228,7 +196,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
@@ -261,7 +229,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
@@ -294,7 +262,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_WORK" />
@@ -327,13 +295,13 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:master_begin">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -360,13 +328,13 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:master_end">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -393,13 +361,13 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:sync_begin">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -426,13 +394,79 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SYNC" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:sync_end">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_begin">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_begin">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_SYNC" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -459,17 +493,17 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:sync_wait_begin">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
-				<stateValue type="int" value="$STATE_IN_SYNC_WAIT" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
@@ -479,26 +513,26 @@
 			<stateChange>
 				<stateAttribute type="constant" value="CPU" />
 				<stateAttribute type="eventField" value="cpu" />
-				<stateValue type="int" value="$STATE_IN_SYNC_WAIT" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="parallel_region" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
-				<stateValue type="int" value="$STATE_IN_SYNC_WAIT" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
-				<stateValue type="int" value="$STATE_IN_SYNC_WAIT" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="ompt_pinsight_lttng_ust:sync_wait_end">
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -525,7 +559,205 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="constant" value="Thread" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="Thread-CPU" />
+				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="CPU" />
+				<stateAttribute type="eventField" value="cpu" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_region" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="thread" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
+				<stateValue type="int" value="$STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="parallel_instance" />
+				<stateAttribute type="eventField" value="parallel_codeptr" />
+				<stateAttribute type="constant" value="instance" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
@@ -620,8 +852,9 @@
 		<definedValue name="STATE_IN_MASTER" value="227" color="#00FF7F"/> <!-- spring green -->
 		<!-- 250 - 269 are for those states in which threads are synchronizing -->
 		<definedValue name="STATE_IN_SYNC" value="251" color="#FF0000" /> <!-- red -->
-		<definedValue name="STATE_IN_SYNC_WAIT" value="252" color="#CD5C5C" /> <!-- indianred -->
-		<definedValue name="STATE_IN_JOIN_WAIT" value="260" color="#8B0000"/> <!-- dark red -->
+		<definedValue name="STATE_IN_PARALLEL_JOIN_SYNC_WAIT" value="252" color="#CD5C5C" /> <!-- indianred -->
+		<definedValue name="STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" value="253" color="#F62817" /> <!-- fire engine red -->
+		<definedValue name="STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" value="254" color="#8B0000"/> <!-- dark red -->
 
 		<definedValue name="STATE_THREAD_TERMINATED" value="300" color="#FFFFFF" /> <!-- white -->
 
