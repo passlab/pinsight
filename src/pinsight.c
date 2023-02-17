@@ -31,7 +31,8 @@ lexgion_record_t * push_lexgion(lexgion_t * lgp, unsigned int counter) {
     lexgion_record_t * record = &pinsight_thread_data.lexgion_stack[top];
     record->lgp = lgp;
     record->counter = counter;
-    pinsight_thread_data.stack_top++;
+    pinsight_thread_data.stack_top = top;
+
     return record;
 }
 
@@ -82,14 +83,13 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
     }
     return NULL;
 }
-
 /**
  * This is a thread-specific call
  *
  */
 lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
-        fprintf(stderr, "Max number of lex regions (%d) allowed in the source code reached\n",
+        fprintf(stderr, "FATAL: Max number of lexgions (%d) allowed in the source code reached, cannot continue\n",
                 MAX_NUM_LEXGIONS);
         return NULL;
     }
@@ -99,8 +99,8 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     lexgion_t *lgp = find_lexgion(class, type, codeptr_ra, &index);
     if (lgp == NULL) {
         index = pinsight_thread_data.num_lexgions;
-        pinsight_thread_data.num_lexgions++;
         lgp = &pinsight_thread_data.lexgions[index];
+        pinsight_thread_data.num_lexgions++;
         lgp->codeptr_ra = codeptr_ra;
         //printf("%d: lexgion_begin(%d, %X): first time encountered %X\n", thread_id, i, codeptr_ra, lgp);
         lgp->type = type;
