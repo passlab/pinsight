@@ -18,11 +18,11 @@ pinsight_thread_data_t * init_thread_data(int _thread_num) {
 }
 
 /**
- * push the encounting lexgion to the stack, also saving the counter of the lexgion instance
+ * push the encounting lexgion instance to the stack
  * @param lgp
- * @param counter
+ * @param record_id
  */
-lexgion_record_t * push_lexgion(lexgion_t * lgp, unsigned int counter) {
+lexgion_record_t * push_lexgion(lexgion_t * lgp, unsigned int record_id) {
     int top = pinsight_thread_data.stack_top+1;
     if (top == MAX_LEXGION_STACK_DEPTH) {
        fprintf(stderr, "thread %d lexgion stack overflow\n", global_thread_num);
@@ -30,21 +30,21 @@ lexgion_record_t * push_lexgion(lexgion_t * lgp, unsigned int counter) {
     }
     lexgion_record_t * record = &pinsight_thread_data.lexgion_stack[top];
     record->lgp = lgp;
-    record->counter = counter;
+    record->record_id = record_id;
     pinsight_thread_data.stack_top = top;
 
     return record;
 }
 
 /**
- * pop the lexgion out of the stack and also return the counter if it is requested.
- * @param counter
+ * pop the lexgion out of the stack and also return the record_id if it is requested.
+ * @param record_id
  * @return
  */
-lexgion_t * pop_lexgion(unsigned int * counter) {
+lexgion_t * pop_lexgion(unsigned int * record_id) {
     int top = pinsight_thread_data.stack_top;
     lexgion_t * lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-    if (counter != NULL) *counter = pinsight_thread_data.lexgion_stack[top].counter;
+    if (record_id != NULL) *record_id = pinsight_thread_data.lexgion_stack[top].record_id;
     pinsight_thread_data.stack_top--;
     return lgp;
 }
@@ -124,19 +124,17 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
 }
 
 /**
- * mark the end of a lexgion, return the lexgion and the counter of the instance if it is requested
- * @param counter the counter of the lexgion instance that is just ended.
+ * mark the end of a lexgion, return the lexgion and the record_id of the instance if it is requested
+ * @param record_id: record_id of the lexgion instance that is just ended.
  * @return
  */
-lexgion_t *lexgion_end(unsigned int * counter) {
-    return pop_lexgion(counter);
+lexgion_t *lexgion_end(unsigned int * record_id) {
+    return pop_lexgion(record_id);
 }
 
 /**
- * search the lexgion stack to find the topmost lexgion instance in the stack of the specified type. The counter of the
- * lexgion instance is returned via the counter argument
+ * search the lexgion stack to find the topmost lexgion record in the stack of the specified type.
  * @param type
- * @param counter
  * @return
  */
 lexgion_record_t * top_lexgion_type(int class, int type) {
