@@ -101,7 +101,7 @@ typedef struct lexgion {
  */
 typedef struct lexgion_record_t {
     lexgion_t *lgp;
-    unsigned int counter; /* this counter is the counter of lgp when an lexgion instance is created and
+    unsigned int record_id; /* the record_id is the counter of lgp when an lexgion instance is created and
                            * pushed to the stack */
    int tracing; /* a flag to indicate whether to trace this instance or not */
 } lexgion_record_t;
@@ -136,9 +136,9 @@ extern __thread lexgion_record_t * enclosing_task_lexgion_record;
 
 //These are used for lttng to copy to the trace record, they are redundant
 extern __thread const void * parallel_codeptr;
-extern __thread unsigned int parallel_counter;
+extern __thread unsigned int parallel_record_id;
 extern __thread const void * task_codeptr;
-extern __thread unsigned int task_counter;
+extern __thread unsigned int task_record_id;
 
 extern __thread pinsight_thread_data_t pinsight_thread_data;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
@@ -151,12 +151,12 @@ extern "C" {
 #endif
 
 extern pinsight_thread_data_t * init_thread_data(int _thread_num);
-extern lexgion_record_t * push_lexgion(lexgion_t * lexgion, unsigned int counter);
-extern lexgion_t * pop_lexgion(unsigned int * counter);
+extern lexgion_record_t * push_lexgion(lexgion_t * lexgion, unsigned int record_id);
+extern lexgion_t * pop_lexgion(unsigned int * record_id);
 extern lexgion_record_t * top_lexgion() ;
 extern lexgion_record_t * top_lexgion_type(int class, int type);
 extern lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra);
-extern lexgion_t *lexgion_end(unsigned int * counter);
+extern lexgion_t *lexgion_end(unsigned int * record_id);
 
 //implemented in lexgion_trace_cnofig.c
 extern lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr);
