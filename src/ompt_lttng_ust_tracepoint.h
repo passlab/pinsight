@@ -22,9 +22,9 @@ extern int mpirank ;
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
 extern __thread const void * parallel_codeptr;
-extern __thread unsigned int parallel_counter;
+extern __thread unsigned int parallel_record_id;
 extern __thread const void * task_codeptr;
-extern __thread unsigned int task_counter;
+extern __thread unsigned int task_record_id;
 #endif
 
 /** Macros used to simplify the definition of LTTNG_UST_TRACEPOINT_EVENT */
@@ -36,17 +36,17 @@ extern __thread unsigned int task_counter;
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
-    lttng_ust_field_integer(unsigned int, parallel_counter, parallel_counter)
+    lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_OMPT \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
-    lttng_ust_field_integer(unsigned int, parallel_counter, parallel_counter)
+    lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
 #endif
 // For future tasking extension of OpenMP
 //    lttng_ust_field_integer_hex(long int, task_codeptr, task_codeptr) \
-//    lttng_ust_field_integer(unsigned int, task_counter, task_counter)
+//    lttng_ust_field_integer(unsigned int, task_record_id, task_record_id)
 
 #ifdef PINSIGHT_ENERGY
 #define ENERGY_LTTNG_UST_TP_ARGS             \
@@ -158,7 +158,7 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_end)
             unsigned short,    wstype,                                     \
             const void *,  work_begin_codeptr,                                          \
             const void *,  work_end_codeptr,                                          \
-            unsigned int,  counter,            \
+            unsigned int,  record_id,            \
             unsigned int,  count            \
             ENERGY_LTTNG_UST_TP_ARGS                                                      \
         ),                                                                     \
@@ -167,7 +167,7 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_end)
             lttng_ust_field_integer(unsigned short, wstype, wstype)      \
             lttng_ust_field_integer_hex(unsigned int, work_begin_codeptr, work_begin_codeptr)                  \
             lttng_ust_field_integer_hex(unsigned int, work_end_codeptr, work_end_codeptr)                  \
-            lttng_ust_field_integer(unsigned int, counter, counter)                 \
+            lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             lttng_ust_field_integer(unsigned int, count, count)                        \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
@@ -185,14 +185,14 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_WORK(work_end)
         LTTNG_UST_TP_ARGS(                                                               \
             const void *,  masked_begin_codeptr,                                          \
             const void *,  masked_end_codeptr,                                          \
-            unsigned int,  counter            \
+            unsigned int,  record_id            \
             ENERGY_LTTNG_UST_TP_ARGS                                                      \
         ),                                                                     \
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
             lttng_ust_field_integer_hex(unsigned int, masked_begin_codeptr, masked_begin_codeptr)                  \
             lttng_ust_field_integer_hex(unsigned int, masked_end_codeptr, masked_end_codeptr)                  \
-            lttng_ust_field_integer(unsigned int, counter, counter)                 \
+            lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
     )
@@ -207,14 +207,14 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_MASKED(masked_end)
         LTTNG_UST_TP_ARGS(                                                               \
             unsigned short,    kind,                                     \
             const void *,  sync_codeptr,                                          \
-            unsigned int,  counter            \
+            unsigned int,  record_id            \
             ENERGY_LTTNG_UST_TP_ARGS                                                      \
         ),                                                                     \
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
             lttng_ust_field_integer(unsigned short, kind, kind)      \
             lttng_ust_field_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
-            lttng_ust_field_integer(unsigned int, counter, counter)                 \
+            lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
     )
