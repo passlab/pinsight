@@ -13,7 +13,7 @@
 		</head>
 
 		<storedField id="team_size" alias="num_threads"/>
-		<storedField id="parallel_counter" alias="nums of execution"/>
+		<storedField id="parallel_record_id" alias="nums of execution"/>
 
 		<patternHandler initial="FSM_parallel_master">
 			<test id="parallel_codeptr_cond">

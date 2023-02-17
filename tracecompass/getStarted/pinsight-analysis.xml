@@ -88,14 +88,14 @@
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_begin">
+		<eventHandler eventName="lttng_pinsight:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_end">
+		<eventHandler eventName="lttng_pinsight:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -195,14 +195,14 @@
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_begin">
+		<eventHandler eventName="lttng_pinsight:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
 				<stateAttribute type="eventField" value="global_thread_num" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_end">
+		<eventHandler eventName="lttng_pinsight:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
 				<stateAttribute type="eventField" value="global_thread_num" />
@@ -302,14 +302,14 @@
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_begin">
+		<eventHandler eventName="lttng_pinsight:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="CPU" />
 				<stateAttribute type="eventField" value="cpu" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_end">
+		<eventHandler eventName="lttng_pinsight:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="CPU" />
 				<stateAttribute type="eventField" value="cpu" />
@@ -425,7 +425,7 @@
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_begin">
+		<eventHandler eventName="lttng_pinsight:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="parallel_region" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
@@ -434,7 +434,7 @@
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_end">
+		<eventHandler eventName="lttng_pinsight:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="parallel_region" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
@@ -495,7 +495,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_THREAD_STARTED" />
@@ -506,7 +506,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_THREAD_TERMINATED" />
@@ -517,7 +517,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_PARALLEL" />
@@ -528,7 +528,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SEQUENTIAL" />
@@ -539,7 +539,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
@@ -550,7 +550,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
@@ -561,7 +561,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_WORK" />
@@ -572,29 +572,29 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_begin">
+		<eventHandler eventName="lttng_pinsight:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 		</eventHandler>
-		<eventHandler eventName="lttng_pinsight:master_end">
+		<eventHandler eventName="lttng_pinsight:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
@@ -605,7 +605,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_JOIN_WAIT" />
@@ -616,7 +616,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SYNC" />
@@ -627,7 +627,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
@@ -638,7 +638,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SYNC_WAIT" />
@@ -649,7 +649,7 @@
 				<stateAttribute type="constant" value="parallel_instance" />
 				<stateAttribute type="eventField" value="parallel_codeptr" />
 				<stateAttribute type="constant" value="instance" />
-				<stateAttribute type="eventField" value="parallel_counter" />
+				<stateAttribute type="eventField" value="parallel_record_id" />
 				<stateAttribute type="constant" value="thread" />
 				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
