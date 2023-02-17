@@ -186,7 +186,9 @@ static void print_current_address()
  * @param thread_type
  * @param thread_data
  */
-#define INITIAL_PARALLEL 0xFFFFFFFFFFFF
+#define INITIAL_PARALLEL_CODEPTR 0xFFFFFFFFFFFF
+#define UNKNOWN_END_CODEPTR      0x100000000000
+#define NULL_DEFAULT_CODEPTR     0x200000000000
 static void
 on_ompt_callback_thread_begin(
         ompt_thread_t thread_type,
@@ -201,25 +203,25 @@ on_ompt_callback_thread_begin(
         pinsight_thread_data.initial_thread = 1;
 
         //Setup the initial parallel region, and this could be a call to the callback, but we will elaborate it here
-        //on_ompt_callback_parallel_begin(NULL, NULL, &pinsight_thread_data.lexgion_stack[0], 1, ompt_parallel_team || ompt_parallel_invoker_runtime, INITIAL_PARALLEL);
-        enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL);
-        printf("thread_begin: initial parallel lexgion: %p\n", enclosing_parallel_lexgion_record->lgp);
-        parallel_codeptr = (void*)INITIAL_PARALLEL;
+        //on_ompt_callback_parallel_begin(NULL, NULL, &pinsight_thread_data.lexgion_stack[0], 1, ompt_parallel_team || ompt_parallel_invoker_runtime, INITIAL_PARALLEL_CODEPTR);
+        enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL_CODEPTR);
+        //printf("thread_begin: initial parallel lexgion: %p\n", enclosing_parallel_lexgion_record->lgp);
+        parallel_codeptr = (void*)INITIAL_PARALLEL_CODEPTR;
         parallel_counter = enclosing_parallel_lexgion_record->counter;
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, 1, ompt_parallel_team || ompt_parallel_invoker_runtime, NULL ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 
-        //  parallel_codeptr = codeptr_ra; //redundant since implicit_task will do this
-        //  parallel_counter = lgp->counter; //redundant since implicit task will do this
-        //  omp_thread_num = 0;  //redundant since implicit task will do this
-
         omp_thread_num = 0;
 
+        //NO NEED THIS ANYMORE since initial implicit task is setup by the callback_implicit_task
+#if 0
         //Setup the initial implicit task, not sure whether this can be a call to the on_ompt_callback_implicit_task
-        enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, (void*)INITIAL_PARALLEL);
-        printf("thread_begin: initial implicit task lexgion: %p\n", enclosing_task_lexgion_record->lgp);
-        task_codeptr = (void*)INITIAL_PARALLEL;
+        enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, (void*)INITIAL_PARALLEL_CODEPTR);
+        debugging_initial_implicit_task = enclosing_task_lexgion_record->lgp;
+        task_codeptr = (void*)INITIAL_PARALLEL_CODEPTR;
         task_counter = enclosing_task_lexgion_record->counter;
+        printf("thread_begin: initial implicit task lexgion: %p, counter: %d\n", enclosing_task_lexgion_record->lgp, task_counter);
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_begin, 1 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+#endif
     } else {
         pinsight_thread_data.initial_thread = 0;
     }
@@ -229,7 +231,7 @@ on_ompt_callback_thread_begin(
 }
 
 #define PRINTF_LEXGION_HEADER printf("#\t\tcodeptr\t\ttype\tcount\t\ttrace count(first-last)\n")
-#define PRINTF_LEXGION_INFO(i, lgp) printf("%d\t%p-%p\t%d\t%d\t\t%d(%d-%d)\n", i, lgp->codeptr_ra, lgp->end_codeptr_ra == NULL ? (void*)0x100000 : lgp->end_codeptr_ra, lgp->type, lgp->counter, lgp->trace_counter, lgp->first_trace_num, lgp->last_trace_num)
+#define PRINTF_LEXGION_INFO(i, lgp) printf("%d\t%p-%p\t%d\t%d\t\t%d(%d-%d)\n", i, lgp->codeptr_ra, lgp->end_codeptr_ra == NULL ? (void*)NULL_DEFAULT_CODEPTR : lgp->end_codeptr_ra, lgp->type, lgp->counter, lgp->trace_counter, lgp->first_trace_num, lgp->last_trace_num)
 
 #define PRINT_LEXGION_SUMMARY 1
 
@@ -239,19 +241,24 @@ on_ompt_callback_thread_end(
 {
     if (pinsight_thread_data.initial_thread) { //we should pop up initial implicit task and initial parallel region that are set up by the thread_begin
         unsigned int counter;
-        lexgion_t * lgp = lexgion_end(&counter); //pop up initial implicit task
-        lgp->end_codeptr_ra = (void*)INITIAL_PARALLEL;
-        assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL);
+        lexgion_t * lgp;
+
+        //NO NEED THIS ANYMORE since initial implicit task is processed by the callback_implicit_task
+#if 0
+		lgp = lexgion_end(&counter); //pop up initial implicit task
+        lgp->end_codeptr_ra = (void*)INITIAL_PARALLEL_CODEPTR;
+        assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL_CODEPTR);
         printf("thread_end: initial implicit task lexgion: %p\n", lgp);
         printf("counter: %d, lgp->counter: %d\n", counter, lgp->counter);
         //assert(counter == lgp->counter);
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_end, 1 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
         lexgion_post_trace_update(lgp);
+#endif
 
         lgp = lexgion_end(&counter); //pop up initial parallel region
-        lgp->end_codeptr_ra = (void*)INITIAL_PARALLEL;
-        assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL);
-        printf("thread_end: initial parallel lexgion: %p\n", lgp);
+        lgp->end_codeptr_ra = (void*)UNKNOWN_END_CODEPTR;
+        assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL_CODEPTR);
+        //printf("thread_end: initial parallel lexgion: %p\n", lgp);
         assert(counter == lgp->counter);
 
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end, ompt_parallel_team || ompt_parallel_invoker_runtime ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
@@ -266,6 +273,9 @@ on_ompt_callback_thread_end(
 #ifdef PRINT_LEXGION_SUMMARY
   //print out lexgion summary */
   if (global_thread_num == 0) {
+    printf("======================================================================================\n");
+    printf("======================================================================================\n");
+    printf("=========================== PINSIGHT TRACING REPORT ==================================\n");
     printf("======================================================================================\n");
     printf("Lexgion report from thread 0: total %d lexgions\n", pinsight_thread_data.num_lexgions);
     PRINTF_LEXGION_HEADER;
@@ -393,6 +403,9 @@ on_ompt_callback_parallel_end(
   * TODO: we need to store and restore the omp_thread_num, task_codeptr, task_counter in the nested parallel situation */
 }
 
+/**
+ * only parallel, teams and initial implicit tasks can trigger this callback
+ */
 static void
 on_ompt_callback_implicit_task(
         ompt_scope_endpoint_t endpoint,
@@ -415,15 +428,11 @@ on_ompt_callback_implicit_task(
       parallel_counter = enclosing_parallel_lexgion_record->counter;
 
       omp_thread_num = thread_num;
-      /* in this call back, parallel_data is NULL for ompt_scope_end endpoint, thus to know the parallel_data at the end,
-       * we need to pass the needed fields of parallel_data in the scope_begin to the task_data */
-      enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, task_codeptr);
+      /// Here a new lexgion with the same codeptr as the parallel region is created, but this lexgion has implicit_task type
+      enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
       task_data->ptr = (void*)enclosing_task_lexgion_record;
       task_codeptr = parallel_codeptr;
       task_counter = enclosing_task_lexgion_record->counter;
-      /* Here a new lexgion with the same codeptr as the parallel region is created, but this lexgion has implicit_task type
-       */
-      //ompt_implicit_task->num_exes_after_last_trace++;
       lexgion_t * lgp = enclosing_task_lexgion_record->lgp;
       lexgion_set_trace_bit(lgp);
       if (trace_bit) {
@@ -438,7 +447,10 @@ on_ompt_callback_implicit_task(
     }
     case ompt_scope_end: {
       //parallel_data is NULL here
+      if (flags & ompt_task_initial) { //nothing special
+      }
       lexgion_t * lgp = lexgion_end(NULL);
+      lgp->end_codeptr_ra = (void*)UNKNOWN_END_CODEPTR; //Sadly, it is unknow at this point since parallel_end happens after this event callback
       if (trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
