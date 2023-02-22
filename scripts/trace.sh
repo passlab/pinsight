@@ -85,8 +85,14 @@ lttng enable-event --userspace cupti_pinsight_lttng_ust:'*'
 #lttng add-context --userspace --type=perf:thread:cycles
 #lttng add-context --userspace --type=perf:thread:instructions
 
+
+# For enabling source lookup, but only for looking up sources that have the LTTng UST tracepoint call, i.e. the ompt/pmpi/cupti callbacks
+#lttng enable-event -u -a
+#lttng add-context -u -t vpid -t ip
+
 # For enabling callstack analysis
-#lttng add-context -u -t vpid -t vtid -t procname
+lttng enable-event -u -a
+lttng add-context -u -t procname -t vpid -t vtid -t ip
 #lttng add-context --kernel --type=callstack-user --type=callstack-kernel
 
 # Start LTTng tracing.
@@ -96,9 +102,10 @@ lttng start
 # OMP_TOOL_LIBRARIES is the workaround to use the Ubuntu-distributed LLVM OpenMP runtime for OMPT
 # https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1899199
 #LD_PRELOAD=${PINSIGHT_LIB} "$@"
+#LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:/usr/lib/x86_64-linux-gnu/liblttng-ust-dl.so OMP_TOOL_LIBRARIES=${PINSIGHT_LIB} "$@"
+#LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile-fast.so
 OMP_TOOL_LIBRARIES=${PINSIGHT_LIB} "$@"
 
-# Enable callstack tracing
 # LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
 # LD_PRELOAD=${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
 
