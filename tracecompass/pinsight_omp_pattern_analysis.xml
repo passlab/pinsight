@@ -32,7 +32,8 @@
 				<stateChange>
 					<stateAttribute type="constant" value="#CurrentScenario" />
 					<stateAttribute type="constant" value="Thread" />
-					<stateValue type="eventField" value="global_thread_num"/>
+					<!--stateValue type="eventField" value="global_thread_num"/-->
+					<stateValue type="eventField" value="omp_thread_num"/>
 				</stateChange>
 				<stateChange>
 					<stateAttribute type="constant" value="#CurrentScenario" />
