@@ -40,12 +40,13 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<!--stateAttribute type="eventField" value="global_thread_num" / -->
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_THREAD_STARTED" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -73,12 +74,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_THREAD_TERMINATED" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -106,12 +107,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_PARALLEL" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -139,12 +140,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -172,12 +173,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_IMPLICIT_TASK" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -205,12 +206,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -238,12 +239,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:work_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_WORK" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -271,12 +272,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:work_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -304,12 +305,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_MASTER" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -337,12 +338,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -370,12 +371,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SYNC" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -403,12 +404,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SYNC" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -436,12 +437,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_SYNC" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -469,12 +470,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -502,12 +503,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -535,12 +536,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -568,12 +569,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -601,12 +602,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_wait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -634,12 +635,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_wait_begin">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -667,12 +668,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -700,12 +701,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_wait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
@@ -733,12 +734,12 @@
 		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_wait_end">
 			<stateChange>
 				<stateAttribute type="constant" value="Thread" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="int" value="$STATE_TRANSITION" />
 			</stateChange>
 			<stateChange>
 				<stateAttribute type="constant" value="Thread-CPU" />
-				<stateAttribute type="eventField" value="global_thread_num" />
+				<stateAttribute type="eventField" value="omp_thread_num" />
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 			<stateChange>
