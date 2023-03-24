@@ -49,22 +49,22 @@ extern __thread int omp_thread_num;
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer(unsigned int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #elif defined(PINSIGHT_MPI) && !defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
-    lttng_ust_field_integer(unsigned int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #elif !defined(PINSIGHT_MPI) && defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer(unsigned int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
-    lttng_ust_field_integer(unsigned int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #endif
 
