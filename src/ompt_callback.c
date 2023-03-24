@@ -50,6 +50,10 @@ __thread unsigned int task_record_id = -1;
 __thread int global_thread_num = 0;
 __thread int omp_thread_num = 0;
 
+//TODO: this is not thread-local, which simplify since we only need to find the load_baseaddr once.
+//We might have datarace bugs
+unsigned long int load_baseaddr = 0;
+
 static const char* ompt_thread_type_t_values[] = {
   NULL,
   "ompt_thread_initial",
@@ -186,9 +190,9 @@ static void print_current_address()
  * @param thread_type
  * @param thread_data
  */
-#define INITIAL_PARALLEL_CODEPTR 0xFFFFFFFFFFFF
-#define UNKNOWN_END_CODEPTR      0x100000000000
-#define NULL_DEFAULT_CODEPTR     0x200000000000
+#define INITIAL_PARALLEL_CODEPTR 0xFFFFFFFF
+#define UNKNOWN_END_CODEPTR      0xFFFFFFFE
+#define NULL_DEFAULT_CODEPTR     0xFFFFFFFD
 static void
 on_ompt_callback_thread_begin(
         ompt_thread_t thread_type,
@@ -340,8 +344,8 @@ on_ompt_callback_parallel_begin(
         int flag,
         const void *codeptr_ra)
 {
-	//void * extracted_codeptr_ra = __builtin_extract_return_addr(codeptr_ra);
-	//printf("codeptr: %x, extracted: %x\n", codeptr_ra, extracted_codeptr_ra);
+  if (load_baseaddr == 0) load_baseaddr = find_load_baseaddr(codeptr_ra);
+  codeptr_ra = (void *)((unsigned long int)codeptr_ra - load_baseaddr);
 //  parallel_data->value = ompt_get_unique_id();
 //  printf("parallel_begin: codeptr_ra: 0x%" PRIx64 "\n", codeptr_ra);
   enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
@@ -376,6 +380,7 @@ on_ompt_callback_parallel_end(
 {
   lexgion_t * lgp = lexgion_end(NULL); //pop up the current parallel lexgion record
   assert(parallel_data->ptr == enclosing_parallel_lexgion_record);
+  codeptr_ra = (void *)((unsigned long int)codeptr_ra - load_baseaddr);
   lgp->end_codeptr_ra = codeptr_ra;
   //turn off this assertation. LLVM openmp runtime has a bug that for serialized parallel region, codeptr_ra for parallel_end callback is NULL 
   //assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
@@ -480,6 +485,7 @@ on_ompt_callback_work(
         uint64_t count,
         const void *codeptr_ra)
 {
+  codeptr_ra = (void *)((unsigned long int)codeptr_ra - load_baseaddr);
   switch(endpoint)
   {
     case ompt_scope_begin:
@@ -552,6 +558,7 @@ on_ompt_callback_masked(
         ompt_data_t *task_data,
         const void *codeptr_ra)
 {
+  codeptr_ra = (void *)((unsigned long int)codeptr_ra - load_baseaddr);
   switch(endpoint)
   {
     case ompt_scope_begin:
@@ -603,6 +610,7 @@ on_ompt_callback_sync_region(
         ompt_data_t *parallel_data,
         ompt_data_t *task_data,
         const void *codeptr_ra) {
+  if (codeptr_ra != NULL) codeptr_ra = (void *)((unsigned long int)codeptr_ra - load_baseaddr);
   unsigned int record_id = 0;
   switch(endpoint) {
     case ompt_scope_begin: {
@@ -792,6 +800,7 @@ on_ompt_callback_sync_region_wait(
         ompt_data_t *parallel_data,
         ompt_data_t *task_data,
         const void *codeptr_ra) {
+    if (codeptr_ra != NULL) codeptr_ra = (void *)((unsigned long int)codeptr_ra - load_baseaddr);
 	lexgion_record_t * record = top_lexgion(); //this could be either the region that contains the implicit barrier or the explicit barrier
 	unsigned int record_id = record->record_id;
     switch(endpoint) {

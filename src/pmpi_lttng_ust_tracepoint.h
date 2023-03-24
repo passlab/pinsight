@@ -37,6 +37,9 @@ extern __thread void * mpi_codeptr;
 #ifdef PINSIGHT_OPENMP
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
+#else
+//We only need this if OMPT is not enabled, if OMPT is enabled, it is defined in OMPT. It is NOT thread_local //TODO: might have issue with OpenMP
+unsigned long int load_baseaddr = 0;
 #endif
 #include <common_tp_fields_global_lttng_ust_tracepoint.h>
 #endif

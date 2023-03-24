@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "pinsight_config.h"
 #include "lexgion_trace_config.h"
+#include "load_baseaddr.h"
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
@@ -163,6 +164,9 @@ extern lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr);
 extern void print_lexgion_trace_config();
 extern void lexgion_trace_config_read();
 extern void initial_lexgion_trace_config();
+
+//implemented in load_baseaddr.c
+extern unsigned long int find_load_baseaddr(const void * codeptr);
 
 #ifdef  __cplusplus
 };
