@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <inttypes.h>
 #include <omp.h>
@@ -9,6 +10,7 @@
 #endif
 #include "lexgion_trace_config.h"
 #include "pinsight.h"
+#include <dlfcn.h>
 
 // --------------------------------------------------------
 // Environment config variable names and default values.
@@ -343,7 +345,15 @@ on_ompt_callback_parallel_begin(
 	//void * extracted_codeptr_ra = __builtin_extract_return_addr(codeptr_ra);
 	//printf("codeptr: %x, extracted: %x\n", codeptr_ra, extracted_codeptr_ra);
 //  parallel_data->value = ompt_get_unique_id();
-  //printf("parallel_begin: codeptr_ra: 0x%" PRIx64 "\n", codeptr_ra);
+  //void * addr = codeptr_ra;
+  void * addr = &on_ompt_callback_parallel_begin;
+  Dl_info dlinfo;
+  dladdr(addr, &dlinfo);
+  printf("0x%p: offset: %p\n", addr, (void*)((unsigned long int) addr - (unsigned long int)dlinfo.dli_fbase));
+  printf("Dl_info: filename: %s, base address: %p, symbol: %s, symbol address: %p\n",
+	                  dlinfo.dli_fname, dlinfo.dli_fbase, dlinfo.dli_sname, dlinfo.dli_saddr);
+
+//  printf("parallel_begin: codeptr_ra: 0x%" PRIx64 "\n", codeptr_ra);
   enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
   //This parallel_data->ptr will be passed to the callbacks of implicit tasks,
   parallel_data->ptr = enclosing_parallel_lexgion_record;
