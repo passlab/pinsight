@@ -49,12 +49,12 @@ extern __thread int omp_thread_num;
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer_hex(unsigned int, mpi_codeptr, mpi_codeptr)
+    lttng_ust_field_integer_hex(unsigned long int, mpi_codeptr, mpi_codeptr)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_PMPI \
     COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
-    lttng_ust_field_integer_hex(unsigned int, mpi_codeptr, mpi_codeptr)
+    lttng_ust_field_integer_hex(unsigned long int, mpi_codeptr, mpi_codeptr)
 #endif
 
 /* int MPI_Init(int *argc, char ***argv) */
@@ -163,7 +163,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_PMPI
-            lttng_ust_field_integer_hex(unsigned int, buf, buf)
+            lttng_ust_field_integer_hex(unsigned long int, buf, buf)
             lttng_ust_field_integer(unsigned int, count, count)
             lttng_ust_field_integer(unsigned int, dest, dest)
             lttng_ust_field_integer(unsigned int, tag, tag)
@@ -204,7 +204,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_PMPI
-            lttng_ust_field_integer_hex(unsigned int, buf, buf)
+            lttng_ust_field_integer_hex(unsigned long int, buf, buf)
             lttng_ust_field_integer(unsigned int, count, count)
             lttng_ust_field_integer(unsigned int, source, source)
             lttng_ust_field_integer(unsigned int, tag, tag)
@@ -256,8 +256,8 @@ LTTNG_UST_TRACEPOINT_EVENT(
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_PMPI
-            lttng_ust_field_integer_hex(unsigned int, sendbuf, sendbuf)
-            lttng_ust_field_integer_hex(unsigned int, recvbuf, recvbuf)
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
             lttng_ust_field_integer(unsigned int, count, count)
             lttng_ust_field_integer(unsigned int, root, root)
             lttng_ust_field_integer_hex(unsigned int, mpi_op, mpi_op)
@@ -286,8 +286,8 @@ LTTNG_UST_TRACEPOINT_EVENT(
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_PMPI
-            lttng_ust_field_integer_hex(unsigned int, sendbuf, sendbuf)
-            lttng_ust_field_integer_hex(unsigned int, recvbuf, recvbuf)
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
             lttng_ust_field_integer(unsigned int, count, count)
             lttng_ust_field_integer_hex(unsigned int, mpi_op, mpi_op)
         )

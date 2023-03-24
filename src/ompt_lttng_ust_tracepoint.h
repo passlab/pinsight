@@ -35,13 +35,13 @@ extern __thread unsigned int task_record_id;
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
+    lttng_ust_field_integer_hex(unsigned long int, parallel_codeptr, parallel_codeptr) \
     lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_OMPT \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer_hex(unsigned int, parallel_codeptr, parallel_codeptr) \
+    lttng_ust_field_integer_hex(unsigned long int, parallel_codeptr, parallel_codeptr) \
     lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
 #endif
 // For future tasking extension of OpenMP
@@ -165,8 +165,8 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_IMPLICIT_TASK(implicit_task_end)
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
             lttng_ust_field_integer(unsigned short, wstype, wstype)      \
-            lttng_ust_field_integer_hex(unsigned int, work_begin_codeptr, work_begin_codeptr)                  \
-            lttng_ust_field_integer_hex(unsigned int, work_end_codeptr, work_end_codeptr)                  \
+            lttng_ust_field_integer_hex(unsigned long int, work_begin_codeptr, work_begin_codeptr)                  \
+            lttng_ust_field_integer_hex(unsigned long int, work_end_codeptr, work_end_codeptr)                  \
             lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             lttng_ust_field_integer(unsigned int, count, count)                        \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
@@ -190,8 +190,8 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_WORK(work_end)
         ),                                                                     \
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
-            lttng_ust_field_integer_hex(unsigned int, masked_begin_codeptr, masked_begin_codeptr)                  \
-            lttng_ust_field_integer_hex(unsigned int, masked_end_codeptr, masked_end_codeptr)                  \
+            lttng_ust_field_integer_hex(unsigned long int, masked_begin_codeptr, masked_begin_codeptr)                  \
+            lttng_ust_field_integer_hex(unsigned long int, masked_end_codeptr, masked_end_codeptr)                  \
             lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
@@ -213,7 +213,7 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_MASKED(masked_end)
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
             lttng_ust_field_integer(unsigned short, kind, kind)      \
-            lttng_ust_field_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
+            lttng_ust_field_integer_hex(unsigned long int, sync_codeptr, sync_codeptr)                  \
             lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
@@ -236,7 +236,7 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_BARRIER_EXPLICIT_SYNC(barrier_explicit_sync_wait
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
             lttng_ust_field_integer(unsigned short, kind, kind)      \
-            lttng_ust_field_integer_hex(unsigned int, sync_codeptr, sync_codeptr)                  \
+            lttng_ust_field_integer_hex(unsigned long int, sync_codeptr, sync_codeptr)                  \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
     )

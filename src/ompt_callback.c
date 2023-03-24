@@ -340,8 +340,10 @@ on_ompt_callback_parallel_begin(
         int flag,
         const void *codeptr_ra)
 {
+	//void * extracted_codeptr_ra = __builtin_extract_return_addr(codeptr_ra);
+	//printf("codeptr: %x, extracted: %x\n", codeptr_ra, extracted_codeptr_ra);
 //  parallel_data->value = ompt_get_unique_id();
-  //printf("parallel_begin: codeptr_ra: %x\n", codeptr_ra);
+  //printf("parallel_begin: codeptr_ra: 0x%" PRIx64 "\n", codeptr_ra);
   enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
   //This parallel_data->ptr will be passed to the callbacks of implicit tasks,
   parallel_data->ptr = enclosing_parallel_lexgion_record;
