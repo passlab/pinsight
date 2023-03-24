@@ -100,7 +100,7 @@ public class Pinsight3DView extends ViewPart {
                 super.handleData(data);
                 ITmfEventField field = data.getContent().getField();
                 String Eventname = data.getName();
-                if (Eventname.equals("lttng_pinsight:implicit_task_begin") && field != null) {
+                if (Eventname.equals("ompt_pinsight_lttng_ust:implicit_task_begin") && field != null) {
                     Double yValue = (Double) field.getValue();
                     String zValue;
                     String fieldString = field.toString();
@@ -117,13 +117,13 @@ public class Pinsight3DView extends ViewPart {
                     yValues.add(yValue);
                     double xValue = (double) data.getTimestamp().getValue();
                     xValues.add(xValue);
-                }else if (Eventname.equals("lttng_pinsight:implicit_task_end") && field != null) {
+                }else if (Eventname.equals("ompt_pinsight_lttng_ust:implicit_task_end") && field != null) {
                 	Double yValue = (Double) field.getValue();
                     String zValue;
                     String fieldString = field.toString();
                     String[] contentSplit = fieldString.split("\\s*,\\s*");
                     for(int i = 0; i < contentSplit.length; i++) {
-                    	if (contentSplit[i].contains("global_thread_num")) {
+                        if (contentSplit[i].contains("omp_thread_num")) {
                     		yValue = (double) (contentSplit[i].charAt(contentSplit[i].length()-1)-'0');
                     	}else if(contentSplit[i].contains("parallel_codeptr")) {
                     		String[] contentSplit1 = contentSplit[i].split("\\=");
@@ -198,7 +198,7 @@ public class Pinsight3DView extends ViewPart {
                             rotateY.setAngle(rotateY.getAngle() + (mousePosX - mouseOldX));
                             mouseOldX = mousePosX;
                             mouseOldY = mousePosY;
-
+                            lttng_pinsight
                         });
 
                         makeZoomable(root);
@@ -340,7 +340,7 @@ public class Pinsight3DView extends ViewPart {
 	                line.setFill(gridColor);
 	                line.setTranslateX(x);
 	                line.setTranslateZ(zTranslate);
-	                line.setStrokeWidth(lineWidth);
+	                line.setStrokeWidth(lineWidth);TmfView
 
 	                getChildren().addAll(line);
 
