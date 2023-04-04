@@ -220,6 +220,7 @@ on_ompt_callback_thread_begin(
         task_codeptr = (void*)INITIAL_PARALLEL_CODEPTR;
         task_record_id = enclosing_task_lexgion_record->record_id;
         printf("thread_begin: initial implicit task lexgion: %p, record_id: %d\n", enclosing_task_lexgion_record->lgp, task_record_id);
+        retrieve_backtrace();
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_begin, 1 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 #endif
     } else {
@@ -261,6 +262,7 @@ on_ompt_callback_thread_end(
         //printf("thread_end: initial parallel lexgion: %p\n", lgp);
         assert(record_id == lgp->counter == 1); //both should be 1, since it is only recorded once
 
+        retrieve_backtrace();
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end, ompt_parallel_team || ompt_parallel_invoker_runtime ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
         lexgion_post_trace_update(lgp);
     } else {
@@ -362,6 +364,7 @@ on_ompt_callback_parallel_begin(
     }
 #endif
     void * enter_frame_ptr = (parent_task_frame == NULL) ? NULL : parent_task_frame->enter_frame.ptr;
+    retrieve_backtrace();
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, requested_team_size, flag, enter_frame_ptr
                ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
   }
@@ -387,6 +390,7 @@ on_ompt_callback_parallel_end(
     }
 #endif
 
+    retrieve_backtrace();
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end, flag ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
     lexgion_post_trace_update(lgp);
   }
@@ -443,6 +447,7 @@ on_ompt_callback_implicit_task(
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
 #endif
+        retrieve_backtrace();
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_begin, team_size ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
       }
       break;
@@ -459,6 +464,7 @@ on_ompt_callback_implicit_task(
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
 #endif
+        retrieve_backtrace();
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_end, team_size ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
         lexgion_post_trace_update(lgp);
       }
@@ -495,6 +501,7 @@ on_ompt_callback_work(
             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
           }
 #endif
+          retrieve_backtrace();
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_begin, (short) wstype, codeptr_ra, (void *) 0x000000, record->record_id,
                      count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
         }
@@ -533,6 +540,7 @@ on_ompt_callback_work(
             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
           }
 #endif
+          retrieve_backtrace();
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_end, (short) wstype, lgp->codeptr_ra, codeptr_ra, record_id,
                      count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
           lexgion_post_trace_update(lgp);
@@ -564,6 +572,7 @@ on_ompt_callback_masked(
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
 #endif
+        retrieve_backtrace();
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, masked_begin, codeptr_ra, (void *) 0x000000, record->record_id
                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
       }
@@ -580,6 +589,7 @@ on_ompt_callback_masked(
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
         }
 #endif
+        retrieve_backtrace();
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, masked_end, lgp->codeptr_ra, codeptr_ra, record_id ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
         lexgion_post_trace_update(lgp);
       }
@@ -618,6 +628,7 @@ on_ompt_callback_sync_region(
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
+                        retrieve_backtrace();
                         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_begin, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                     }
                 }
@@ -632,6 +643,7 @@ on_ompt_callback_sync_region(
 #ifdef PINSIGHT_ENERGY
                     if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
+                    retrieve_backtrace();
                     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_begin, (unsigned short) kind, codeptr_ra, record_id
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                 }
@@ -645,6 +657,7 @@ on_ompt_callback_sync_region(
 #ifdef PINSIGHT_ENERGY
                     if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
+                    retrieve_backtrace();
                     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_begin, (unsigned short) kind, codeptr_ra
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                 }
@@ -664,6 +677,7 @@ on_ompt_callback_sync_region(
   #ifdef PINSIGHT_ENERGY
                           if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
   #endif
+                          retrieve_backtrace();
                           lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_begin, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                       }
                   } else {
@@ -677,6 +691,7 @@ on_ompt_callback_sync_region(
   #ifdef PINSIGHT_ENERGY
                           if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
   #endif
+                          retrieve_backtrace();
                           lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_begin, (unsigned short) kind, codeptr_ra
                                      ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                       }
@@ -705,6 +720,7 @@ on_ompt_callback_sync_region(
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
+                        retrieve_backtrace();
                         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                     }
                 }
@@ -718,6 +734,7 @@ on_ompt_callback_sync_region(
                         rapl_sysfs_read_packages(package_energy); // Read package energy counters.
                     }
 #endif
+                    retrieve_backtrace();
                     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_end, (unsigned short) kind, codeptr_ra, record_id
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                     lexgion_post_trace_update(lgp);
@@ -733,6 +750,7 @@ on_ompt_callback_sync_region(
                         rapl_sysfs_read_packages(package_energy); // Read package energy counters.
                     }
 #endif
+                    retrieve_backtrace();
                     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_end, (unsigned short) kind, codeptr_ra
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                 }
@@ -755,6 +773,7 @@ on_ompt_callback_sync_region(
             	#ifdef PINSIGHT_ENERGY
             	                        if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
             	#endif
+                                        retrieve_backtrace();
             	                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
             	                    }
             	                } else {
@@ -768,6 +787,7 @@ on_ompt_callback_sync_region(
             	                            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
             	                        }
             	    #endif
+                                        retrieve_backtrace();
             	                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_end, (unsigned short) kind, codeptr_ra
             	                                       ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
             	                        lexgion_post_trace_update(lgp);
