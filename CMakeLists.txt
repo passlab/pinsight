@@ -23,6 +23,7 @@ set(SOURCE_FILES
         src/lexgion_trace_config.h
         src/pinsight.h
         src/pinsight.c
+        src/backtrace.c
         src/enter_exit.c
         src/enter_exit_lttng_ust_tracepoint.h
         )
