@@ -14,8 +14,10 @@ This folder contains instructions and sample files/traces to help one start deve
 
 4. After the installation of tracecompass plugin, Eclipse will restart
 5. After restart, create a new trace project
-6. ![Uploading Screenshot 2023-09-08 at 7.51.41 PM.png…]()
+6.<img width="1470" alt="Screenshot 2023-09-08 at 7 51 41 PM" src="https://github.com/passlab/pinsight/assets/135630264/585e5e14-6314-4676-b736-cc895fd87a61">
 7. 
+
+   
 
 
 
