@@ -11,7 +11,12 @@ This folder contains instructions and sample files/traces to help one start deve
 2. open eclipse installer and open the "Eclipse IDE for Java Developers"
 3. After installing> open Eclipse>Help>Install New Software. Use this link for the following repo for tracecompass: http://download.eclipse.org/tracecompass/releases/9.0.0/repository/
    <img width="1470" alt="Screenshot 2023-09-08 at 7 46 16 PM" src="https://github.com/passlab/pinsight/assets/135630264/671ca1e5-66d3-4833-9cd5-3a0dec632726">
-   
+
+4. After the installation of tracecompass plugin, Eclipse will restart
+5. After restart, create a new trace project
+6. ![Uploading Screenshot 2023-09-08 at 7.51.41 PM.png…]()
+7. 
+
 
 
 
