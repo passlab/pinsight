@@ -34,11 +34,6 @@ This folder contains instructions and sample files/traces to help one start deve
    
 
 
-   
-
-
-
-
 ### Create a plugin in Eclipse 
 1. Check [the Tracecompass tutorial for creating a plugin](https://archive.eclipse.org/tracecompass/doc/org.eclipse.tracecompass.doc.dev/View-Tutorial.html#View_Tutorial). The tutorial is part of [the Tracecompass developer guide](https://archive.eclipse.org/tracecompass/doc/org.eclipse.tracecompass.doc.dev/Developer-Guide.html) that also includes other features for analysis and visualization 
 2. With the tutorial, have the example working to the step of creating an empty view, but not using the data provided by the example traces in the tutorial since we will need to populate the view using the provided sample trace files. The code used in the the tutorial example are outdated and we will update as we progress.
