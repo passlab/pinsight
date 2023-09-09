@@ -17,12 +17,11 @@ This folder contains instructions and sample files/traces to help one start deve
 6. File>New>Project
 <img width="1470" alt="Screenshot 2023-09-08 at 7 51 41 PM" src="https://github.com/passlab/pinsight/assets/135630264/585e5e14-6314-4676-b736-cc895fd87a61">
 7. Tracing>Tracing project
-   ![image](https://github.com/passlab/pinsight/assets/135630264/a5e007e2-4978-4a2e-bcd8-1c9f0b5adaa0)
-
+  <img width="1470" alt="Screenshot 2023-09-08 at 7 56 58 PM" src="https://github.com/passlab/pinsight/assets/135630264/12dd660d-441b-4a5e-82c8-72e34cc11a6b">
+  
 8. Read [tracecompass user guide](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/User-Guide.html) to get familiar with the UI interface and their functionality.
-
-9.  Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis).
-10.  
+9. Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis).
+   
 
 
    
