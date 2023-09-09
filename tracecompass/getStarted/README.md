@@ -27,7 +27,6 @@ This folder contains instructions and sample files/traces to help one start deve
 
 <img width="1470" alt="Screenshot 2023-09-08 at 8 24 22 PM" src="https://github.com/passlab/pinsight/assets/135630264/479224f1-66bb-40c1-9fca-8714cb463647">
 
-11.<img width="1440" alt="Screenshot 2023-09-08 at 8 43 48 PM" src="https://github.com/passlab/pinsight/assets/135630264/bfb8f5eb-bf37-43a2-a915-7e9cd99af2c5">
 
 
 
