@@ -6,6 +6,7 @@ This folder contains instructions and sample files/traces to help one start deve
 2. Read [tracecompass user guide](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/User-Guide.html) to get familiar with the UI interface and their functionality
 3. Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis). 
 4. Open [the sample trace package](traces.tar), unpack it and open it with tracecompass to visualize. You will need to go down to the deep of the folder and open a metadata file.
+
    
 ### for mac:
 1. Download the Eclipse IDE: https://www.eclipse.org/downloads/download.php?file=/oomph/epp/2023-06/R/eclipse-inst-jre-mac64.dmg
@@ -25,7 +26,14 @@ This folder contains instructions and sample files/traces to help one start deve
 10. Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis).
 11. Open [the sample trace package](traces.tar), unpack it and open it with tracecompass to visualize. You will need to go down to the deep of the folder and open a metadata file. Download this file. Unzip the file and import it to the "traces" folder in eclipse. It should look like this after importing the traces. 
 
-<img width="1470" alt="Screenshot 2023-09-08 at 8 24 22 PM" src="https://github.com/passlab/pinsight/assets/135630264/479224f1-66bb-40c1-9fca-8714cb463647">
+<img width="1440" alt="Screenshot 2023-09-08 at 9 38 48 PM" src="https://github.com/passlab/pinsight/assets/135630264/3de002f0-95b7-49ba-941c-0c785ad76242">
+
+12. You should see the following after you click the PInsight OpenMP Trace Review button deep in the Traces. You will be able to see the data like this.
+    <img width="1440" alt="Screenshot 2023-09-08 at 9 44 58 PM" src="https://github.com/passlab/pinsight/assets/135630264/c1fbff01-a334-4802-853c-e516afbbce60">
+
+
+
+
 
 
 
