@@ -6,22 +6,24 @@ This folder contains instructions and sample files/traces to help one start deve
 2. Read [tracecompass user guide](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/User-Guide.html) to get familiar with the UI interface and their functionality
 3. Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis). 
 4. Open [the sample trace package](traces.tar), unpack it and open it with tracecompass to visualize. You will need to go down to the deep of the folder and open a metadata file.
+   
 ### for mac:
-1. download the Eclipse IDE: https://www.eclipse.org/downloads/download.php?file=/oomph/epp/2023-06/R/eclipse-inst-jre-mac64.dmg
-2. open eclipse installer and open the "Eclipse IDE for Java Developers"
-3. After installing> open Eclipse>Help>Install New Software. Use this link for the following repo for tracecompass: http://download.eclipse.org/tracecompass/releases/9.0.0/repository/
+1. Download the Eclipse IDE: https://www.eclipse.org/downloads/download.php?file=/oomph/epp/2023-06/R/eclipse-inst-jre-mac64.dmg
+2.Read Trace compass user guide (https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/User-Guide.html) to get familiar with the UI interface and their functionality
+3. open eclipse installer and open the "Eclipse IDE for Java Developers"
+4. After installing> open Eclipse>Help>Install New Software. Use this link for the following repo for tracecompass: http://download.eclipse.org/tracecompass/releases/9.0.0/repository/
    <img width="1470" alt="Screenshot 2023-09-08 at 7 46 16 PM" src="https://github.com/passlab/pinsight/assets/135630264/671ca1e5-66d3-4833-9cd5-3a0dec632726">
 
-4. After the installation of tracecompass plugin, Eclipse will restart
-5. After restart, create a new trace project
-6. File>New>Project
+5. After the installation of tracecompass plugin, Eclipse will restart
+6. After restart, create a new trace project
+7. File>New>Project
 <img width="1470" alt="Screenshot 2023-09-08 at 7 51 41 PM" src="https://github.com/passlab/pinsight/assets/135630264/585e5e14-6314-4676-b736-cc895fd87a61">
-7. Tracing>Tracing project
+8. Tracing>Tracing project
   <img width="1470" alt="Screenshot 2023-09-08 at 7 56 58 PM" src="https://github.com/passlab/pinsight/assets/135630264/12dd660d-441b-4a5e-82c8-72e34cc11a6b">
   
-8. Read [tracecompass user guide](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/User-Guide.html) to get familiar with the UI interface and their functionality.
-9. Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis).
-10. Open [the sample trace package](traces.tar), unpack it and open it with tracecompass to visualize. You will need to go down to the deep of the folder and open a metadata file. Download this file. Unzip the file and import it to the "traces" folder in eclipse. It should look like this after importing the traces. 
+9. Read [tracecompass user guide](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/User-Guide.html) to get familiar with the UI interface and their functionality.
+10. Import the xml file [pinsight-analysis.xml](pinsight-analysis.xml) to setup pinsight data-driven analysis and visualization. The XML file is developed using a [data driven analysis solution in tracecompass](https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis).
+11. Open [the sample trace package](traces.tar), unpack it and open it with tracecompass to visualize. You will need to go down to the deep of the folder and open a metadata file. Download this file. Unzip the file and import it to the "traces" folder in eclipse. It should look like this after importing the traces. 
 
 <img width="1470" alt="Screenshot 2023-09-08 at 8 24 22 PM" src="https://github.com/passlab/pinsight/assets/135630264/479224f1-66bb-40c1-9fca-8714cb463647">
 
