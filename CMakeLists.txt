@@ -10,10 +10,11 @@ set(PINSIGHT_VERSION_MAJOR 0)
 set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
-option(PINSIGHT_OPENMP "Build with OpenMP support"       TRUE)
-option(PINSIGHT_MPI    "Build with MPI support"          TRUE)
-option(PINSIGHT_CUDA   "Build with CUDA support"         FALSE)
-option(PINSIGHT_ENERGY "Build with Energy tracing"       FALSE)
+option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
+option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
+option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
+option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
+option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
@@ -60,7 +61,7 @@ endif()
 if (PINSIGHT_CUDA)
     # CUPTI install location needs to be provided, which could be part of CUDA SDK install or a standaline install
     set(CUDA_INSTALL "/usr/local/cuda" CACHE PATH "CUDA SDK install path that includes CUPTI under extras/CUPTI folder" )
-    set(CUPTI_INSTALL ${CUDA_INSTALL}/extras/CUPTI)
+    set(CUPTI_INSTALL ${CUDA_INSTALL})
 
     include_directories(${CUPTI_INSTALL}/include ${CUDA_INSTALL}/include)
     #list(APPEND PINSIGHT_EXTERNAL_LIBS cupti)
@@ -68,6 +69,14 @@ if (PINSIGHT_CUDA)
     list(APPEND SOURCE_FILES
             src/cupti_lttng_ust_tracepoint.h
             src/cupti_callback.c
+            )
+endif()
+
+## Backtrace support, which use GNU extension
+if (PINSIGHT_BACKTRACE)
+    list(APPEND SOURCE_FILES
+            src/backtrace.h
+            src/backtrace.c
             )
 endif()
 
@@ -122,5 +131,10 @@ if (PINSIGHT_CUDA)
     message("    CUPTI_INSTALL: ${CUPTI_INSTALL}")
 else()
     message("Build with CUDA Support:       FALSE")
+endif()
+if (PINSIGHT_BACKTRACE)
+    message("Build with GNU BACKTRACE SUPPORT:  TRUE")
+else()
+    message("Build with GNU BACKTRACE SUPPORT:  FALSE")
 endif()
 message("============================================================")
