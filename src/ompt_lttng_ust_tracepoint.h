@@ -19,6 +19,9 @@ extern "C" {
 extern int mpirank ;
 #include <common_tp_fields_global_lttng_ust_tracepoint.h>
 #endif
+#ifdef PINSIGHT_BACKTRACE
+#include <backtrace.h>
+#endif
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
 extern __thread const void * parallel_codeptr;
@@ -32,6 +35,7 @@ extern __thread unsigned int task_record_id;
 #if defined(PINSIGHT_MPI)
 #define COMMON_LTTNG_UST_TP_FIELDS_OMPT \
     COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
+	LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
@@ -39,6 +43,7 @@ extern __thread unsigned int task_record_id;
     lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_OMPT \
+	LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer_hex(unsigned long int, parallel_codeptr, parallel_codeptr) \
