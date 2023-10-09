@@ -49,7 +49,20 @@ An example of that build process (taken from our `Dockerfile`), building and ins
 
 ### Build
 
-To build the main `pinsight` shared library, use the cmake and make utilities. A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
+To build the `pinsight` shared library, use the cmake and make utilities. 
+The option to enable features of PInsight includes:
+
+            option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
+            option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
+            option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
+            option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
+            option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
+
+You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
+For OpenMP, A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
+For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided with default to be `/usr/local/cuda`. 
+
+Example: 
 
     git clone https://github.com/passlab/pinsight.git
     cd pinsight && mkdir build && cd build
