@@ -18,6 +18,8 @@ extern "C" {
 #ifdef PINSIGHT_MPI
 extern int mpirank ;
 #include <common_tp_fields_global_lttng_ust_tracepoint.h>
+#endif
+#ifdef PINSIGHT_BACKTRACE
 #include <backtrace.h>
 #endif
 extern __thread int global_thread_num;
