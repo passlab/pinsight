@@ -164,9 +164,6 @@ extern void print_lexgion_trace_config();
 extern void lexgion_trace_config_read();
 extern void initial_lexgion_trace_config();
 
-//backtrace.c
-extern void retrieve_backtrace();
-
 #ifdef  __cplusplus
 };
 #endif
