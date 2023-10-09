@@ -12,5 +12,6 @@
 #cmakedefine PINSIGHT_MPI
 #cmakedefine PINSIGHT_CUDA
 #cmakedefine PINSIGHT_ENERGY
+#cmakedefine PINSIGHT_BACKTRACE
 
 #endif /* PINSIGHT_CONFIG_H */

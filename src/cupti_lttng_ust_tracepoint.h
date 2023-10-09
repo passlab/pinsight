@@ -30,11 +30,15 @@ extern "C" {
 #ifndef _CUPTI_LTTNG_UST_TRACEPOINT_H_DECLARE_ONCE_
 #define _CUPTI_LTTNG_UST_TRACEPOINT_H_DECLARE_ONCE_
 #ifdef PINSIGHT_MPI
-extern int mpirank ;
+extern int mpirank;
+#include "common_tp_fields_global_lttng_ust_tracepoint.h"
 #endif
 #ifdef PINSIGHT_OPENMP
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
+#endif
+#ifdef PINSIGHT_BACKTRACE
+#include <backtrace.h>
 #endif
 #endif
 

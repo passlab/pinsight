@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 __thread void * backtrace_ip[16]; //no recursive so far
+__thread char * backtrace_symbol[16];
 __thread int backtrace_depth = 0;
 
 void retrieve_backtrace() {

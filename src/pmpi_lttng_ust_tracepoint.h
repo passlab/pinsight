@@ -40,7 +40,9 @@ extern __thread int omp_thread_num;
 #else
 #endif
 #include <common_tp_fields_global_lttng_ust_tracepoint.h>
+#ifdef PINSIGHT_BACKTRACE
 #include <backtrace.h>
+#endif
 #endif
 
 //COMMON_LTTNG_UST_TP_FIELDS_PMPI includes mpirank global variable, and codeptr passed by all the tracepoint call.
