@@ -60,7 +60,7 @@ The option to enable features of PInsight includes:
 
 You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
 For OpenMP, A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
-For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided with default to be `/usr/local/cuda`. 
+For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided via `CUDA_INSTALL` with default to be `/usr/local/cuda`. 
 
 Example: 
 
