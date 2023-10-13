@@ -1,33 +1,64 @@
-# Event Tracing and Visualization for OpenMP, MPI and CUDA programs
+# PInsight: Dynamic and Asynchronous Tracing and Visualization for OpenMP, MPI and CUDA Programs
 
-## PInsight shared library
+PInsight is a performance tool that help developers trace and measure the performance of the 
+execution of parallel applications, and to analyze and visualize the tracing to identify performance issues. 
+It includes PInsight shared library developed using LTTng UST for dynamic and asynchronous tracing, 
+and Eclipse/Trace Compass plugins for analyzing and visualizing traces. 
 
-The core of this project is a shared library called `pinsight`, which generates [LTTng][lttng] trace data for OpenMP [OMPT][ompt] events, MPI [PMPI events][pmpi], and CUDA [CUPTI events][cupti]. 
+## PInsight shared library for tracing OpenMP, MPI and CUDA programs
+
+The PInsight trace library is a shared library called `pinsight`. The library implemnts OpenMP [OMPT][ompt] and CUDA [CUPTI][cupti] event
+callbacks for tracing OpenMP and CUDA application, and MPI [PMPI][pmpi] wrapper for tracing MPI applications. 
+The OMPT/CUPTI callbacks and PMPI wrappers redirect tracing to [LTTng][lttng] UST for processing tracing asynchronously. The library also
+implements flexible runtime configuration of tracing options such as tracing rate, allowing 1) for optimizing dynamic tracing 
+to reduce unnecessnary and redundant tracing, 2) for runtime reconfiguration for both tracing and application for runtime performance optimization, and 3)
+for performance debugging such that the application execution can be paused for performance analysis and optimization, and then resumed with optimized execution. 
 
    [lttng]: https://lttng.org
    [ompt]: https://www.openmp.org/wp-content/uploads/ompt-tr.pdf
    [pmpi]: https://www.open-mpi.org/faq/?category=perftools#PMPI
    [cupti]: https://docs.nvidia.com/cuda/cupti/index.html
+   
+### Build
+1. install several essential dependencies. On Ubuntu systems:
 
-### Install for OpenMP OMPT event tracing
+           sudo apt-get install build-essential cmake git
 
-To be able to build/run the OMPT event tracing library, you will need to install several dependencies.
+2. Then install LTTng, which has some special [setup instructions][lttng-install].
 
-For Ubuntu 18.04/16.04 systems:
+   [lttng-install]: https://lttng.org/docs
 
-    sudo apt-get install build-essential cmake git
+           sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev babeltrace
 
-LTTng has some special [setup instructions][lttng-install].
+3. Clone the repo and build the `pinsight` shared library. It uses the cmake and make utilities. 
+The option to enable features of PInsight includes:
 
-   [lttng-install]: https://lttng.org/docs/v2.10/#doc-installing-lttng
+            option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
+            option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
+            option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
+            option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
+            option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
 
-    # After following the LTTng setup instructions:
-    sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev babeltrace
+You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
+For OpenMP, A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
+For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided via `CUDA_INSTALL` with default to be `/usr/local/cuda`. 
 
-You will also need to have the [LLVM OpenMP runtime][llvm-openmp] installed and OMPT should be enabled to support runtime tracing. LLVM has combined modules into 
-one github repo. You will need to clone the whole repo. For installing OpenMP library, llvm should allow to install the runtime instead of the whole LLVM. You can use an already-installed Clang/LLVM that have the OMPT-enabled OpenMP runtime and the required header files (omp.h and ompt.h). 
+Example: 
 
-An example of that build process (taken from our `Dockerfile`), building and installing to `/home/yanyh/tools/llvm-openmp-install`:
+           git clone https://github.com/passlab/pinsight.git
+           cd pinsight && mkdir build && cd build
+           cmake -DOPENMP_INCLUDE_PATH=/home/yanyh/tools/llvm-openmp-install/include ..
+           make
+
+The instructions above will result in `build/libpinsight.so` to be created. 
+
+#### To install LLVM OpenMP library for OpenMP OMPT event tracing
+
+To build and trace OpenMP programs which uses the OMPT event tracing library, [LLVM OpenMP runtime][llvm-openmp] needs to be installed and OMPT 
+should be enabled to support runtime tracing. LLVM has combined modules into 
+one github repo. If you already have Clang/LLVM installed with OpenMP/OMPT enabled, you only need to provide the path to the OpenMP headers (omp.h and omp-tools.h) for 
+building the pinsight library. You will need the libomp.so library for PInsight to trace an OpenMP application. If you do not have Clang/LLVM installed, you will need to clone the whole repo, 
+but only need to install the OpenMP library. The following is an example of building LLVM OpenMP runtime library (taken from our `Dockerfile`):
 
     git clone https://github.com/llvm-project/openmp.git && \
     cd openmp && \
@@ -46,33 +77,27 @@ An example of that build process (taken from our `Dockerfile`), building and ins
 
    [llvm-openmp]: https://github.com/llvm/llvm-project/tree/master/openmp
 
+#### To build and setup for CUDA CUPTI event tracing
+For CUDA CUPTI tracing, `PINSIGHT_CUDA` should be set to `TRUE` for cmake. CUDA SDK with CUPTI SDK should be installed. 
+On Ubuntu 22.04, to install CUDA 12.2, follow steps in the 
+NVIDIA [CUDA 12.2 download page](https://developer.nvidia.com/cuda-12-2-2-download-archive), such as: 
 
-### Build
+       wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+       sudo dpkg -i cuda-keyring_1.1-1_all.deb
+       sudo apt-get update
+       sudo apt-get -y install cuda
 
-To build the `pinsight` shared library, use the cmake and make utilities. 
-The option to enable features of PInsight includes:
+The above command will install CUDA at `/usr/local/cuda`, with that, the pinsight library can be built with support for CUDA as: 
+           git clone https://github.com/passlab/pinsight.git
+           cd pinsight && mkdir build && cd build
+           cmake -DPINSIGHT_CUDA=TRUE ..
+           make
+If CUDA is not installed at `/usr/local/cuda`, The `CUDA_INSTALL` option should pass to cmake to provide the path to a CUDA install folder. 
 
-            option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
-            option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
-            option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
-            option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
-            option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
+#### To build and setup for MPI PMPI event tracing
+To be completed
 
-You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
-For OpenMP, A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
-For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided via `CUDA_INSTALL` with default to be `/usr/local/cuda`. 
-
-Example: 
-
-    git clone https://github.com/passlab/pinsight.git
-    cd pinsight && mkdir build && cd build
-    cmake -DOPENMP_INCLUDE_PATH=/home/yanyh/tools/llvm-openmp-install/include ..
-    make
-
-The instructions above will result in `build/libpinsight.so` to be created. 
-
-
-### Run
+### Tracing the Application Execution
 
 #### Tracing script
 
@@ -181,7 +206,7 @@ yyan7@yyan7-Ubuntu:~/tools/pinsight$
 
 ```
 
-For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
+#### Tracing MPI or MPI+X applications, e.g. trace LULESH
 
      scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so \
      /home/yanyh/tools/llvm-openmp-install:/opt/openmpi-install/lib \
@@ -191,13 +216,10 @@ For tracing MPI or MPI+OpenMP applications, e.g. trace LULESH
 After tracing complete, you can use babeltrace tools to dump the trace data to text on the terminal
 
      babeltrace <tracefolder>
-   
-
-------------------------------------
 
 #### Manual LTTng tracing session
 
-Since we're using LTTng, we have to set up a [tracing session][lttng-tracing-session], and enable some [event rules][lttng-event-rules] before starting tracing:
+If not using the provided trace.sh script, one can follow LTTng document to set up [tracing session][lttng-tracing-session], and then enable some [event rules][lttng-event-rules] before starting tracing:
 
    [lttng-tracing-session]: https://lttng.org/docs/v2.10/#doc-tracing-session
    [lttng-event-rules]: https://lttng.org/docs/v2.10/#doc-event
@@ -214,9 +236,8 @@ Since we're using LTTng, we have to set up a [tracing session][lttng-tracing-ses
 
 Once the session has started, LTTng's daemon will be ready to accept the traces our application generates.
 
-In order to generate traces about OMPT events, our `libpinsight.so` library needs to be preloaded by the application.
-We also need to specify which OpenMP runtime to use.
-
+In order to generate traces about OMPT events, our `libpinsight.so` library needs to be preloaded by the application. Latest OpenMP standard provide `OMP_TOOL_LIBRARIES`
+env to point the tool library (pinsight.so), thus no need to use LD_PRELOAD. The OpenMP runtime library is also need to provided for the execution. 
 In order to ensure the 2 shared libraries are loaded correctly, we use the `LD_PRELOAD` environment variable, like so:
 
     # Run an OpenMP application with our shared libraries.
@@ -242,11 +263,8 @@ Shell variable example:
     export PINSIGHT_DEBUG_ENABLE=1
     # Normal tracing stuff from here on...
 
-#### Tracing CUDA program using CUPTI 
 
---------------------------------------------
-
-### Optimizing dynamic tracing to reduce unnecessnary and redundant tracing
+## Optimizing dynamic tracing to reduce unnecessnary and redundant tracing
 In comparison with static tracing that when tracing are started, no changes can be made to change tracing rate, position, etc. Dynamic tracing enables highly optimized tracing according to the needs and behavior of the program execution. We will allow the following configuration to enable and disable tracing in multiple granularity level. 
 
 ##### 1. Completely turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
@@ -269,8 +287,14 @@ To allow user's control of tracing of each parallel region, one can specify a sa
 
 ---------------------------------------------------------------------------
 
-### Analysis
+## View, Analysis, and Visualize PInsight Traces
 
+### Trace text dump
+After tracing complete, you can use babeltrace tool to dump the trace data to text on the terminal
+
+     babeltrace <tracefolder>
+
+### Python script
 This repo comes with a few Python scripts which can dump program statistics into CSV format for analysis.
 
 #### Per-thread per-region
@@ -293,15 +317,14 @@ To run event processing in parallel, use the `-j <NUM_PROCESSES>` flag:
 
     python3 python/per_thread.py -j 8 /tmp/ompt-jacobi/ 32 > per-region.csv
 
-
------
-
-### Screenshot
-
-#### Lulesh tracing and visualization with Tracecompass
- ![Lulesh tracing and visualization with Tracecompass](doc/OMPT_LTTng_TraceCompass.png). The picture was created in Tracecompass using [Data driven analysis](
+### Eclipse Trace Compass and Data-Driven Analysis
+Eclipse Trace Compass can be used to view, analyze and visualize the PInsight traces. See below the screen shot for LULESH tracing and visualization with Tracecompass.
+The visualization was created in Trace Compass using [Data driven analysis](
  http://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis). To generate visualizations like this yourself, look at the `tracecompass/` folder in this repository.
 
+ ![Lulesh tracing and visualization with Tracecompass](doc/OMPT_LTTng_TraceCompass.png). 
+
+-------------------------------------
 
 ### Analyses considered
 
@@ -313,20 +336,3 @@ To run event processing in parallel, use the `-j <NUM_PROCESSES>` flag:
  1. https://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/LTTng-UST-Analyses.html
 
 
-#### Docker install
-
-Docker makes it easy to build the project and its dependencies, and incurs only minimal overheads.
-The commands below show how to create the image, and then get a container up and running.
-
-    sudo docker build -f Dockerfile -t passlab-pinsight
-    sudo docker create --name AAA --privileged passlab-pinsight
-
-The `docker build` command creates an *image* called `passlab-pinsight`.
-The `docker create` command creates a *container* named `AAA`, based on the `passlab-pinsight` image.
-
-We need a privileged container to ensure that access to the underlying hardware isn't an issue.
-(If this requirement can be dropped at a later time, we will drop it.)
-
-To get a terminal open on the example container (for experimentation), try:
-
-    sudo docker exect -it AAA /bin/bash
