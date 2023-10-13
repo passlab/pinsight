@@ -20,7 +20,7 @@ for performance debugging such that the application execution can be paused for 
    [cupti]: https://docs.nvidia.com/cuda/cupti/index.html
    
 ### Build
-1. install several essential dependencies. On Ubuntu systems:
+1. Install the essential dependencies. On Ubuntu systems:
 
            sudo apt-get install build-essential cmake git
 
@@ -88,10 +88,12 @@ NVIDIA [CUDA 12.2 download page](https://developer.nvidia.com/cuda-12-2-2-downlo
        sudo apt-get -y install cuda
 
 The above command will install CUDA at `/usr/local/cuda`, with that, the pinsight library can be built with support for CUDA as: 
+
            git clone https://github.com/passlab/pinsight.git
            cd pinsight && mkdir build && cd build
            cmake -DPINSIGHT_CUDA=TRUE ..
            make
+	   
 If CUDA is not installed at `/usr/local/cuda`, The `CUDA_INSTALL` option should pass to cmake to provide the path to a CUDA install folder. 
 
 #### To build and setup for MPI PMPI event tracing
