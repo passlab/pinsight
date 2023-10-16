@@ -41,7 +41,7 @@ The option to enable features of PInsight includes:
 
 You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
 For OpenMP tracing, building the library requires omp.h and omp-tools.h headers. The PInsight repo `src` folder contains copies of these two header files
-from Clang/LLVM 14.0. If you need to use the two headers that are already installed,  pass to cmake via `OPENMP_INCLUDE_PATH` setting. 
+from Clang/LLVM 14.0. If you need to use the two headers from other locations,  pass to cmake via `OPENMP_INCLUDE_PATH` setting. 
 For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided via `CUDA_INSTALL` with default to be `/usr/local/cuda`. 
 
 Example: 
