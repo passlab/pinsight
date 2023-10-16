@@ -40,7 +40,8 @@ The option to enable features of PInsight includes:
             option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
 
 You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
-For OpenMP, A path that includes omp.h and ompt.h headers needs to provided to cmake via `OPENMP_INCLUDE_PATH` setting. 
+For OpenMP tracing, building the library requires omp.h and omp-tools.h headers. The PInsight repo `src` folder contains copies of these two header files
+from Clang/LLVM 14.0. If you need to use the two headers that are already installed,  pass to cmake via `OPENMP_INCLUDE_PATH` setting. 
 For CUDA tracing, which depends on CUPTI, CUDA/CUPTI installation folder should be provided via `CUDA_INSTALL` with default to be `/usr/local/cuda`. 
 
 Example: 
@@ -57,7 +58,8 @@ The instructions above will result in `build/libpinsight.so` to be created.
 To build and trace OpenMP programs which uses the OMPT event tracing library, [LLVM OpenMP runtime][llvm-openmp] needs to be installed and OMPT 
 should be enabled to support runtime tracing. LLVM has combined modules into 
 one github repo. If you already have Clang/LLVM installed with OpenMP/OMPT enabled, you only need to provide the path to the OpenMP headers (omp.h and omp-tools.h) for 
-building the pinsight library. You will need the libomp.so library for PInsight to trace an OpenMP application. If you do not have Clang/LLVM installed, you will need to clone the whole repo, 
+building the pinsight library. You will need the libomp.so library for PInsight to trace an OpenMP application. 
+If you do not have Clang/LLVM installed, you will need to clone the whole repo, 
 but only need to install the OpenMP library. The following is an example of building LLVM OpenMP runtime library (taken from our `Dockerfile`):
 
     git clone https://github.com/llvm-project/openmp.git && \

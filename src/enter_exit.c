@@ -19,7 +19,7 @@ void exit_pinsight_func() __attribute__((destructor));
 unsigned int pid;
 char hostname[48];
 
-#ifdef PINSIGHT_CUPTI
+#ifdef PINSIGHT_CUDA
 extern void LTTNG_CUPTI_Init (int rank);
 extern void LTTNG_CUPTI_Fini (int rank);
 #endif
