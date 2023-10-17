@@ -161,7 +161,8 @@ extern lexgion_t *lexgion_end(unsigned int * record_id);
 //implemented in lexgion_trace_cnofig.c
 extern lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr);
 extern void print_lexgion_trace_config();
-extern void lexgion_trace_config_read();
+extern void lexgion_trace_config_read_file();
+extern void lexgion_trace_config_read_env();
 extern void initial_lexgion_trace_config();
 
 #ifdef  __cplusplus
