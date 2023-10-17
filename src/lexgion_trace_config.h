@@ -33,6 +33,18 @@ static const char *lexgion_trace_config_keys[] = {
         "tracing_rate",           //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region. 
 };
 
+enum lexgion_trace_config_key_index {
+	OpenMP_trace_enabled_index = 0,
+    MPI_trace_enabled_index,
+    CUDA_trace_enabled_index,
+    ENERGY_trace_enabled_index,
+    BACKTRACE_enabled_index,
+    trace_starts_at_index,
+    initial_trace_count_index,
+    max_num_traces_index,
+    tracing_rate_index,
+};
+
 /**
  * the struct for storing trace config of a lexgion. trace config can be updated at the runtime so PInsight can do dynamic
  * tracing. Each time, PInsight needs to check the config of a lexgion, it checks the lexgion_trace_config object
@@ -76,5 +88,35 @@ typedef struct lexgion_trace_config {  /* all the config fields MUST be from the
                                         * used __sync_bool_compare_and_swap to access it */
     int updated;                       //a flag to indicate whether a config is updated by the ongoing reading from the config file. It is used only for updating
 } lexgion_trace_config_t;
+
+/**
+ * There are two ways to set the configuration options for PInsight tracing:
+ * 1) via environment variables, and 2) via a config file.
+ *
+ * 1) For env variables, below are the variables and their optional values that one can use to set the runtime tracing options.
+ * Env settings are applied to the runtime default configuration for all lexgions. If you want lexgion-specific configuration,
+ * you have to use the second way which is using a config file.
+ * PINSIGHT_TRACE_OPENMP=TRUE|FALSE
+ * PINSIGHT_TRACE_MPI=TRUE|FALSE
+ * PINSIGHT_TRACE_CUDA=TRUE|FALSE
+ * PINSIGHT_TRACE_ENERGY=TRUE|FALSE
+ * PINSIGHT_TRACE_BACKTRACE=TRUE|FALSE
+ * PINSIGHT_TRACE_RATE=<trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>
+ *
+ * The PINSIGHT_TRACE_RATE env can be used to specifying the tracing and sampling rate with four integers. The format is
+ * <trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>, e.g. PINSIGHT_TRACE_RATE=10:20:100:10.
+ * The meaning of each of the four number can be found from the above for the lexgion_trace_config_keys[] declaration. E.g.:
+ *      PINSIGHT_TRACE_RATE=0:0:10:1, This is the system default (lexgion_trace_config_sysdefault function).
+ *         It starting recording from the first execution, then record the first 0 traces,
+                then after that, record one trace per 1 execution and in total max 10 traces should be recorded.
+        PINSIGHT_TRACE_RATE=0:0:-1:-1, Record all the traces.
+        PINSIGHT_TRACE_RATE=0:0:-1:10, record 1 trace per 10 executions for all the executions.
+        PINSIGHT_TRACE_RATE=0:20:20:-1, record the first 20 iterations
+ *
+ * 2) For using a config file to specify runtime tracing options, the file name can be specified using the PINSIGHT_TRACE_CONFIG env.
+ * Please check the sample file in the src folder.
+ *
+ * If both ways are used by the users, the options provided by the config file will be used.
+ */
 
 #endif // LEXGION_TRACE_CONFIG_H

@@ -9,29 +9,9 @@ lexgion_trace_config_t *sysdefault_trace_config; //trace_configs[0]    //system 
 lexgion_trace_config_t *rtdefault_trace_config;  //trace_configs[1]    //runtime default config, configured at runtime
 lexgion_trace_config_t *lexgion_trace_config;    //trace_configs[2...] //lexgion-specific config, configured at runtime
 
-/* Constant or variable for controlling sampling tracing */
-/* For sampling-based tracing, which allows user's control of tracing of each parallel region by specifying
- * a sampling rate, max number of traces, and initial number of traces using PINSIGHT_TRACE_CONFIG environment
- * variable. The PINSIGHT_TRACE_CONFIG should be in the form of
- * <num_initial_traces>:<max_num_traces>:<trace_sampling_rate>. Below are the example of setting PINSIGHT_TRACE_CONFIG
- * and its tracing behavior:
-        PINSIGHT_TRACE_CONFIG=10:50:10, This is the system default. It records the first 10 traces,
-                then after that, record one trace per 10 execution and in total max 50 traces should be recorded.
-        PINSIGHT_TRACE_CONFIG=<any_number>:-1:-1,  Record all the traces.
-        PINSIGHT_TRACE_CONFIG=0:-1:10, record 1 trace per 10 executions for all the executions.
-        PINSIGHT_TRACE_CONFIG=20:20:-1, record the first 20 iterations
-
- * In implementation, there are three global variables for the three configuration variables: NUM_INITIAL_TRACES,
- * MAX_NUM_TRACES, TRACE_SAMPLING_RATE.
- * NUM_INITIAL_TRACES specifies how many traces must be recorded from the beginning of the execution of the region.
- * MAX_NUM_TRACES specifies the total number of trace records LTTng will collect for the region.
- * TRACE_SAMPLING_RATE specifies the rate a trace will be recorded, e.g. every TRACE_SAMPLING_RATE of
- * executions of the region, a trace is recorded.
- * The three variables will be initialized from PINSIGHT_TRACE_CONFIG environment variable when OMPT is initialized.
- * For each region, they are copied to the corresponding variables of each region, thus the implementation has the
- * capability of setting different trace configuration for different regions.
+/**
+ * Read the system default. This is set according to what features are enabled when building the library, check CMakeLists.txt file
  */
-
 static void lexgion_trace_config_sysdefault() {
 	sysdefault_trace_config = &trace_configs[0];
 	rtdefault_trace_config = &trace_configs[1];
@@ -66,7 +46,7 @@ static void lexgion_trace_config_sysdefault() {
 #else
 	sysdefault_trace_config[0].BACKTRACE_enabled = 0;
 #endif
-	sysdefault_trace_config[0].trace_starts_at = 0;
+	sysdefault_trace_config[0].trace_starts_at = 0;     //system default
 	sysdefault_trace_config[0].initial_trace_count = 0; //system default
 	sysdefault_trace_config[0].max_num_traces = 10;     //system default
 	sysdefault_trace_config[0].tracing_rate = 1;        //system default
@@ -82,7 +62,8 @@ static void lexgion_trace_config_sysdefault() {
  */
 __attribute__ ((constructor)) void initial_lexgion_trace_config() {
     lexgion_trace_config_sysdefault();
-    lexgion_trace_config_read();
+    lexgion_trace_config_read_env();
+    lexgion_trace_config_read_file();
     print_lexgion_trace_config();
 }
 
@@ -154,6 +135,22 @@ lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr) {
     return config;
 }
 
+/**
+ * The function check whether the requested setting can be enabled by the system, i.e. a feature can only be enabled if
+ * it is enabled by the system default.
+ *
+ * The function returns the setting: if request to enable, but system does not have this feature, return disabled. Otherwise,
+ * return what is requested
+ *
+ * We can simply set it as system default, but having the checking in order to notify users
+ */
+static int feature_enabling_check(int value, int key_index) { //If the config wants to enable this feature
+    if (((int*)sysdefault_trace_config)[key_index] == 0) {//but the sysdefault is not enabled, i.e. this feature is not available
+	    value = 0; //disable this feature and notify users that feature is not enabled even it is requested.
+        printf("PInsight WARNING: The feature \"%s\" is not supported by the library, thus cannot be enabled! Rebuild the library with support for it.\n", lexgion_trace_config_keys[key_index]);
+    }
+	return value;
+}
 
 /**
  * read in a config line, which is in the format of "key = value" into the config object. key must be a
@@ -181,13 +178,8 @@ static int read_config_line(lexgion_trace_config_t * config, char * lineBuffer) 
                 intvalue = atoi(value);
             }
             //Check whether this feature is enabled by the sysdefault_trace_config. If so, we can enable here.
-            //If not, this feature cannot be used.
-            if (i < NUM_CONFIG_FEATURES && intvalue >= 1) { //If the config wants to enable this feature
-                if (((int*)sysdefault_trace_config)[i] == 0) {//but the sysdefault is not enabled, i.e. this feature is not available
-                    intvalue = 0; //disable this feature and notify users that feature is not enabled even it is requested.
-                    printf("PInsight WARNING: The feature \"%s\" is not supported by the library, thus cannot be enabled! Rebuild the library with support for it.\n", lexgion_trace_config_keys[i]);
-                }
-            }
+            //If not, this feature cannot be used. We can simply set it as system default, but doing so to notify users
+            if (i < NUM_CONFIG_FEATURES && intvalue >= 1) intvalue = feature_enabling_check(intvalue, i);
             ((int*)config)[i] = intvalue;
             //printf("%s=%d\n", key, ((unsigned int*)config)[i]);
             return 0;
@@ -197,11 +189,53 @@ static int read_config_line(lexgion_trace_config_t * config, char * lineBuffer) 
 }
 
 /**
+ * Return the env and update the rtdefault_trace_config
+ */
+static void lexgion_trace_config_read_env_true_false(const char * env, int key_index) {
+    const char* value = getenv(env);
+    if (value == NULL) return;
+
+    int intvalue;
+    if (strcasecmp(value, "TRUE") == 0) {
+        intvalue = 1;
+        intvalue = feature_enabling_check(intvalue, key_index);
+        ((int*)rtdefault_trace_config)[key_index] = intvalue;
+    } else if (strcasecmp(value, "FALSE") == 0) {
+        intvalue = 0;
+        ((int*)rtdefault_trace_config)[key_index] = intvalue;
+    } else { //wrong value, report back
+        printf("PInsight WARNING: Incorrect setting \"%s\" for env %s, ignored!. It can only be set as TRUE or FALSE.\n", value, env);
+    }
+}
+
+/**
+ * Return the env and update the rtdefault_trace_config
+ */
+void lexgion_trace_config_read_env() {
+	lexgion_trace_config_read_env_true_false("PINSIGHT_TRACE_OPENMP", OpenMP_trace_enabled_index);
+	lexgion_trace_config_read_env_true_false("PINSIGHT_TRACE_MPI", MPI_trace_enabled_index);
+	lexgion_trace_config_read_env_true_false("PINSIGHT_TRACE_CUDA", CUDA_trace_enabled_index);
+	lexgion_trace_config_read_env_true_false("PINSIGHT_TRACE_ENERGY", ENERGY_trace_enabled_index);
+	lexgion_trace_config_read_env_true_false("PINSIGHT_TRACE_BACKTRACE", BACKTRACE_enabled_index);
+
+    const char* value = getenv("PINSIGHT_TRACE_RATE");
+    if (value == NULL) return;
+    /* The simpliest way to split the int values for
+     * PINSIGHT_TRACE_RATE=<trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>
+     */
+    sscanf(value, "%d:%d:%d:%d",
+        (int*)rtdefault_trace_config + trace_starts_at_index,
+        (int*)rtdefault_trace_config + initial_trace_count_index,
+        (int*)rtdefault_trace_config + max_num_traces_index,
+        (int*)rtdefault_trace_config + tracing_rate_index);
+}
+
+/**
  * Read the config file and store the configuration into a lexgion_trace_config_t object
  */
-void lexgion_trace_config_read() {
+void lexgion_trace_config_read_file() {
     /* read in config from config file if it is provided via lexgion_trace_configFILE env */
-    const char* configFileName = getenv("PINSIGHT_LEXGION_TRACE_CONFIG");
+    const char* configFileName = getenv("PINSIGHT_TRACE_CONFIG");
     FILE *configFile;
     if (configFileName != NULL) {
         configFile = fopen(configFileName, "r");
