@@ -34,7 +34,7 @@ static void lexgion_trace_config_sysdefault() {
     lexgion_trace_config[0].trace_enabled = 1;
     lexgion_trace_config[0].ompt_trace_enabled = 1;
     lexgion_trace_config[0].pmpi_trace_enabled = 0;
-    lexgion_trace_config[0].cupti_trace_enabled = 0;
+    lexgion_trace_config[0].cupti_trace_enabled = 1;
     lexgion_trace_config[0].trace_starts_at = 0;
     lexgion_trace_config[0].initial_trace_count = 0;
     lexgion_trace_config[0].max_num_traces = 10;
