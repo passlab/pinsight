@@ -90,7 +90,7 @@ typedef struct lexgion {
 
 /* This macro check whether to trace or not: trace_bit is set if trace_enable is set AND
  * traces for the initial number of exes or when reaching sampling rate */
-#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->trace_enabled && (lgp->trace_config->trace_starts_at <= lgp->counter) && \
+#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->OpenMP_trace_enabled && (lgp->trace_config->trace_starts_at <= lgp->counter) && \
                             (lgp->trace_counter < lgp->trace_config->initial_trace_count || \
                             (lgp->trace_counter < lgp->trace_config->max_num_traces && lgp->num_exes_after_last_trace == lgp->trace_config->tracing_rate));}
 
@@ -142,7 +142,7 @@ extern __thread unsigned int task_record_id;
 
 extern __thread pinsight_thread_data_t pinsight_thread_data;
 extern __thread int trace_bit; /* 0 or 1 for enabling trace */
-extern lexgion_trace_config_t lexgion_trace_config[]; //all threads share a single config for each lexgion */
+//extern lexgion_trace_config_t* lexgion_trace_config; //all threads share a single config for each lexgion */
 
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 

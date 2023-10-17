@@ -36,8 +36,8 @@ if (PINSIGHT_OPENMP)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     # if not hardcode here, should be set in cmake as -DOMPLIB_INSTALL=/home/yanyh/tools/llvm-openmp-install
     # only omp.h and ompt.h are needed for building
-    set(OPENMP_INCLUDE_PATH "/usr/lib/llvm-14/lib/clang/14.0.0/includeno" CACHE PATH
-            "Path to an include folder that contains omp.h and omp-tools.h headers for OpenMP support")
+    set(OPENMP_INCLUDE_PATH "src" CACHE PATH
+            "Path to an include folder that contains omp.h and omp-tools.h headers for OpenMP support. By default, the two headers files are provided.")
 
     include_directories(${OPENMP_INCLUDE_PATH})
     list(APPEND SOURCE_FILES

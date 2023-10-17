@@ -4,7 +4,10 @@
 #include <string.h>
 #include "pinsight.h"
 
-lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS+1] = {{1,1,0,0,0,0, -1, 1, 0, 0, 0}}; //The first one is used for default
+lexgion_trace_config_t trace_configs[MAX_NUM_LEXGIONS+2];
+lexgion_trace_config_t *sysdefault_trace_config; //trace_configs[0]    //system default config, defined at built time
+lexgion_trace_config_t *rtdefault_trace_config;  //trace_configs[1]    //runtime default config, configured at runtime
+lexgion_trace_config_t *lexgion_trace_config;    //trace_configs[2...] //lexgion-specific config, configured at runtime
 
 /* Constant or variable for controlling sampling tracing */
 /* For sampling-based tracing, which allows user's control of tracing of each parallel region by specifying
@@ -12,9 +15,9 @@ lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS+1] = {{1,1,0,0,0,0,
  * variable. The PINSIGHT_TRACE_CONFIG should be in the form of
  * <num_initial_traces>:<max_num_traces>:<trace_sampling_rate>. Below are the example of setting PINSIGHT_TRACE_CONFIG
  * and its tracing behavior:
-        PINSIGH_TRACE_CONFIG=10:50:10, This is the system default. It records the first 10 traces,
+        PINSIGHT_TRACE_CONFIG=10:50:10, This is the system default. It records the first 10 traces,
                 then after that, record one trace per 10 execution and in total max 50 traces should be recorded.
-        PINSIGH_TRACE_CONFIG=<any_number>:-1:-1,  Record all the traces.
+        PINSIGHT_TRACE_CONFIG=<any_number>:-1:-1,  Record all the traces.
         PINSIGHT_TRACE_CONFIG=0:-1:10, record 1 trace per 10 executions for all the executions.
         PINSIGHT_TRACE_CONFIG=20:20:-1, record the first 20 iterations
 
@@ -30,23 +33,48 @@ lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS+1] = {{1,1,0,0,0,0,
  */
 
 static void lexgion_trace_config_sysdefault() {
+	sysdefault_trace_config = &trace_configs[0];
+	rtdefault_trace_config = &trace_configs[1];
+	lexgion_trace_config = &trace_configs[2];
     //set the default for the global config, which is full trace
-    lexgion_trace_config[0].trace_enabled = 1;
-    lexgion_trace_config[0].ompt_trace_enabled = 1;
-    lexgion_trace_config[0].pmpi_trace_enabled = 0;
-    lexgion_trace_config[0].cupti_trace_enabled = 0;
-    lexgion_trace_config[0].trace_starts_at = 0;
-    lexgion_trace_config[0].initial_trace_count = 0;
-    lexgion_trace_config[0].max_num_traces = 10;
-    lexgion_trace_config[0].tracing_rate = 1;
-    lexgion_trace_config[0].updated = 0;
-    lexgion_trace_config[0].codeptr = NULL;
+#ifdef PINSIGHT_OPENMP
+	sysdefault_trace_config[0].OpenMP_trace_enabled = 1;
+#else
+	sysdefault_trace_config[0].OpenMP_trace_enabled = 0;
+#endif
 
-    int i;
-    for (i=1; i<MAX_NUM_LEXGIONS; i++) {
-        lexgion_trace_config_t  * config = &lexgion_trace_config[i];
-        memcpy(config, lexgion_trace_config, sizeof(lexgion_trace_config_t));
-    }
+#ifdef PINSIGHT_MPI
+	sysdefault_trace_config[0].MPI_trace_enabled = 1;
+#else
+	sysdefault_trace_config[0].MPI_trace_enabled = 0;
+#endif
+
+#ifdef PINSIGHT_CUDA
+	sysdefault_trace_config[0].CUDA_trace_enabled = 1;
+#else
+	sysdefault_trace_config[0].CUDA_trace_enabled = 0;
+#endif
+
+#ifdef PINSIGHT_ENERGY
+	sysdefault_trace_config[0].ENERGY_trace_enabled = 1;
+#else
+	sysdefault_trace_config[0].ENERGY_trace_enabled = 0;
+#endif
+
+#ifdef PINSIGHT_BACKTRACE
+	sysdefault_trace_config[0].BACKTRACE_enabled = 1;
+#else
+	sysdefault_trace_config[0].BACKTRACE_enabled = 0;
+#endif
+	sysdefault_trace_config[0].trace_starts_at = 0;
+	sysdefault_trace_config[0].initial_trace_count = 0; //system default
+	sysdefault_trace_config[0].max_num_traces = 10;     //system default
+	sysdefault_trace_config[0].tracing_rate = 1;        //system default
+	sysdefault_trace_config[0].updated = 0;
+	sysdefault_trace_config[0].codeptr = NULL;
+
+    //Initialize the default runtime trace config to be the same as the system default
+    memcpy(rtdefault_trace_config, sysdefault_trace_config, sizeof(lexgion_trace_config_t));
 }
 
 /**
@@ -118,7 +146,7 @@ lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr) {
             } /* else, go back to the loop and check again */
         }
         if (unused_entry == MAX_NUM_LEXGIONS) {//assertation check
-            //we have enough entries (MAX_NUM_LEXGIONS) for the posibble number of lexgions in the app.
+            //we have enough entries (MAX_NUM_LEXGIONS) for the max possible number of lexgions in the app.
             //otherwise, this is fault.
 
         }
@@ -144,13 +172,23 @@ static int read_config_line(lexgion_trace_config_t * config, char * lineBuffer) 
     int i;
     for (i=0; i<NUM_CONFIG_KEYS; i++) {
         if (strcasecmp(key, lexgion_trace_config_keys[i]) == 0) {
+            int intvalue;
             if (strcasecmp(value, "TRUE") == 0) {
-                ((int*)config)[i] = 1;
+                intvalue = 1;
             } else if (strcasecmp(value, "FALSE") == 0) {
-                ((int*)config)[i] = 0;
+                intvalue = 0;
             } else {
-                ((int*)config)[i] = atoi(value);
+                intvalue = atoi(value);
             }
+            //Check whether this feature is enabled by the sysdefault_trace_config. If so, we can enable here.
+            //If not, this feature cannot be used.
+            if (i < NUM_CONFIG_FEATURES && intvalue >= 1) { //If the config wants to enable this feature
+                if (((int*)sysdefault_trace_config)[i] == 0) {//but the sysdefault is not enabled, i.e. this feature is not available
+                    intvalue = 0; //disable this feature and notify users that feature is not enabled even it is requested.
+                    printf("PInsight WARNING: The feature \"%s\" is not supported by the library, thus cannot be enabled! Rebuild the library with support for it.\n", lexgion_trace_config_keys[i]);
+                }
+            }
+            ((int*)config)[i] = intvalue;
             //printf("%s=%d\n", key, ((unsigned int*)config)[i]);
             return 0;
         }
@@ -158,22 +196,10 @@ static int read_config_line(lexgion_trace_config_t * config, char * lineBuffer) 
     return 1;
 }
 
-void lexgion_trace_config_copy(lexgion_trace_config_t * dest, lexgion_trace_config_t * src) {
-    dest->trace_enabled = src->trace_enabled;
-    dest->ompt_trace_enabled = src->ompt_trace_enabled;
-    dest->pmpi_trace_enabled = src->pmpi_trace_enabled;
-    dest->cupti_trace_enabled = src->pmpi_trace_enabled;
-    dest->trace_starts_at = src->trace_starts_at;
-    dest->initial_trace_count = src->initial_trace_count;
-    dest->max_num_traces = src->max_num_traces;
-    dest->tracing_rate = src->tracing_rate;
-}
-
 /**
  * Read the config file and store the configuration into a lexgion_trace_config_t object
  */
 void lexgion_trace_config_read() {
-    int freshnewconfig = 1;
     /* read in config from config file if it is provided via lexgion_trace_configFILE env */
     const char* configFileName = getenv("PINSIGHT_LEXGION_TRACE_CONFIG");
     FILE *configFile;
@@ -190,14 +216,10 @@ void lexgion_trace_config_read() {
 
     /* Read the config file and store the configuration into a lexgion_trace_config_t object */
     lexgion_trace_config_t *config; /* The very first one should be initialized from the system */
-    lexgion_trace_config_t *global_config = &lexgion_trace_config[0];
     char lineBuffer[512];
     int max_char = 511;
     void * lexgion_codeptr;
-    int read_global_config = 1; /* a flag */
     int line = 0;
-    int col = 1;
-    int index;
     while (fgets(lineBuffer, max_char, configFile) != NULL) {
         char * ptr = lineBuffer;
         line++;
@@ -218,13 +240,12 @@ void lexgion_trace_config_read() {
                     ptr++;
                     while(*ptr==' ' || *ptr=='\t') ptr++; // skip leading whitespaces
                     if (*ptr == '#' || *ptr=='\r' || *ptr=='\n') {//comment line or empty line
-                        config = global_config;
-                        config->updated = 1;
-                        index = 0;
+                        config = rtdefault_trace_config;
+                        config->updated ++;
                         continue;
                     }
                 }
-                printf("Syntax error in the config file %s:%d\n", configFileName, line);
+                printf("Syntax error in the config file %s:%d: %s\n", configFileName, line, lineBuffer);
             } else if (*ptr == 'l' && *++ptr == 'e' && *++ptr == 'x' && *++ptr == 'g' && *++ptr == 'i' && *++ptr == 'o'
                 && *++ptr == 'n' && *++ptr == '.' && *++ptr == '0' && *++ptr == 'x') { //parse the [lexgion.0x1234567]
                 ptr++;
@@ -237,44 +258,37 @@ void lexgion_trace_config_read() {
                         while(*ptr==' ' || *ptr=='\t') ptr++; // skip leading whitespaces
                         if (*ptr == '#' || *ptr=='\r' || *ptr=='\n') {//comment line or empty line
                             config = retrieve_lexgion_config(lexgion_codeptr);
-                            config->updated = 1;
-                            if (freshnewconfig) lexgion_trace_config_copy(config, global_config); //copy the default config first
+                            if (config->updated == 0) memcpy(config, rtdefault_trace_config, sizeof(lexgion_trace_config_t));
+                            config->updated ++;
                             continue;
                         }
                     }
                 }
-                printf("Syntax error in the config file %s:%d\n", configFileName, line);
+                printf("Syntax error in the config file %s:%d: %s\n", configFileName, line, lineBuffer);
             }
         } else { /* read the config for a specified lexgion */
             int error = read_config_line(config, ptr);
             if (error) {
                 //failed reading a line
-                printf("Syntax error in the config file %s:%d\n", configFileName, line);
+                printf("Syntax error in the config file %s:%d: %s\n", configFileName, line, lineBuffer);
             } else {
             }
         }
     }
     fclose(configFile);
-
-    if (freshnewconfig) {
-        int i;
-        for (i=0; i<MAX_NUM_LEXGIONS; i++) {
-            config = &lexgion_trace_config[i];
-            if (config->updated) {
-                config->updated = 0;
-            } else if (i > 0) { //copy from the global config since this will be the new config to be used in the future
-                lexgion_trace_config_copy(config, global_config);
-            }
-        }
-    }
 }
 
 void print_lexgion_trace_config() {
     int i;
-    printf("\n=================== PInsight Lexgion Tracing Configuration ==============================\n");
-    printf("[default]\n");
-    lexgion_trace_config_t *config = &lexgion_trace_config[0];
+    printf("#=================== PInsight Lexgion Tracing Configuration ==============================\n");
 
+    printf("#  [System Default]\n");
+    lexgion_trace_config_t *config = sysdefault_trace_config;
+    for (i=0; i<NUM_CONFIG_KEYS; i++) {
+        printf("# \t%s = %d\n", lexgion_trace_config_keys[i], ((int*)config)[i]);
+    }
+    printf("[default]\n");
+    config = rtdefault_trace_config;
     for (i=0; i<NUM_CONFIG_KEYS; i++) {
         printf("\t%s = %d\n", lexgion_trace_config_keys[i], ((int*)config)[i]);
     }
@@ -289,5 +303,5 @@ void print_lexgion_trace_config() {
             }
         }
     }
-    printf("==========================================================================================\n\n");
+    printf("#==========================================================================================\n\n");
 }
