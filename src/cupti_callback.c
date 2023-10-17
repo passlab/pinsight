@@ -44,8 +44,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             const void *src = funcParams->src;
             unsigned int count = funcParams->count;
             int kind = funcParams->kind;
+            int testStream = 02;
+      
             //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, kind);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, testStream, kind);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             int return_val = *((int *) cbInfo->functionReturnValue);
             //printf("inside callback for cudaMemcpy_end: %s\n", funName);
@@ -64,7 +66,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             const void* src = p -> src;
             unsigned int count = p -> count;
             int kind = p -> kind;
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, kind);
+            int testStream = 02;
+            //CUstream stream = p -> stream;
+        
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, testStream, kind);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
           int return_val = *((int *) cbInfo -> functionParams);
           lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_end, codeptr, funName, return_val);
