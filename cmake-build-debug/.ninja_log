@@ -1,0 +1,8 @@
+# ninja log v5
+546	598	1698255289526045710	libpinsight.so	2f9a6145e18b317b
+1	130	1698255289058044634	CMakeFiles/pinsight.dir/src/enter_exit.c.o	43c1163bdf830299
+0	52	1698255288978044448	CMakeFiles/pinsight.dir/src/pinsight.c.o	9a171e2d0e138f92
+2	546	1698255289470045581	CMakeFiles/pinsight.dir/src/ompt_callback.c.o	cf47529de7f20a96
+1	49	1698255288978044448	CMakeFiles/pinsight.dir/src/backtrace.c.o	e93279adb5924e6c
+0	48	1698255288974044439	CMakeFiles/pinsight.dir/src/lexgion_trace_config.c.o	54648b40ad618acc
+2	228	1698255289154044855	CMakeFiles/pinsight.dir/src/cupti_callback.c.o	f20f4f1df60e9f1d

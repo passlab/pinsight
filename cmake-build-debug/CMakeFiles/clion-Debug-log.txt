@@ -1,0 +1,13 @@
+/home/eingram4/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/eingram4/.local/share/JetBrains/Toolbox/apps/clion/bin/ninja/linux/x64/ninja -G Ninja -S /home/eingram4/Documents/cuda/pinsight -B /home/eingram4/Documents/cuda/pinsight/cmake-build-debug
+============================================================
+Build with OpenMP Support:     TRUE
+    OPENMP_INCLUDE_PATH: /usr/lib/llvm-14/lib/clang/14.0.0/includeno
+Build with MPI Support:        FALSE
+Build with CUDA Support:       TRUE
+    CUDA_INSTALL: /usr/local/cuda
+    CUPTI_INSTALL: /usr/local/cuda/extras/CUPTI
+Build with GNU BACKTRACE SUPPORT:  TRUE
+============================================================
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/eingram4/Documents/cuda/pinsight/cmake-build-debug
