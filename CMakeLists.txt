@@ -61,7 +61,7 @@ endif()
 if (PINSIGHT_CUDA)
     # CUPTI install location needs to be provided, which could be part of CUDA SDK install or a standaline install
     set(CUDA_INSTALL "/usr/local/cuda" CACHE PATH "CUDA SDK install path that includes CUPTI under extras/CUPTI folder" )
-    set(CUPTI_INSTALL ${CUDA_INSTALL})
+    set(CUPTI_INSTALL ${CUDA_INSTALL}/extras/CUPTI)
 
     include_directories(${CUPTI_INSTALL}/include ${CUDA_INSTALL}/include)
     #list(APPEND PINSIGHT_EXTERNAL_LIBS cupti)

@@ -6,5 +6,5 @@ C_DEFINES = -Dpinsight_EXPORTS
 
 C_INCLUDES = -I/usr/lib/llvm-14/lib/clang/14.0.0/includeno -I/usr/local/cuda/extras/CUPTI/include -I/usr/local/cuda/include -I/home/eingram4/Documents/cuda/pinsight/build/src -I/home/eingram4/Documents/cuda/pinsight/src
 
-C_FLAGS = -O0 -g -Wall -Wextra -fPIC
+C_FLAGS = -g -fPIC
 

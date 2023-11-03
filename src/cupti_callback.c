@@ -11,6 +11,15 @@
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "cupti_lttng_ust_tracepoint.h"
 
+struct callback_data {
+    void *dst;
+    const void *src;
+    unsigned int count;
+    int kind;
+    int stream;
+    int cid;
+};
+
 void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              CUpti_CallbackId cbid, const CUpti_CallbackData *cbInfo) {
     CUptiResult cuptiErr;
@@ -45,7 +54,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             unsigned int count = funcParams->count;
             int kind = funcParams->kind;
             //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, kind);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321,kind);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             int return_val = *((int *) cbInfo->functionReturnValue);
             //printf("inside callback for cudaMemcpy_end: %s\n", funName);
@@ -56,10 +65,25 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
     }
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020) {
-        cudaMemcpyAsync_v3020_params *p = (cudaMemcpyAsync_v3020_params *) cbInfo->functionParams;
+        //cudaMemcpyAsync_v3020_params *p = (cudaMemcpyAsync_v3020_params *) cbInfo->functionParams;
+
+        const char *funName = cbInfo->functionName;
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
+// Store parameters passed to cudaMemcpy
+            cudaMemcpyAsync_v3020_params *p = (cudaMemcpyAsync_v3020_params *) cbInfo->functionParams;
+            void *dst = p->dst;
+            const void *src = p->src;
+            unsigned int count = p->count;
+            int kind = p->kind;
+            int stream = cbInfo->correlationId;
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321, kind);
+
+            //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
 
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
+            int return_val = *((int *) cbInfo->functionReturnValue);
+            //printf("inside callback for cudaMemcpy_end: %s\n", funName);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_end, codeptr, funName, return_val);
 
         } else {
 
@@ -140,12 +164,48 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     return;
 }
 
+//allocated buffer to sore records from activity API
+void CUPTIAPI bufferRequested(uint8_t **buffer, size_t *size, size_t *maxNumRecords) {
+    *size = 16 * 1024;
+    *buffer = (uint8_t *)malloc(*size);
+}
+
+//
+void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer, size_t size, size_t validSize) {
+    CUpti_Activity *record = NULL;
+    CUptiResult status = cuptiActivityGetNextRecord(buffer, validSize, &record);
+
+    while (status == CUPTI_SUCCESS) {
+        if (record->kind == CUPTI_ACTIVITY_KIND_MEMCPY) {
+            CUpti_ActivityMemcpy *memcpyRecord = (CUpti_ActivityMemcpy *)record;
+            printf("Detected cudaMemcpyAsync of %llu bytes on stream %u. CUPTI reported stream ID: %u.\n", 
+                   (unsigned long long)memcpyRecord->bytes, 
+                   memcpyRecord->streamId, 
+                   streamId);
+            //void *dst = memcpyRecord->dst;
+            //const void *src = memcpyRecord->src;
+            //unsigned int count = memcpyRecord->count;
+            //int kind = memcpyRecord->kind;
+            //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 0, kind);
+            
+
+         }
+
+        status = cuptiActivityGetNextRecord(buffer, validSize, &record);
+    }
+
+    free(buffer);
+}
+
+
 static CUpti_SubscriberHandle subscriber;
 
 void LTTNG_CUPTI_Init (int rank) {
     /* Create a subscriber, no need userData for bookkeeping  */
     cuptiSubscribe (&subscriber, (CUpti_CallbackFunc) CUPTI_callback_lttng, NULL);
 
+    //register CUPTI activity callback
+    cuptiActivityRegisterCallbacks(bufferRequested, bufferCompleted);
     /* Activate callbacks for the following API calls:
       CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020
       CUPTI_RUNTIME_TRACE_CBID_cudaConfigureCall_v3020
@@ -168,8 +228,12 @@ void LTTNG_CUPTI_Init (int rank) {
     cuptiEnableCallback (1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API, CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020);
     cuptiEnableCallback (1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API, CUPTI_RUNTIME_TRACE_CBID_cudaDeviceReset_v3020);
     cuptiEnableCallback (1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API, CUPTI_RUNTIME_TRACE_CBID_cudaThreadExit_v3020);
+    //enable activity
+    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
 }
 
 void LTTNG_CUPTI_Fini (int rank) {
     cuptiUnsubscribe(subscriber);
+    // Flush any remaining activity records
+   // cuptiActivityFlushAll(0);
 }
