@@ -5,20 +5,152 @@
 #include <stdio.h>
 #include <cuda.h>
 #include <cupti.h>
+#include <pthread.h>
 #include "pinsight.h"
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "cupti_lttng_ust_tracepoint.h"
 
-struct callback_data {
+typedef struct {
+    int cid;
     void *dst;
     const void *src;
     unsigned int count;
     int kind;
     int stream;
-    int cid;
-};
+    void* next;
+    const void* codeptr;
+    const char* funName;
+}callback_data;
+
+typedef struct {
+    int size;
+    int capacity;
+    callback_data** buckets;
+}hash_table;
+
+hash_table hash_t;
+pthread_mutex_t  mutex; //mutex associated with hashmap
+
+
+int hash(hash_table* ht, int key) {
+    return key % ht->capacity;
+}
+
+void hash_table_init(hash_table* ht, int capacity) {
+    ht->buckets = (callback_data**)malloc(capacity*sizeof(callback_data*));
+    ht->capacity = capacity;
+    ht->size = capacity;
+    for (int i = 0; i < capacity; i++) {
+        ht->buckets[i] = NULL;
+    }
+}
+
+void callback_data_init(callback_data* cbd) {
+    cbd->cid = (int)NULL;
+    cbd->src = NULL;
+    cbd->dst = NULL;
+    cbd->kind = (int)NULL;
+    cbd->count = (int)NULL;
+    cbd->stream = (int)NULL;
+    cbd->codeptr = NULL;
+    cbd->funName = NULL;
+    cbd->next = NULL;
+}
+
+int hash_table_insert(hash_table* ht, callback_data* cbd) {
+    int index = hash(ht, cbd->cid);
+    if(ht->buckets[index] != NULL) {
+        //printf("OCCUPIED");
+        callback_data* node = ht->buckets[index];
+        while (node->next != NULL) {
+            //printf("next cid: %d\n",node->cid);
+            node = node->next;
+        }
+        node->next = cbd;
+    } else {
+        //printf("EMPTY");
+        ht->buckets[index] = cbd;
+        return 1;
+    }
+    return 0;
+}
+
+int hash_table_remove(hash_table* ht, int key) {
+    int index = hash(ht, key);
+    if (ht->buckets[index] != NULL) {
+        ht -> buckets[index] = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+callback_data* get(hash_table* ht, int key) {
+    int index = hash(ht, key);
+    if (ht->buckets[index] == NULL) {
+        return ht->buckets[index];
+    } else {
+        return NULL;
+    }
+}
+
+void hash_table_clean(hash_table* ht) {
+    for (int i = 0; i < ht->capacity; i++) {
+        free(ht->buckets[i]);
+    }
+    free(ht->buckets);
+    //free(ht);
+}
+
+void print_hash_table(hash_table* ht) {
+    printf("---START---\n");
+    for (int i = 0; i < ht->size; i++) {
+        if (ht->buckets[i] == NULL) {
+            printf("cid = ---\n");
+        } else {
+            callback_data* node;
+            node = ht->buckets[i];
+            int depth = 1;
+            printf("depth %d cid = %d\n",depth,node->cid);
+            while (node->next != NULL) {
+                depth += 1;
+                node = node->next;
+                printf("depth %d cid = %d\n",depth,node->cid);
+            }
+        }
+    }
+    printf("---END---\n");
+}
+
+void print_callback_data(callback_data* cbd) {
+    printf("callback data:\n cid: %d\n dst: %p\n src: %p count: %d\n kind: %d\n stream: %d\n codept: %p\n funame: %s\n", cbd->cid,cbd->dst,cbd->src,cbd->count,cbd->kind,cbd->stream,cbd->codeptr,cbd->funName);
+}
+
+int try_write_trace(hash_table* ht, int cid) {
+    callback_data * data = get(ht,cid);
+    if (data != NULL) {
+        if (data->cid != NULL &&
+            data->dst != NULL &&
+            data->dst != NULL &&
+            data->kind != NULL &&
+            data->stream != NULL &&
+            data -> codeptr != NULL &&
+            data -> funName != NULL
+            ) {
+            print_callback_data(data);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid,data->kind);
+
+        }
+       
+        return 1;
+    } else {
+
+
+        return 0;
+    }
+}
+
 
 void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              CUpti_CallbackId cbid, const CUpti_CallbackData *cbInfo) {
@@ -54,6 +186,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             unsigned int count = funcParams->count;
             int kind = funcParams->kind;
             //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
+            printf("test print sync\n");
             lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321,kind);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             int return_val = *((int *) cbInfo->functionReturnValue);
@@ -75,7 +208,25 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             const void *src = p->src;
             unsigned int count = p->count;
             int kind = p->kind;
-            int stream = cbInfo->correlationId;
+            int cid = cbInfo->correlationId;
+            //printf("raw cid: %d\n", cid);
+
+            //check if copy is in the hashmap. we use a mutex to make sure the other callback isn't accessing data at the sametime
+            pthread_mutex_lock(&mutex);
+            if (get(&hash_t,cid) == NULL) {
+                callback_data* data = (callback_data*)malloc(sizeof(callback_data));
+                callback_data_init(data);
+                data->cid = cid;
+                hash_table_insert(&hash_t, data);
+                try_write_trace(&hash_t, cid);
+            } else {
+                try_write_trace(&hash_t, cid);
+            }
+            pthread_mutex_unlock(&mutex);
+
+            //printf("post creation cid: %d\n", data->cid);
+            //printf("test print async\n");
+
             lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321, kind);
 
             //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
@@ -187,8 +338,20 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
             //unsigned int count = memcpyRecord->count;
             //int kind = memcpyRecord->kind;
             //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 0, kind);
-            
-
+            int cid = memcpyRecord->correlationId;
+            pthread_mutex_lock(&mutex);
+            callback_data* data = get(&hash_t,cid);
+            if (data == NULL) {
+                callback_data* data = (callback_data*)malloc(sizeof(callback_data));
+                callback_data_init(data);
+                data->cid = cid;
+                data->stream = memcpyRecord->streamId;
+                hash_table_insert(&hash_t, data);
+            } else {
+                data->stream = memcpyRecord->streamId;
+                try_write_trace(&hash_t, cid);
+            }
+            pthread_mutex_unlock(&mutex);
          }
 
         status = cuptiActivityGetNextRecord(buffer, validSize, &record);
@@ -201,6 +364,11 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
 static CUpti_SubscriberHandle subscriber;
 
 void LTTNG_CUPTI_Init (int rank) {
+    /*initialize hash map*/
+    hash_table_init(&hash_t, 100);
+
+    /*initialize mutex*/
+    pthread_mutex_init(&mutex, NULL);
     /* Create a subscriber, no need userData for bookkeeping  */
     cuptiSubscribe (&subscriber, (CUpti_CallbackFunc) CUPTI_callback_lttng, NULL);
 
@@ -235,5 +403,9 @@ void LTTNG_CUPTI_Init (int rank) {
 void LTTNG_CUPTI_Fini (int rank) {
     cuptiUnsubscribe(subscriber);
     // Flush any remaining activity records
-   // cuptiActivityFlushAll(0);
+    cuptiActivityFlushAll(0);
+    // clean up hash table
+    print_hash_table(&hash_t);
+    hash_table_clean(&hash_t);
+ 
 }
