@@ -152,6 +152,17 @@ CMakeFiles/pinsight.dir/src/cupti_callback.c.o: /home/eingram4/Documents/cuda/pi
   /usr/local/cuda/include/builtin_types.h \
   /usr/local/cuda/include/cuda_device_runtime_api.h \
   /usr/local/cuda/extras/CUPTI/include/generated_cuda_meta.h \
+  /usr/include/pthread.h \
+  /usr/include/sched.h \
+  /usr/include/x86_64-linux-gnu/bits/sched.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h \
+  /usr/include/x86_64-linux-gnu/bits/cpu-set.h \
+  /usr/include/time.h \
+  /usr/include/x86_64-linux-gnu/bits/time.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
+  /usr/include/x86_64-linux-gnu/bits/setjmp.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
   /home/eingram4/Documents/cuda/pinsight/src/pinsight.h \
   src/pinsight_config.h \
   /home/eingram4/Documents/cuda/pinsight/src/lexgion_trace_config.h \
@@ -213,17 +224,6 @@ CMakeFiles/pinsight.dir/src/cupti_callback.c.o: /home/eingram4/Documents/cuda/pi
   /usr/include/byteswap.h \
   /usr/lib/gcc/x86_64-linux-gnu/12/include/float.h \
   /usr/include/x86_64-linux-gnu/urcu/ref.h \
-  /usr/include/pthread.h \
-  /usr/include/sched.h \
-  /usr/include/x86_64-linux-gnu/bits/sched.h \
-  /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h \
-  /usr/include/x86_64-linux-gnu/bits/cpu-set.h \
-  /usr/include/time.h \
-  /usr/include/x86_64-linux-gnu/bits/time.h \
-  /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h \
-  /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
-  /usr/include/x86_64-linux-gnu/bits/setjmp.h \
-  /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
   /usr/include/x86_64-linux-gnu/lttng/ust-ringbuffer-context.h \
   /usr/include/x86_64-linux-gnu/lttng/ust-tracepoint-event-reset.h \
   /usr/include/x86_64-linux-gnu/lttng/ust-tracepoint-event-write.h \
@@ -680,16 +680,6 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/include/x86_64-linux-gnu/lttng/ust-tracepoint-event-reset.h:
 
-/usr/include/x86_64-linux-gnu/bits/time.h:
-
-/usr/include/x86_64-linux-gnu/bits/cpu-set.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h:
-
-/usr/include/x86_64-linux-gnu/bits/sched.h:
-
-/usr/include/sched.h:
-
 /usr/include/x86_64-linux-gnu/urcu/ref.h:
 
 /usr/include/x86_64-linux-gnu/lttng/ust-events.h:
@@ -734,13 +724,25 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/include/x86_64-linux-gnu/bits/posix_opt.h:
 
+/usr/include/x86_64-linux-gnu/lttng/ust-utils.h:
+
+/usr/include/x86_64-linux-gnu/urcu/system.h:
+
+/usr/include/x86_64-linux-gnu/urcu/uatomic/x86.h:
+
+/usr/include/x86_64-linux-gnu/bits/syscall.h:
+
+/usr/include/x86_64-linux-gnu/asm/unistd.h:
+
 /usr/lib/gcc/x86_64-linux-gnu/12/include/stdint.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h:
 
 /usr/local/cuda/include/device_types.h:
 
-/usr/include/x86_64-linux-gnu/asm/unistd.h:
+/usr/include/x86_64-linux-gnu/asm/unistd_64.h:
+
+/usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h:
 
 /home/eingram4/Documents/cuda/pinsight/src/ompt_lttng_ust_tracepoint.h:
 
@@ -754,10 +756,6 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h:
 
-/usr/include/x86_64-linux-gnu/bits/setjmp.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
-
 /usr/include/x86_64-linux-gnu/bits/pthread_stack_min.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h:
@@ -766,9 +764,9 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/include/x86_64-linux-gnu/bits/long-double.h:
 
-/usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h:
+/usr/include/x86_64-linux-gnu/sys/syscall.h:
 
-/usr/include/x86_64-linux-gnu/urcu/arch/generic.h:
+/usr/include/x86_64-linux-gnu/bits/select.h:
 
 /usr/local/cuda/include/builtin_types.h:
 
@@ -793,6 +791,10 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 /usr/local/cuda/include/surface_types.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/clockid_t.h:
+
+/usr/include/x86_64-linux-gnu/urcu/arch/generic.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h:
 
 /usr/include/stdio.h:
 
@@ -830,15 +832,15 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/local/cuda/include/cuda_device_runtime_api.h:
 
-/usr/include/time.h:
-
-/usr/include/x86_64-linux-gnu/lttng/ust-api-compat.h:
-
 /usr/include/x86_64-linux-gnu/bits/endianness.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h:
 
 /usr/include/x86_64-linux-gnu/bits/typesizes.h:
+
+/usr/include/x86_64-linux-gnu/urcu/uatomic/generic.h:
+
+/usr/local/cuda/extras/CUPTI/include/cupti_result.h:
 
 /home/eingram4/Documents/cuda/pinsight/src/common_tp_fields_global_lttng_ust_tracepoint.h:
 
@@ -853,10 +855,6 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 /usr/include/x86_64-linux-gnu/bits/pthreadtypes-arch.h:
 
 /usr/local/cuda/extras/CUPTI/include/cupti_metrics.h:
-
-/usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h:
-
-/usr/include/x86_64-linux-gnu/asm/unistd_64.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h:
 
@@ -892,15 +890,7 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/include/x86_64-linux-gnu/lttng/urcu/pointer.h:
 
-/usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h:
-
-/usr/include/x86_64-linux-gnu/bits/floatn.h:
-
 /usr/include/x86_64-linux-gnu/bits/wordsize.h:
-
-/usr/include/pthread.h:
-
-/usr/lib/gcc/x86_64-linux-gnu/12/include/syslimits.h:
 
 /usr/include/stdlib.h:
 
@@ -944,6 +934,10 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/lib/gcc/x86_64-linux-gnu/12/include/limits.h:
 
+/usr/include/x86_64-linux-gnu/lttng/ust-api-compat.h:
+
+/usr/include/time.h:
+
 /usr/include/x86_64-linux-gnu/bits/wchar.h:
 
 /usr/include/x86_64-linux-gnu/bits/local_lim.h:
@@ -958,15 +952,11 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 
 /usr/local/cuda/extras/CUPTI/include/cupti_events.h:
 
-/usr/include/x86_64-linux-gnu/urcu/system.h:
+/usr/include/x86_64-linux-gnu/bits/cpu-set.h:
 
 /usr/include/x86_64-linux-gnu/lttng/ust-endian.h:
 
 /usr/local/cuda/extras/CUPTI/include/cupti_driver_cbid.h:
-
-/usr/include/x86_64-linux-gnu/bits/select.h:
-
-/usr/include/x86_64-linux-gnu/sys/syscall.h:
 
 /usr/include/x86_64-linux-gnu/lttng/ust-tracepoint-event-nowrite.h:
 
@@ -985,6 +975,26 @@ CMakeFiles/pinsight.dir/src/pinsight.c.o: /home/eingram4/Documents/cuda/pinsight
 /usr/include/x86_64-linux-gnu/urcu/uatomic.h:
 
 /usr/local/cuda/extras/CUPTI/include/generated_cuda_meta.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/12/include/syslimits.h:
+
+/usr/include/pthread.h:
+
+/usr/include/sched.h:
+
+/usr/include/x86_64-linux-gnu/bits/sched.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h:
+
+/usr/include/x86_64-linux-gnu/bits/time.h:
+
+/usr/include/x86_64-linux-gnu/bits/floatn.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
+
+/usr/include/x86_64-linux-gnu/bits/setjmp.h:
 
 /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h:
 
@@ -1021,13 +1031,3 @@ src/pinsight_config.h:
 /usr/include/string.h:
 
 /usr/include/x86_64-linux-gnu/urcu/arch.h:
-
-/usr/include/x86_64-linux-gnu/bits/syscall.h:
-
-/usr/include/x86_64-linux-gnu/urcu/uatomic/x86.h:
-
-/usr/local/cuda/extras/CUPTI/include/cupti_result.h:
-
-/usr/include/x86_64-linux-gnu/urcu/uatomic/generic.h:
-
-/usr/include/x86_64-linux-gnu/lttng/ust-utils.h:
