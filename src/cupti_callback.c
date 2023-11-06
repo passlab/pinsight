@@ -150,7 +150,7 @@ int try_write_trace(callback_data* data) {
             print_callback_data(data);
             lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid, data->kind);
 
-            //printf("TRACEPOINT WRITTEN\n");
+            printf("TRACEPOINT WRITTEN\n");
             return 1;
         }
         return 0;
@@ -225,7 +225,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             data = get(&hash_t,cid);
             //print_callback_data(data); //crashing right here
             if (data  == NULL) {
-                printf("null\n");
+                printf("data is null\n");
                 data = (callback_data*)malloc(sizeof(callback_data));
                 callback_data_init(data);
                 data->cid = cid;
@@ -236,7 +236,6 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                 data->codeptr = codeptr;
                 data->funName = funName;
                 hash_table_insert(&hash_t, data);
-                //try_write_trace(data);
                 pthread_mutex_unlock(&mutex);
             } else {
                 data->cid = cid;
@@ -246,11 +245,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                 data->kind = p->kind;
                 data->codeptr = codeptr;
                 data->funName = funName;
-                printf("not null\n");
+                printf("---ELSE BRANCH ACTIVITY API---\n");
                 pthread_mutex_unlock(&mutex);
-                //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321, kind);
+                lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321, kind);
                 //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid, data->kind);
-
                 try_write_trace(data);
             }
 
@@ -364,11 +362,6 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
                    (unsigned long long)memcpyRecord->bytes, 
                    memcpyRecord->streamId, 
                    streamId);
-            //void *dst = memcpyRecord->dst;
-            //const void *src = memcpyRecord->src;
-            //unsigned int count = memcpyRecord->count;
-            //int kind = memcpyRecord->kind;
-            //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 0, kind);
             int cid = memcpyRecord->correlationId;
             pthread_mutex_lock(&mutex);
             callback_data* data;
@@ -383,7 +376,7 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
                 pthread_mutex_unlock(&mutex);
             } else {
                 data->stream = memcpyRecord->streamId;
-                printf("not null");
+                printf("---ELSE BRANCH ACTIVITY API---\n");
                 pthread_mutex_unlock(&mutex);
                 //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid, data->kind);
                 try_write_trace(data);
@@ -437,9 +430,10 @@ void LTTNG_CUPTI_Init (int rank) {
 }
 
 void LTTNG_CUPTI_Fini (int rank) {
+    cuptiActivityFlushAll(0);
     cuptiUnsubscribe(subscriber);
     // Flush any remaining activity records
-    cuptiActivityFlushAll(0);
+    //cuptiActivityFlushAll(0);
     // clean up hash table
     print_hash_table(&hash_t);
     hash_table_clean(&hash_t);
