@@ -88,11 +88,21 @@ int hash_table_remove(hash_table* ht, int key) {
 
 callback_data* get(hash_table* ht, int key) {
     int index = hash(ht, key);
-    if (ht->buckets[index] == NULL) {
-        return ht->buckets[index];
-    } else {
-        return NULL;
+    callback_data* node = ht->buckets[index];
+    if (node != NULL) {
+        if (node->cid == key) {
+            return node;
+        } else {
+            while (node->next != NULL) {
+                node = node->next;
+                if (node->cid == key) {
+                    return node;
+                }
+            }
+            return NULL;
+        }
     }
+    return NULL;
 }
 
 void hash_table_clean(hash_table* ht) {
@@ -124,10 +134,11 @@ void print_hash_table(hash_table* ht) {
 }
 
 void print_callback_data(callback_data* cbd) {
-    printf("callback data:\n cid: %d\n dst: %p\n src: %p count: %d\n kind: %d\n stream: %d\n codept: %p\n funame: %s\n", cbd->cid,cbd->dst,cbd->src,cbd->count,cbd->kind,cbd->stream,cbd->codeptr,cbd->funName);
+    printf("callback data:\n cid: %d\n dst: %p\n src: %p\n count: %d\n kind: %d\n stream: %d\n codept: %p\n funame: %s\n", cbd->cid,cbd->dst,cbd->src,cbd->count,cbd->kind,cbd->stream,cbd->codeptr,cbd->funName);
 }
 
 int try_write_trace(callback_data* data) {
+    print_callback_data(data);
     if (data != NULL) {
         if (data->cid != NULL &&
             data->dst != NULL &&
@@ -137,7 +148,7 @@ int try_write_trace(callback_data* data) {
             data -> codeptr != NULL &&
             data -> funName != NULL
             ) {
-            print_callback_data(data);
+
             lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid,data->kind);
 
         }
@@ -213,13 +224,31 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             //check if copy is in the hashmap. we use a mutex to make sure the other callback isn't accessing data at the sametime
             pthread_mutex_lock(&mutex);
             callback_data* data;
-            if ((data = get(&hash_t,cid)) == NULL) {
+            data = get(&hash_t,cid);
+            //print_callback_data(data); //crashing right here
+            if (data  == NULL) {
+                printf("null\n");
                 data = (callback_data*)malloc(sizeof(callback_data));
                 callback_data_init(data);
                 data->cid = cid;
+                data->dst = p->dst;
+                data->src = p->src;
+                data->count = p->count;
+                data->kind = p->kind;
+                data->codeptr = codeptr;
+                data->funName = funName;
                 hash_table_insert(&hash_t, data);
                 //try_write_trace(data);
             } else {
+                data->cid = cid;
+                data->dst = p->dst;
+                data->src = p->src;
+                data->count = p->count;
+                data->kind = p->kind;
+                data->codeptr = codeptr;
+                data->funName = funName;
+                printf("not null\n");
+
                 try_write_trace(data);
             }
             pthread_mutex_unlock(&mutex);
@@ -341,14 +370,17 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
             int cid = memcpyRecord->correlationId;
             pthread_mutex_lock(&mutex);
             callback_data* data;
-            if ((data = get(&hash_t,cid)) == NULL) {
+            data = get(&hash_t,cid);
+            //print_callback_data(data); //crashing right here
+            if (data == NULL) {
                 data = (callback_data*)malloc(sizeof(callback_data));
                 callback_data_init(data);
-                data->cid = cid;
                 data->stream = memcpyRecord->streamId;
                 hash_table_insert(&hash_t, data);
+                printf("null\n");
             } else {
                 data->stream = memcpyRecord->streamId;
+                printf("not null");
                 try_write_trace(data);
             }
             pthread_mutex_unlock(&mutex);
