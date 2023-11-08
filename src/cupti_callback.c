@@ -206,6 +206,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
     }
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020) {
+        printf("CALLBACKAPI ID: %d, Thread ID: %lu\n", getpid(), pthread_self());
         //cudaMemcpyAsync_v3020_params *p = (cudaMemcpyAsync_v3020_params *) cbInfo->functionParams;
 
         const char *funName = cbInfo->functionName;
@@ -236,6 +237,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                 data->codeptr = codeptr;
                 data->funName = funName;
                 hash_table_insert(&hash_t, data);
+                int lttng_enbaled = 777;
+                lttng_enbaled = lttng_ust_tracepoint_enabled(cupti_pinsight_lttng_ust, cudaMemcpy_begin);
+                //printf("lttng enabled status: %d\n", lttng_enbaled);
+                printf("address of lttng_ust_tracepoint: CALLBACK API IF %p lttng enabled status: %d \n", &lttng_ust_tracepoint_cupti_pinsight_lttng_ust___cudaMemcpy_end, lttng_enbaled);
                 pthread_mutex_unlock(&mutex);
             } else {
                 data->cid = cid;
@@ -248,8 +253,14 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                 printf("---ELSE BRANCH ACTIVITY API---\n");
                 pthread_mutex_unlock(&mutex);
                 lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, 123, 321, kind);
+                int lttng_enbaled = 777;
+                lttng_enbaled = lttng_ust_tracepoint_enabled(cupti_pinsight_lttng_ust, cudaMemcpy_begin);
+                //printf("lttng enabled status: %d\n", lttng_enbaled);
+                printf("address of lttng_ust_tracepoint: CALLBACK API ELSE %p lttng enabled status: %d \n", &lttng_ust_tracepoint_cupti_pinsight_lttng_ust___cudaMemcpy_end, lttng_enbaled);
+
                 //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid, data->kind);
                 try_write_trace(data);
+                pthread_mutex_unlock(&mutex);
             }
 
 
@@ -354,8 +365,12 @@ void CUPTIAPI bufferRequested(uint8_t **buffer, size_t *size, size_t *maxNumReco
 void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer, size_t size, size_t validSize) {
     CUpti_Activity *record = NULL;
     CUptiResult status = cuptiActivityGetNextRecord(buffer, validSize, &record);
+    int threadId = pthread_self();
+    printf("ACTIVITYAPTI: Process ID: %d, Thread ID: %lu\n", getpid(), pthread_self());
+
 
     while (status == CUPTI_SUCCESS) {
+
         if (record->kind == CUPTI_ACTIVITY_KIND_MEMCPY) {
             CUpti_ActivityMemcpy *memcpyRecord = (CUpti_ActivityMemcpy *)record;
             printf("Detected cudaMemcpyAsync of %llu bytes on stream %u. CUPTI reported stream ID: %u.\n", 
@@ -373,13 +388,25 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
                 data->stream = memcpyRecord->streamId;
                 hash_table_insert(&hash_t, data);
                 printf("null\n");
+                int lttng_enbaled = 777;
+                lttng_enbaled = lttng_ust_tracepoint_enabled(cupti_pinsight_lttng_ust, cudaMemcpy_begin);
+                //printf("lttng enabled status: %d\n", lttng_enbaled);
+                printf("address of lttng_ust_tracepoint: ACTICITY API IF %p lttng enabled status: %d \n", &lttng_ust_tracepoint_cupti_pinsight_lttng_ust___cudaMemcpy_end, lttng_enbaled);
                 pthread_mutex_unlock(&mutex);
             } else {
                 data->stream = memcpyRecord->streamId;
                 printf("---ELSE BRANCH ACTIVITY API---\n");
-                pthread_mutex_unlock(&mutex);
+
                 //lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, data->codeptr, data->funName, data->dst, data->src, data->count, data->stream, data->cid, data->kind);
                 try_write_trace(data);
+                int lttng_enbaled = 777;
+                lttng_enbaled = lttng_ust_tracepoint_enabled(cupti_pinsight_lttng_ust, cudaMemcpy_begin);
+                //printf("lttng enabled status: %d\n", lttng_enbaled);
+                printf("address of lttng_ust_tracepoint: ACTICITY API ELSE %p lttng enabled status: %d \n", &lttng_ust_tracepoint_cupti_pinsight_lttng_ust___cudaMemcpy_end, lttng_enbaled);
+
+                //printf("lttng enabled function location: %p\n", &cupti_pinsight_lttng_ust);
+
+                pthread_mutex_unlock(&mutex);
             }
         }
 
@@ -394,10 +421,12 @@ static CUpti_SubscriberHandle subscriber;
 
 void LTTNG_CUPTI_Init (int rank) {
     /*initialize hash map*/
+
     hash_table_init(&hash_t, 100);
 
     /*initialize mutex*/
     pthread_mutex_init(&mutex, NULL);
+    printf("INIT: Process ID: %d, Thread ID: %lu\n", getpid(), pthread_self());
     /* Create a subscriber, no need userData for bookkeeping  */
     cuptiSubscribe (&subscriber, (CUpti_CallbackFunc) CUPTI_callback_lttng, NULL);
 
