@@ -1,0 +1,858 @@
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda-12.1/lib64:
+Session testtraces-tracing-session created.
+Traces will be output to /home/eingram4/Documents/cuda/LULESH-2.0.2-dev/cuda/testTraces
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+ust event ompt_pinsight_lttng_ust:* created in channel channel0
+ust event pmpi_pinsight_lttng_ust:* created in channel channel0
+ust event cupti_pinsight_lttng_ust:* created in channel channel0
+All ust events are enabled in channel channel0
+ust context procname added to all channels
+ust context vpid added to all channels
+ust context vtid added to all channels
+ust context ip added to all channels
+Tracing started for session testtraces-tracing-session
+#=================== PInsight Lexgion Tracing Configuration ==============================
+#  [System Default]
+# 	OpenMP_trace_enabled = 1
+# 	MPI_trace_enabled = 0
+# 	CUDA_trace_enabled = 1
+# 	ENERGY_trace_enabled = 0
+# 	BACKTRACE_enabled = 1
+# 	trace_starts_at = 0
+# 	initial_trace_count = 0
+# 	max_num_traces = 10
+# 	tracing_rate = 1
+[default]
+	OpenMP_trace_enabled = 1
+	MPI_trace_enabled = 0
+	CUDA_trace_enabled = 1
+	ENERGY_trace_enabled = 0
+	BACKTRACE_enabled = 1
+	trace_starts_at = 0
+	initial_trace_count = 0
+	max_num_traces = 10
+	tracing_rate = 1
+#==========================================================================================
+
+INIT: Process ID: 749652, Thread ID: 140323409960960
+Host CCI1XVLWP3LWS using GPU 0: NVIDIA RTX A4000
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+Running until t=0.010000, Problem size=45x45x45
+   Used Memory         =  271.8125 Mb
+test print sync
+Run completed:  
+   Problem size        =  45 
+   MPI tasks           =  1 
+   Iteration count     =  1477 
+   Final Origin Energy = 4.234875e+05 
+test print sync
+   Testing Plane 0 of Energy Array on rank 0:
+        MaxAbsDiff   = 4.220055e-10
+        TotalAbsDiff = 3.314958e-09
+        MaxRelDiff   = 1.824377e-12
+
+
+Elapsed time         =       2.08 (s)
+Grind time (us/z/c)  = 0.01543177 (per dom)  (0.01543177 overall)
+FOM                  =  64801.379 (z/s)
+
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+data is null
+address of lttng_ust_tracepoint: CALLBACK API IF 0x7f9f977c3960 lttng enabled status: 1 
+CALLBACKAPI ID: 749652, Thread ID: 140323409960960
+ACTIVITYAPTI: Process ID: 749652, Thread ID: 140323258257408
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 125
+ dst: 0x7f9f53cb2000
+ src: 0x55c32ed1b580
+ count: 778688
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 127
+ dst: 0x7f9f53e00000
+ src: 0x55c32edd9750
+ count: 778688
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 129
+ dst: 0x7f9f53ebe200
+ src: 0x55c32ee97920
+ count: 778688
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 2916352 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 131
+ dst: 0x7f9f37a00000
+ src: 0x7f9f7040b010
+ count: 2916352
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 8464 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 139
+ dst: 0x7f9f377c1400
+ src: 0x55c32ef5ee10
+ count: 8464
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 8464 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 141
+ dst: 0x7f9f377bf200
+ src: 0x55c32ef5ccf0
+ count: 8464
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 8464 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 143
+ dst: 0x7f9f377bd000
+ src: 0x55c32ef5abd0
+ count: 8464
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 145
+ dst: 0x7f9f37eb2000
+ src: 0x55c32f176fb0
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 147
+ dst: 0x7f9f37659000
+ src: 0x55c32ef61070
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 149
+ dst: 0x7f9f376b2000
+ src: 0x55c32efba050
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 151
+ dst: 0x7f9f3770b000
+ src: 0x55c32f013030
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 153
+ dst: 0x7f9f37764000
+ src: 0x55c32f06c010
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 155
+ dst: 0x7f9f37e00000
+ src: 0x55c32f0c4ff0
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 157
+ dst: 0x7f9f37e59000
+ src: 0x55c32f11dfd0
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 389344 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 159
+ dst: 0x7f9f53f7c400
+ src: 0x55c32efc0160
+ count: 389344
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 389344 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 161
+ dst: 0x7f9f2e17c400
+ src: 0x55c32ef61070
+ count: 389344
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 2916000 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 163
+ dst: 0x7f9f2ea00000
+ src: 0x7f9f70143010
+ count: 2916000
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 165
+ dst: 0x7f9f37600000
+ src: 0x55c32f01f250
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 167
+ dst: 0x7f9f2e8be200
+ src: 0x55c32f078230
+ count: 778688
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 729000 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 169
+ dst: 0x7f9f3feb2000
+ src: 0x55c32f1d0380
+ count: 729000
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 729000 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 171
+ dst: 0x7f9f53c00000
+ src: 0x55c32f282330
+ count: 729000
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 8 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 173
+ dst: 0x7f9f37f0b000
+ src: 0x7ffcaa532b90
+ count: 8
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 8 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 175
+ dst: 0x7ffcaa532bb0
+ src: 0x7f9f3feb2000
+ count: 8
+ kind: 2
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 44 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 187
+ dst: 0x7f9f53fdb600
+ src: 0x55c32ef60250
+ count: 44
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 44 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 189
+ dst: 0x7f9f53fdb800
+ src: 0x55c32ef60290
+ count: 44
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 191
+ dst: 0x7f9f2e37c400
+ src: 0x55c32f136400
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 364500 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 193
+ dst: 0x7f9f2e57c400
+ src: 0x55c32f3342e0
+ count: 364500
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 44 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 195
+ dst: 0x7f9f53fdba00
+ src: 0x55c32ef5ae10
+ count: 44
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 197
+ dst: 0x55c32ed1b580
+ src: 0x7f9f2e8be200
+ count: 778688
+ kind: 2
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 199
+ dst: 0x7f9f2e8be200
+ src: 0x55c32ed1b580
+ count: 778688
+ kind: 1
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 8 bytes on stream 7. CUPTI reported stream ID: 0.
+null
+address of lttng_ust_tracepoint: ACTICITY API IF 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 16200 bytes on stream 7. CUPTI reported stream ID: 0.
+null
+address of lttng_ust_tracepoint: ACTICITY API IF 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 17958
+ dst: 0x55c32edfaf00
+ src: 0x7f9f53cb2000
+ count: 778688
+ kind: 2
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 17960
+ dst: 0x55c32ef61070
+ src: 0x7f9f53e00000
+ count: 778688
+ kind: 2
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+Detected cudaMemcpyAsync of 778688 bytes on stream 7. CUPTI reported stream ID: 0.
+---ELSE BRANCH ACTIVITY API---
+callback data:
+ cid: 17962
+ dst: 0x55c32f01f240
+ src: 0x7f9f53ebe200
+ count: 778688
+ kind: 2
+ stream: 7
+ codept: (nil)
+ funame: cudaMemcpyAsync
+TRACEPOINT WRITTEN
+address of lttng_ust_tracepoint: ACTICITY API ELSE 0x7f9f977c3960 lttng enabled status: 0 
+---START---
+depth 1 cid = 0
+depth 2 cid = 0
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+depth 1 cid = 125
+cid = ---
+depth 1 cid = 127
+cid = ---
+depth 1 cid = 129
+cid = ---
+depth 1 cid = 131
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+depth 1 cid = 139
+cid = ---
+depth 1 cid = 141
+cid = ---
+depth 1 cid = 143
+cid = ---
+depth 1 cid = 145
+cid = ---
+depth 1 cid = 147
+cid = ---
+depth 1 cid = 149
+cid = ---
+depth 1 cid = 151
+cid = ---
+depth 1 cid = 153
+cid = ---
+depth 1 cid = 155
+cid = ---
+depth 1 cid = 157
+depth 1 cid = 17958
+depth 1 cid = 159
+depth 1 cid = 17960
+depth 1 cid = 161
+depth 1 cid = 17962
+depth 1 cid = 163
+cid = ---
+depth 1 cid = 165
+cid = ---
+depth 1 cid = 167
+cid = ---
+depth 1 cid = 169
+cid = ---
+depth 1 cid = 171
+cid = ---
+depth 1 cid = 173
+cid = ---
+depth 1 cid = 175
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+depth 1 cid = 187
+cid = ---
+depth 1 cid = 189
+cid = ---
+depth 1 cid = 191
+cid = ---
+depth 1 cid = 193
+cid = ---
+depth 1 cid = 195
+cid = ---
+depth 1 cid = 197
+cid = ---
+depth 1 cid = 199
+---END---
+#=================== PInsight Lexgion Tracing Configuration ==============================
+#  [System Default]
+# 	OpenMP_trace_enabled = 1
+# 	MPI_trace_enabled = 0
+# 	CUDA_trace_enabled = 1
+# 	ENERGY_trace_enabled = 0
+# 	BACKTRACE_enabled = 1
+# 	trace_starts_at = 0
+# 	initial_trace_count = 0
+# 	max_num_traces = 10
+# 	tracing_rate = 1
+[default]
+	OpenMP_trace_enabled = 1
+	MPI_trace_enabled = 0
+	CUDA_trace_enabled = 1
+	ENERGY_trace_enabled = 0
+	BACKTRACE_enabled = 1
+	trace_starts_at = 0
+	initial_trace_count = 0
+	max_num_traces = 10
+	tracing_rate = 1
+#==========================================================================================
+
+INIT: Process ID: 749675, Thread ID: 140660079971072
+---START---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+cid = ---
+---END---
+Waiting for data availability.
+Tracing stopped for session testtraces-tracing-session
+Destroying session testtraces-tracing-session..
+Session testtraces-tracing-session destroyed
