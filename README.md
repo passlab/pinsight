@@ -272,12 +272,20 @@ Shell variable example:
 In comparison with static tracing that when tracing are started, no changes can be made to change tracing rate, position, etc. 
 Dynamic tracing enables highly optimized tracing according to the needs and behavior of the program execution. 
 This is achieved by allowing enabling and disabling tracing in multiple granularity level. 
-Currently, PInsight implements two ways for users to set the configuration options for tracing: 1) via environment variables, and 2) via a config file.
+Currently, PInsight implements two ways for users to set the configuration options for tracing:
+1) via environment variables that can be used for setting the default tracing config, and 2) via a config file which can be
+used for setting both the default tracing config and lexgion-specific tracing config.
+The tracing config is read from env variables or config file when the `pinsight` library is loaded.
+The tracing config can be re-read at the runtime if we implement it in the library or expose the library to external interface to
+allow re-reading.
 
-#### Configuration via env variables:
+If both env and config file are used to provide the default tracing config, the options provided in the config file 
+will overwrite the options provided in the env variable.
+
+#### Using env variable to specify the default tracing configuration:
 Below are the env variables and their optional values that one can use to set the runtime tracing options. Env settings 
 are applied to the runtime default configuration for all lexgions. If you want lexgion-specific configuration, you have to 
-use the second way which is using a config file.
+use a config file to do that.
 
           PINSIGHT_TRACE_OPENMP=TRUE|FALSE
           PINSIGHT_TRACE_MPI=TRUE|FALSE
@@ -298,8 +306,6 @@ The meaning of each of the four number can be found from the lexgion_trace_confi
  
 #### Using a config file to specify runtime tracing options
 The file name can be specified using the `PINSIGHT_TRACE_CONFIG` env. Please check the sample file in the src folder.
-
-If both ways are used by the users, the options provided by the config file will be used.
 
 Further improvement: to completely turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
 1. One approach is to use an env varabile and a global flag for setting and checking upon entry to each PInsight/OMPT/PMPI/CUPTI call, though this still introduces the overhead of making those calls and one step of checking. 
