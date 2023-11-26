@@ -42,6 +42,8 @@ extern __thread int omp_thread_num;
 #include <common_tp_fields_global_lttng_ust_tracepoint.h>
 #ifdef PINSIGHT_BACKTRACE
 #include <backtrace.h>
+#else
+#define LTTNG_UST_TP_FIELDS_BACKTRACE
 #endif
 #endif
 

@@ -767,7 +767,7 @@
 	</stateProvider>
 
 	<!-- This is the definition of the time-graph view -->
-	<timeGraphView id="org.eclipse.linuxtools.tmf.analysis.xml.sstimeview">
+	<timeGraphView id="xxx.pinsight.omp.timeGraphView">
 		<head>
 			<analysis id="xxx.pinsight.omp.stateProvider" />
 			<label value="PInsight OpenMP Trace View" />
