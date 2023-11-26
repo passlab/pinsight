@@ -14,7 +14,27 @@
 void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              CUpti_CallbackId cbid, const CUpti_CallbackData *cbInfo) {
     CUptiResult cuptiErr;
-    const void *codeptr = NULL; // __builtin_return_address(1);
+    uint64_t timeStamp; cuptiGetTimestamp(&timeStamp);
+    const CUcontext * context = &cbInfo->context;
+    //CUdevice device; cuCtxGetDevice(&device);
+    unsigned int devId; //cudaGetDevice(&devId);
+    cuptiGetDeviceId(*context, &devId);
+    unsigned int correlationId = cbInfo->correlationId;
+    const void *codeptr = __builtin_return_address(2);
+#ifdef PINSIGHT_BACKTRACE
+    retrieve_backtrace();
+#endif
+
+    /*
+    printf("codeptr 1: %x\n", __builtin_return_address(1));
+    printf("codeptr 2: %x\n", __builtin_return_address(2));
+    printf("codeptr 3: %x\n", __builtin_return_address(3));
+    printf("codeptr 4: %x\n", __builtin_return_address(4));
+    printf("codeptr 5: %x\n", __builtin_return_address(5));
+    printf("codeptr 6: %x\n", __builtin_return_address(6));
+    printf("codeptr 7: %x\n", __builtin_return_address(7));
+    printf("==============================\n");
+	*/
 
     if (domain != CUPTI_CB_DOMAIN_RUNTIME_API) {
         return;
@@ -25,10 +45,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         const char *kernelName = cbInfo->symbolName;
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
             //printf("inside callback for kernelLaunch_begin: %s\n", kernelName);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_begin, codeptr, kernelName);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_begin, devId, correlationId, timeStamp, codeptr, kernelName);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             //printf("inside callback for kernelLaunch_end: %s\n", kernelName);
-        	lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_end, codeptr, kernelName);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_end, devId, correlationId, timeStamp, codeptr, kernelName);
         } else {
             //ignore
         }
@@ -45,11 +65,11 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             unsigned int count = funcParams->count;
             int kind = funcParams->kind;
             //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, codeptr, funName, dst, src, count, kind);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, devId, correlationId, timeStamp, codeptr, funName, dst, src, count, kind);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             int return_val = *((int *) cbInfo->functionReturnValue);
             //printf("inside callback for cudaMemcpy_end: %s\n", funName);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_end, codeptr, funName, return_val);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_end, devId, correlationId, timeStamp, codeptr, funName, return_val);
         } else {
             //ignore
         }

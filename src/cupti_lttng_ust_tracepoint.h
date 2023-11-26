@@ -39,36 +39,59 @@ extern __thread int omp_thread_num;
 #endif
 #ifdef PINSIGHT_BACKTRACE
 #include <backtrace.h>
+#else
+#define LTTNG_UST_TP_FIELDS_BACKTRACE
 #endif
 #endif
 
 /** Macros used to simplify the definition of LTTng LTTNG_UST_TRACEPOINT_EVENT */
 #define CODEPTR_ARG \
+    unsigned int, devId, \
+    unsigned int, correlationId, \
+    unsigned long int, cupti_timeStamp, \
     const void *, codeptr, \
     const char *, func_name
 
 //COMMON_LTTNG_UST_TP_FIELDS_PMPI are those fields in the thread-local storage. These fields will be added to all the trace records
 #if defined(PINSIGHT_MPI) && defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
+    COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
+    LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned int, devId, devId) \
+    lttng_ust_field_integer(unsigned int, correlationId, correlationId) \
+    lttng_ust_field_integer(unsigned long int, cupti_timeStamp, cupti_timeStamp) \
+    lttng_ust_field_integer_hex(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #elif defined(PINSIGHT_MPI) && !defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
+    COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
+    LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
-    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned int, devId, devId) \
+    lttng_ust_field_integer(unsigned int, correlationId, correlationId) \
+    lttng_ust_field_integer(unsigned long int, cupti_timeStamp, cupti_timeStamp) \
+    lttng_ust_field_integer_hex(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #elif !defined(PINSIGHT_MPI) && defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
+    LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
-    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
+    lttng_ust_field_integer(unsigned int, devId, devId) \
+    lttng_ust_field_integer(unsigned int, correlationId, correlationId) \
+    lttng_ust_field_integer(unsigned long int, cupti_timeStamp, cupti_timeStamp) \
+    lttng_ust_field_integer_hex(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
-    lttng_ust_field_integer(unsigned long int, cuda_codeptr, codeptr) \
+    LTTNG_UST_TP_FIELDS_BACKTRACE \
+    lttng_ust_field_integer(unsigned int, devId, devId) \
+    lttng_ust_field_integer(unsigned int, correlationId, correlationId) \
+    lttng_ust_field_integer(unsigned long int, cupti_timeStamp, cupti_timeStamp) \
+    lttng_ust_field_integer_hex(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #endif
 
@@ -90,7 +113,7 @@ LTTNG_UST_TRACEPOINT_ENUM(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum,
             lttng_ust_field_enum_value("cudaMemcpyHostToDevice", 1)
             lttng_ust_field_enum_value("cudaMemcpyDeviceToHost", 2)
             lttng_ust_field_enum_value("cudaMemcpyDeviceToDevice", 3)
-            lttng_ust_field_enum_value("cudaMemcpyDefault", 3)
+            lttng_ust_field_enum_value("cudaMemcpyDefault", 4)
         )
 )
 
@@ -110,7 +133,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
             lttng_ust_field_integer(unsigned int, dst, dst)
             lttng_ust_field_integer(unsigned int, src, src)
             lttng_ust_field_integer(unsigned int, count, count)
-            lttng_ust_field_enum(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum, int, enumfield, kind)
+            lttng_ust_field_enum(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum, int, cudaMemcpyKind, kind)
         )
 )
 
