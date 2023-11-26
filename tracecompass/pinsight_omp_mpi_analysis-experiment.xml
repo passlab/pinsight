@@ -1,0 +1,622 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmfxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="xmldefinition.xsd">
+
+	<!-- XSD definition: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.analysis.xml.core/src/org/eclipse/tracecompass/tmf/analysis/xml/core/module -->
+
+	<!-- The state provider assigns states from events -->
+	<stateProvider id="xxx.pinsight.omp_mpi.stateProvider" version="0">
+		<head>
+			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
+			<label value="PInsight OpenMP and MPI Trace Analysis" />
+		</head>
+
+		<!-- In sequential compute state, the first and last state pinsight tracks -->
+		<definedValue name="STATE_IN_SEQ_COMPUTE" value="100" />
+		<definedValue name="STATE_SEQ_TERMINATED" value="101" />
+
+		<!-- Convenience names for the thread state values -->
+		<definedValue name="STATE_OMP_THREAD_STARTED" value="201" />
+		<definedValue name="STATE_OMP_TRANSITION" value="209" /> <!-- changing state -->
+
+		<!-- 220 - 249 are for those states in which threads are doing work -->
+		<definedValue name="STATE_OMP_PARALLEL" value="220" />
+		<definedValue name="STATE_IN_OMP_IMPLICIT_TASK" value="221" />
+		<definedValue name="STATE_IN_OMP_WORK" value="222" />
+		<definedValue name="STATE_IN_OMP_MASTER" value="227" />
+
+		<!-- 250 - 269 are for those states in which threads are synchronizing -->
+		<definedValue name="STATE_OMP_SYNC" value="250" />
+		<definedValue name="STATE_IN_OMP_SYNC_WAIT" value="251" />
+		<definedValue name="STATE_OMP_JOIN_SYNC" value="252" />
+		<definedValue name="STATE_IN_OMP_JOIN_SYNC_WAIT" value="253" />
+		<definedValue name="STATE_OMP_BARRIER_SYNC" value="254" />
+		<definedValue name="STATE_IN_OMP_BARRIER_SYNC_WAIT" value="255" />
+
+		<definedValue name="STATE_OMP_THREAD_TERMINATED" value="300" />
+
+		<!-- Convenience names for the MPI state values -->
+		<definedValue name="STATE_MPI_Inited" value="400" /> <!-- right after MPI_Init call -->
+
+		<!-- 220 - 249 are for those states in which threads are doing work -->
+		<definedValue name="STATE_IN_MPI_Send" value="420" />
+		<definedValue name="STATE_IN_MPI_Recv" value="421" />
+		<definedValue name="STATE_IN_MPI_Sendrecv" value="422" />
+		<definedValue name="STATE_IN_MPI_Isend" value="423" />
+		<definedValue name="STATE_IN_MPI_Irecv" value="424" />
+		<definedValue name="STATE_IN_MPI_Wait" value="425" />
+		<definedValue name="STATE_IN_MPI_Waitall" value="426" />
+		<definedValue name="STATE_IN_MPI_Waitany" value="427" />
+		<definedValue name="STATE_IN_MPI_Waitsome" value="428" />
+
+		<definedValue name="STATE_IN_MPI_Allgather" value="430" />
+		<definedValue name="STATE_IN_MPI_Allreduce" value="431" />
+		<definedValue name="STATE_IN_MPI_Alltoall" value="432" />
+		<definedValue name="STATE_IN_MPI_Barrier" value="433" />
+		<definedValue name="STATE_IN_MPI_Bcast" value="434" />
+		<definedValue name="STATE_IN_MPI_Gather" value="435" />
+		<definedValue name="STATE_IN_MPI_Reduce" value="436" />
+		<definedValue name="STATE_IN_MPI_Scatter" value="437" />
+		<definedValue name="STATE_IN_MPI_Reduce_scatter" value="438" />
+
+		<definedValue name="STATE_IN_MPI_Accumulate" value="440" />
+		<definedValue name="STATE_IN_MPI_Get" value="441" />
+		<definedValue name="STATE_IN_MPI_Put" value="442" />
+
+		<definedValue name="STATE_IN_MPI_Finalize" value="498" />
+		<definedValue name="STATE_MPI_Finalized" value="499" /> <!-- right after MPI finalized -->
+
+		<!-- Event handlers for thread timeGraph view -->
+		<!-- Event handlers for thread-CPU timeGraph view -->
+		<!-- Event handlers for CPU-state timeGraph view -->
+		<!-- Event handlers for parallel region timeGraph view-->
+		<!-- Event handlers for instances of parallel regions timeGraph view-->
+
+		<location id="HostProcessThread">
+			<stateAttribute type="constant" value="Status of Host:Process:Thread" />
+			<stateAttribute type="constant" value="Host" />
+			<stateAttribute type="eventField" value="hostname" />
+			<stateAttribute type="constant" value="Process" />
+			<stateAttribute type="eventField" value="pid" />
+			<stateAttribute type="constant" value="Thread" />
+			<stateAttribute type="eventField" value="context._vtid" />
+		</location>
+
+		<eventHandler eventName="lttng_pinsight_enter_exit:enter_pinsight">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_SEQ_COMPUTE" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="lttng_pinsight_enter_exit:exit_pinsight">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_SEQ_TERMINATED" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_THREAD_STARTED" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_THREAD_TERMINATED" />
+			</stateChange>
+		</eventHandler>
+
+		<!-- TODO: not considering nest parallelism right now.
+		     For nested parallelism, current state value should be pushed to a stack on parallel_begin, and
+		     then new value is assigned as the current state
+		-->
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_PARALLEL" />
+			</stateChange>
+		</eventHandler>
+
+		<!-- TODO: not considering nest parallelism right now.
+		     For nested parallelism, state value should be set as the one that is popped from the stack
+		-->
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_SEQ_COMPUTE" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_JOIN_SYNC" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_JOIN_SYNC_WAIT" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_TRANSITION" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_TRANSITION" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_barrier_sync_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_BARRIER_SYNC" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_barrier_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_BARRIER_SYNC_WAIT" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_barrier_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_TRANSITION" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_barrier_sync_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_TRANSITION" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_IMPLICIT_TASK" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_OMP_TRANSITION" />
+			</stateChange>
+
+		</eventHandler>
+
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:work_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_WORK" />
+			</stateChange>
+
+		</eventHandler>
+
+		<!-- after a work (worksharing loop/for, section, single, etc) ends, thread goes back to implicit task
+		     of the enclosing parallel region, thus it returns to the state of $STATE_IN_OMP_IMPLICIT_TASK.
+		     If we have stack, we can push/pop of the state value upon work_begin and work_end event
+		-->
+		<eventHandler eventName="ompt_pinsight_lttng_ust:work_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_IMPLICIT_TASK" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_MASTER" />
+			</stateChange>
+
+		</eventHandler>
+
+		<!-- after a masked, thread goes back to the implicit task -->
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_OMP_IMPLICIT_TASK" />
+			</stateChange>
+
+		</eventHandler>
+
+		<!-- ============================ MPI event Handler =========================== -->
+		<!-- Event handlers for process timeGraph view -->
+		<!-- Event handlers for process-CPU timeGraph view -->
+		<!-- Event handlers for CPU-state timeGraph view -->
+		<!-- Event handlers for each MPI call handler -->
+		<!--
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Init_thread_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_MPI_Inited" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Init_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_MPI_Inited" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Finalize_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Finalize" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Finalize_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_MPI_Finalized" />
+			</stateChange>
+
+		</eventHandler>
+
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Send_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Send" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Send_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_COMPUTE" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Recv_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Recv" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Recv_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_COMPUTE" />
+			</stateChange>
+
+		</eventHandler>
+
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allgather_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Allgather" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allgather_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_COMPUTE" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allreduce_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Allreduce" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allreduce_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_COMPUTE" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Barrier_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Barrier" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Barrier_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_COMPUTE" />
+			</stateChange>
+
+		</eventHandler>
+
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Bcast_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_Bcast" />
+			</stateChange>
+
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Bcast_end">
+			<stateChange>
+				<stateAttribute type="location" value="HostProcessThread"/>
+
+				<stateValue type="int" value="$STATE_IN_MPI_COMPUTE" />
+			</stateChange>
+
+		</eventHandler>
+		-->
+
+	</stateProvider>
+
+	<!-- This is the definition of the time-graph view -->
+	<timeGraphView id="xxx.pinsight.omp_mpi_timeGraphView">
+		<head>
+			<analysis id="xxx.pinsight.omp_mpi.stateProvider" />
+			<label value="PInsight OpenMP and MPI Trace View" />
+		</head>
+	
+		<!-- Colors assigned to the state values, see http://www.rapidtables.com/web/color/ -->
+		<!-- processor, so far, we use color to represent each processor 0 - 63, generated using processor_color.sh -->
+		<definedValue name="Processor 0" value="0" color="#FF0000" /> <!-- red, (255,0,0) -->
+		<definedValue name="Processor 1" value="1" color="#FF7F50" /> <!-- coral, (255,127,80) -->
+		<definedValue name="Processor 2" value="2" color="#FFFF00" /> <!-- yellow, (255,255,0) -->
+		<definedValue name="Processor 3" value="3" color="#00FF00" /> <!-- lime, (0.255.0) -->
+		<definedValue name="Processor 4" value="4" color="#00FFFF" /> <!-- aqua, (0,255,255) -->
+		<definedValue name="Processor 5" value="5" color="#0000FF" /> <!-- blue, (0,0,255) -->
+		<definedValue name="Processor 6" value="6" color="#FF00FF" /> <!-- magenta, (255,0,255) -->
+		<definedValue name="Processor 7" value="7" color="#2F4F4F" /> <!-- darkslategray, (47,79,79) -->
+		<definedValue name="Processor 8" value="8" color="#8B0000" /> <!-- darkred, (139,0,0) -->
+		<definedValue name="Processor 9" value="9" color="#FFD700" /> <!-- gold, (255,215,0) -->
+		<definedValue name="Processor 10" value="10" color="#BDB76B" /> <!-- darkkhaki, (189,183,107) -->
+		<definedValue name="Processor 11" value="11" color="#6B8E23" /> <!-- olivedrab, (107,142,35) -->
+		<definedValue name="Processor 12" value="12" color="#008080" /> <!-- teal, (0,128,128) -->
+		<definedValue name="Processor 13" value="13" color="#5F9EA0" /> <!-- cadetblue, (95,158,160) -->
+		<definedValue name="Processor 14" value="14" color="#00008B" /> <!-- darkblue, (0,0,139) -->
+		<definedValue name="Processor 15" value="15" color="#800080" /> <!-- purple, (128,0,128) -->
+		<definedValue name="Processor 16" value="16" color="#DB7093" /> <!-- palevioletred, (219,112,147) -->
+		<definedValue name="Processor 17" value="17" color="#8B4513" /> <!-- saddlebrown, (139,69,19) -->
+		<definedValue name="Processor 18" value="18" color="#FA8072" /> <!-- salmon, (250,128,114) -->
+		<definedValue name="Processor 19" value="19" color="#FF4500" /> <!-- orangered, (255,69,0) -->
+		<definedValue name="Processor 20" value="20" color="#FFFFE0" /> <!-- lightyellow, (255,255,224) -->
+		<definedValue name="Processor 21" value="21" color="#FFE4B5" /> <!-- moccasin, (255,228,181) -->
+		<definedValue name="Processor 22" value="22" color="#32CD32" /> <!-- limegreen, (50,205,50) -->
+		<definedValue name="Processor 23" value="23" color="#556B2F" /> <!-- darkolivegreen, (85,107,47) -->
+		<definedValue name="Processor 24" value="24" color="#E0FFFF" /> <!-- lightcyan, (224,255,255) -->
+		<definedValue name="Processor 25" value="25" color="#7B68EE" /> <!-- mediumslateblue, (123,104,238) -->
+		<definedValue name="Processor 26" value="26" color="#008000" /> <!-- green, (0,128,0) -->
+		<definedValue name="Processor 27" value="27" color="#FFC0CB" /> <!-- pink, (255,192,203) -->
+		<definedValue name="Processor 28" value="28" color="#ADFF2F" /> <!-- greenyellow, (173,255,47) -->
+		<definedValue name="Processor 29" value="29" color="#808080" /> <!-- gray, (128,128,128) -->
+		<definedValue name="Processor 30" value="30" color="#BC8F8F" /> <!-- rosybrown, (188,143,143) -->
+		<definedValue name="Processor 31" value="31" color="#00CED1" /> <!-- darkturquoise, (0,206,209) -->
+		<definedValue name="Processor 32" value="32" color="#1E90FF" /> <!-- dodgerblue, (30,144,255) -->
+		<definedValue name="Processor 33" value="33" color="#DDA0DD" /> <!-- plum, (221,160,221) -->
+		<definedValue name="Processor 34" value="34" color="#DEB887" /> <!-- burlywood, (222,184,135) -->
+		<definedValue name="Processor 35" value="35" color="#4B0082" /> <!-- indigo, (75,0,130) -->
+		<definedValue name="Processor 36" value="36" color="#00FA9A" /> <!-- mediumspringgreen, (0,250,154) -->
+		<definedValue name="Processor 37" value="37" color="#DCDCDC" /> <!-- gainsboro, (220,220,220) -->
+		<definedValue name="Processor 38" value="38" color="#A52A2A" /> <!-- brown, (165,42,42) -->
+		<definedValue name="Processor 39" value="39" color="#87CEEB" /> <!-- skyblue, (135,206,235) -->
+		<definedValue name="Processor 40" value="40" color="#7FFFD4" /> <!-- aquamarine, (127,255,212) -->
+		<definedValue name="Processor 41" value="41" color="#8A2BE2" /> <!-- blueviolet, (138,43,226) -->
+		<definedValue name="Processor 42" value="42" color="#4682B4" /> <!-- steelblue, (70,130,180) -->
+		<definedValue name="Processor 43" value="43" color="#808000" /> <!-- olive, (128,128,0) -->
+		<definedValue name="Processor 44" value="44" color="#2E8B57" /> <!-- seagreen, (46,139,87) -->
+		<definedValue name="Processor 45" value="45" color="#00BFFF" /> <!-- deepskyblue, (0,191,255) -->
+		<definedValue name="Processor 46" value="46" color="#FF1493" /> <!-- deeppink, (255,20,147) -->
+		<definedValue name="Processor 47" value="47" color="#D2691E" /> <!-- chocolate, (210,105,30) -->
+		<definedValue name="Processor 48" value="48" color="#98FB98" /> <!-- palegreen, (152,251,152) -->
+		<definedValue name="Processor 49" value="49" color="#FF8C00" /> <!-- darkorange, (255,140,0) -->
+		<definedValue name="Processor 50" value="50" color="#F0E68C" /> <!-- khaki, (240,230,140) -->
+		<definedValue name="Processor 51" value="51" color="#9ACD32" /> <!-- yellowgreen, (154,205,50) -->
+		<definedValue name="Processor 52" value="52" color="#8FBC8F" /> <!-- darkseagreen, (143,188,143) -->
+		<definedValue name="Processor 53" value="53" color="#3CB371" /> <!-- mediumseagreen, (60,179,113) -->
+		<definedValue name="Processor 54" value="54" color="#FF69B4" /> <!-- hotpink, (255,105,180) -->
+		<definedValue name="Processor 55" value="55" color="#F4A460" /> <!-- sandybrown, (244,164,96) -->
+		<definedValue name="Processor 56" value="56" color="#AFEEEE" /> <!-- paleturquoise, (175,238,238) -->
+		<definedValue name="Processor 57" value="57" color="#E6E6FA" /> <!-- lavender, (230,230,250) -->
+		<definedValue name="Processor 58" value="58" color="#9370DB" /> <!-- mediumpurple, (147,112,219) -->
+		<definedValue name="Processor 59" value="59" color="#FFE4E1" /> <!-- mistyrose, (255,228,225) -->
+		<definedValue name="Processor 60" value="60" color="#FFF0F5" /> <!-- lavenderblush, (255,240,245) -->
+		<definedValue name="Processor 61" value="61" color="#D8BFD8" /> <!-- thistle, (216,191,216) -->
+		<definedValue name="Processor 62" value="62" color="#BA55D3" /> <!-- mediumorchid, (186,85,211), -->
+		<definedValue name="Processor 63" value="63" color="#C71585" /> <!-- mediumvioletred, rgb(199,21,133) -->
+
+		<!-- sequential computation, within an MPI process, green-series color-->
+		<definedValue name="STATE_IN_SEQ_COMPUTE" value="100" color="#2E8B57"/> <!-- seagreen -->
+		<definedValue name="STATE_IN_SEQ_TERMINATED" value="101" color="#FFFFFF" /> <!-- white -->
+
+		<definedValue name="STATE_OMP_THREAD_STARTED" value="201" color="#FFFF00" /> <!-- yellow -->
+		<definedValue name="STATE_OMP_TRANSITION" value="209" color="#FFFF99" /> <!-- light yellow 2 -->
+
+		<!-- 220 - 249 are for those states in which threads are doing work -->
+		<definedValue name="STATE_OMP_PARALLEL" value="220" color="#00FF00" /> <!-- lime -->
+		<definedValue name="STATE_IN_OMP_IMPLICIT_TASK" value="221" color="#00CC11" /> <!-- green -->
+		<definedValue name="STATE_IN_OMP_WORK" value="222" color="#32CD32" /> <!-- limegreen -->
+		<definedValue name="STATE_IN_OMP_MASTER" value="227" color="#00FF7F"/> <!-- spring green -->
+
+		<!-- 250 - 269 are for those states in which threads are synchronizing -->
+		<definedValue name="STATE_OMP_SYNC" value="250" color="#CD5C5C" /> <!-- indianred -->
+		<definedValue name="STATE_IN_OMP_SYNC_WAIT" value="251" color="#FF0000" /> <!-- red -->
+		<definedValue name="STATE_OMP_JOIN_SYNC" value="252" color="#CD5C5C" /> <!-- indianred -->
+		<definedValue name="STATE_IN_OMP_JOIN_SYNC_WAIT" value="253" color="#8B0000"/> <!-- dark red -->
+		<definedValue name="STATE_OMP_BARRIER_SYNC" value="254" color="#CD5C5C" /> <!-- indianred -->
+		<definedValue name="STATE_IN_OMP_BARRIER_SYNC_WAIT" value="255" color="#DC143C" /> <!-- crimson -->
+
+		<definedValue name="STATE_OMP_THREAD_TERMINATED" value="300" color="#FFFFFF" /> <!-- white -->
+
+		<!-- Convenience names for the MPI state values -->
+		<!-- blue color is used for representing sequential computation of a program, same as OpenMP -->
+		<definedValue name="STATE_MPI_Inited" value="400" color="0000FF"/> <!-- right after MPI_Init call, blue -->
+
+		<!-- point-to-point communication, purple colors -->
+		<definedValue name="STATE_IN_MPI_Send" value="420" color="#800080" /> <!-- purple -->
+		<definedValue name="STATE_IN_MPI_Recv" value="421" color="#FF00FF" /> <!-- fuchsia -->
+		<definedValue name="STATE_IN_MPI_Sendrecv" value="422" color="#8A2BE2"/> <!-- blueviolet -->
+		<definedValue name="STATE_IN_MPI_Isend" value="423" color="#8B008B" /> <!-- darkmagenta	 -->
+		<definedValue name="STATE_IN_MPI_Irecv" value="424" color="#EE82EE"/> <!-- violet -->
+		<definedValue name="STATE_IN_MPI_Wait" value="425" color="#9370DB" /> <!-- mediumpurple -->
+		<definedValue name="STATE_IN_MPI_Waitall" value="426" color="#BA55D3" /> <!-- mediumorchid -->
+		<definedValue name="STATE_IN_MPI_Waitany" value="427" color="#9370DB" /> <!-- mediumpurple -->
+		<definedValue name="STATE_IN_MPI_Waitsome" value="428" color="#9370DB" /> <!-- mediumpurple -->
+
+		<!-- collective, brown and pink colors -->
+		<definedValue name="STATE_IN_MPI_Allgather" value="430" color="#FFC0CB"/> <!-- pink -->
+		<definedValue name="STATE_IN_MPI_Allreduce" value="431" color="#FF1493" /> <!-- deeppink -->
+		<definedValue name="STATE_IN_MPI_Alltoall" value="432" color="#C71585"/> <!-- mediumviolet -->
+		<definedValue name="STATE_IN_MPI_Barrier" value="433" color="#A52A2A" /> <!-- brown -->
+		<definedValue name="STATE_IN_MPI_Bcast" value="434" color="#DAA520"/> <!-- goldenrod -->
+		<definedValue name="STATE_IN_MPI_Gather" value="435" color="#800000" /> <!-- maroon -->
+		<definedValue name="STATE_IN_MPI_Reduce" value="436" color="#BC8F8F"/> <!-- rosybrown -->
+		<definedValue name="STATE_IN_MPI_Scatter" value="437" color="#D2B48C"/> <!-- tan -->
+		<definedValue name="STATE_IN_MPI_Reduce_scatter" value="438" color="#D2691E" /> <!-- chocolate -->
+
+		<!-- one-side, orange-->
+		<definedValue name="STATE_IN_MPI_Accumulate" value="440" color="#FF4500" /> <!-- orangered -->
+		<definedValue name="STATE_IN_MPI_Get" value="441" color="#FF7F50" /> <!-- coral -->
+		<definedValue name="STATE_IN_MPI_Put" value="442" color="#FF8C00" /> <!-- darkorange -->
+
+		<definedValue name="STATE_IN_MPI_Finalize" value="498" color="#A0522D" /> <!-- sienna -->
+		<definedValue name="STATE_MPI_Finalized" value="499" color="0000FF" /> <!-- right after MPI finalized, blue for sequential computation -->
+
+		<!-- Which attributes to "print" in the view -->
+		<!--
+		<entry path="Thread/*">
+			<display type="self" />
+		</entry>
+		<entry path="CPU/*">
+			<display type="self" />
+		</entry>
+			<entry path="parallel/*">
+			<display type="self" />
+			<entry path="instance/*">
+				<display type="self" />
+				<entry path="thread/*">
+					<display type="self" />
+				</entry>
+			</entry>
+		</entry>
+		-->
+
+		<entry path="Status of Host:Process:Thread"><display type="self" />
+			<entry path="Host"><display type="self" />
+				<entry path="*"> <display type="self" />
+					<entry path="Process"><display type="self" />
+						<entry path="*"> <display type="self" />
+							<entry path="Thread"> <display type="self" />
+								<entry path="*"><display type="self" />
+								</entry>
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+		<!--
+
+		<entry path="MPI_Send"><display type="self" />
+			<entry path="*"><display type="self" />
+				<entry path="Process"><display type="self" />
+					<entry path="*"><display type="self" />
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+		<entry path="MPI_Allreduce"><display type="self" />
+			<entry path="*"><display type="self" />
+				<entry path="Process"><display type="self" />
+					<entry path="*"><display type="self" />
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+		-->
+
+
+		<!--
+		<entry path="parallel_instance">
+			<display type="self" />
+			<entry path="*">
+				<display type="self" />
+				<entry path="instance">
+					<display type="self" />
+					<entry path="*">
+						<display type="self" />
+						<entry path="thread">
+							<display type="self" />
+							<entry path="*">
+								<display type="self" />
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+		-->
+	</timeGraphView>
+</tmfxml>
