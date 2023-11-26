@@ -159,11 +159,9 @@ extern lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_
 extern lexgion_t *lexgion_end(unsigned int * record_id);
 
 //implemented in lexgion_trace_cnofig.c
-extern lexgion_trace_config_t * retrieve_lexgion_config(const void * codeptr);
-extern void print_lexgion_trace_config();
-extern void lexgion_trace_config_read_file();
-extern void lexgion_trace_config_read_env();
-extern void initial_lexgion_trace_config();
+extern lexgion_trace_config_t * retrieve_lexgion_trace_config(const void * codeptr);
+//read env or config file at runtime to allow for user to provide new config for tracing
+extern void lexgion_trace_reconfig();
 
 #ifdef  __cplusplus
 };

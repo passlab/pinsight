@@ -110,7 +110,7 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
         lgp->counter = 0;
         lgp->trace_counter = 0;
         lgp->num_exes_after_last_trace = 0;
-        lgp->trace_config = retrieve_lexgion_config(codeptr_ra);
+        lgp->trace_config = retrieve_lexgion_trace_config(codeptr_ra);
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 

@@ -33,7 +33,7 @@ static const char *lexgion_trace_config_keys[] = {
         "tracing_rate",           //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region. 
 };
 
-enum lexgion_trace_config_key_index {
+typedef enum lexgion_trace_config_key_index {
 	OpenMP_trace_enabled_index = 0,
     MPI_trace_enabled_index,
     CUDA_trace_enabled_index,
@@ -43,7 +43,7 @@ enum lexgion_trace_config_key_index {
     initial_trace_count_index,
     max_num_traces_index,
     tracing_rate_index,
-};
+} lexgion_trace_config_key_index_t;
 
 /**
  * the struct for storing trace config of a lexgion. trace config can be updated at the runtime so PInsight can do dynamic
@@ -86,7 +86,7 @@ typedef struct lexgion_trace_config {  /* all the config fields MUST be from the
     const void *codeptr;               //codeptr as key for region-specific configuration
     volatile void * dummy;             /* NOTE: make sure I do not run into problems of compiling the code for 32 bit systems since the codeptr_ra
                                         * used __sync_bool_compare_and_swap to access it */
-    int updated;                       //a flag to indicate whether a config is updated by the ongoing reading from the config file. It is used only for updating
+    int use_default;                   //a flag to indicate whether a config is copied from the rtdefault or set by the user provided in the config file.
 } lexgion_trace_config_t;
 
 /**
