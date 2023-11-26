@@ -111,7 +111,7 @@
 		<definedValue name="STATE_CUDA_KERNEL_EXE" value="920" color="#008000" />     <!-- Green         rgb(0, 128, 0) -->
 
 		<entry path="Device"><display type="self" />
-			<entry path="*"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" />
 			</entry>
 		</entry>
 	</timeGraphView>
