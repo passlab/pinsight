@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmfxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="xmldefinition.xsd">
+
+	<!-- XSD definition: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.analysis.xml.core/src/org/eclipse/tracecompass/tmf/analysis/xml/core/module -->
+
+	<!-- The state provider assigns states from events -->
+	<stateProvider id="xxx.pinsight.cuda.stateProvider" version="0">
+		<head>
+			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
+			<label value="PInsight CUDA Trace Analysis" />
+		</head>
+
+		<!-- Convenience names for the thread state values -->
+		<definedValue name="STATE_CUDA_IN_CPU" value="900" />
+		<definedValue name="STATE_CUDA_MEMCPY_H2H" value="901" />
+		<definedValue name="STATE_CUDA_MEMCPY_H2D" value="902" />
+		<definedValue name="STATE_CUDA_MEMCPY_D2H" value="903" />
+		<definedValue name="STATE_CUDA_MEMCPY_D2D" value="904" />
+		<definedValue name="STATE_CUDA_MEMCPY_UNKNOWN" value="905" />
+		<definedValue name="STATE_CUDA_KERNEL_EXE" value="920" />
+
+		<!-- Event handlers for device timeGraph view -->
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaMemcpy_begin">
+			<stateChange>
+				<if><condition operator="eq">
+						<stateValue type="eventField" value="cudaMemcpyKind" />
+						<stateValue type="string" value="cudaMemcpyHostToHost" /> <!--  Host to Host memcpy -->
+				</condition></if>
+				<then>
+					<stateAttribute type="constant" value="Device" />
+					<stateAttribute type="eventField" value="devId" />
+					<stateValue type="int" value="$STATE_CUDA_MEMCPY_H2H" />
+				</then>
+				<else>
+					<if><condition operator="eq">
+						<stateValue type="eventField" value="cudaMemcpyKind" />
+						<stateValue type="string" value="cudaMemcpyHostToDevice" /> <!--  Host to Device memcpy -->
+					</condition></if>
+					<then>
+						<stateAttribute type="constant" value="Device" />
+						<stateAttribute type="eventField" value="devId" />
+						<stateValue type="int" value="$STATE_CUDA_MEMCPY_H2D" />
+					</then>
+					<else>
+						<if><condition operator="eq">
+							<stateValue type="eventField" value="cudaMemcpyKind" />
+							<stateValue type="string" value="cudaMemcpyDeviceToHost" /> <!-- Device to Host memcpy -->
+						</condition></if>
+						<then>
+							<stateAttribute type="constant" value="Device" />
+							<stateAttribute type="eventField" value="devId" />
+							<stateValue type="int" value="$STATE_CUDA_MEMCPY_D2H" />
+						</then>
+						<else>
+							<if><condition operator="eq">
+								<stateValue type="eventField" value="cudaMemcpyKind" />
+								<stateValue type="string" value="cudaMemcpyDeviceToDevice" /> <!--  Device to Device memcpy -->
+							</condition></if>
+							<then>
+								<stateAttribute type="constant" value="Device" />
+								<stateAttribute type="eventField" value="devId" />
+								<stateValue type="int" value="$STATE_CUDA_MEMCPY_D2D" />
+							</then>
+							<else>
+								<stateAttribute type="constant" value="Device" />
+								<stateAttribute type="eventField" value="devId" />
+								<stateValue type="int" value="$STATE_CUDA_MEMCPY_UNKNOWN" /> <!--  Unknown direction -->
+							</else>	
+						</else>
+					</else>
+				</else>
+			</stateChange>	
+		</eventHandler>
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaMemcpy_end">
+			<stateChange>
+				<stateAttribute type="constant" value="Device" />
+				<stateAttribute type="eventField" value="devId" />
+				<stateValue type="int" value="$STATE_CUDA_IN_CPU" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaKernelLaunch_begin">
+			<stateChange>
+				<stateAttribute type="constant" value="Device" />
+				<stateAttribute type="eventField" value="devId" />
+				<stateValue type="int" value="$STATE_CUDA_KERNEL_EXE"/>
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaKernelLaunch_end">
+			<stateChange>
+				<stateAttribute type="constant" value="Device" />
+				<stateAttribute type="eventField" value="devId" />
+				<stateValue type="int" value="$STATE_CUDA_IN_CPU"/>
+			</stateChange>
+		</eventHandler>
+	</stateProvider>
+
+	<!-- This is the definition of the time-graph view -->
+	<timeGraphView id="xxx.pinsight.cuda.timeGraphView">
+		<head>
+			<analysis id="xxx.pinsight.cuda.stateProvider" />
+			<label value="PInsight CUDA Trace View" />
+		</head>
+	
+		<definedValue name="STATE_CUDA_IN_CPU" value="900" color="#32CD32" />         <!-- limegreen -->
+		<definedValue name="STATE_CUDA_MEMCPY_H2H" value="901" color="#DA70D6" />     <!-- Orchid        rgb(218, 112, 214) -->
+		<definedValue name="STATE_CUDA_MEMCPY_H2D" value="902" color="#BF40BF" />     <!-- Bright Purple rgb(191, 64, 191) -->
+		<definedValue name="STATE_CUDA_MEMCPY_D2H" value="903" color="#800080" />     <!-- Purple        rgb(128, 0, 128) -->
+		<definedValue name="STATE_CUDA_MEMCPY_D2D" value="904" color="#7F00FF" />     <!-- Violet        rgb(127, 0, 255) -->
+		<definedValue name="STATE_CUDA_MEMCPY_UNKNOWN" value="905" color="#5D3FD3"/>  <!-- Iris          rgb(93, 63, 211) -->
+		<definedValue name="STATE_CUDA_KERNEL_EXE" value="920" color="#008000" />     <!-- Green         rgb(0, 128, 0) -->
+
+		<entry path="Device"><display type="self" />
+			<entry path="*"><display type="self" />
+			</entry>
+		</entry>
+	</timeGraphView>
+</tmfxml>

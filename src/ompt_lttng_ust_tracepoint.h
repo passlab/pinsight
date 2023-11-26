@@ -21,6 +21,8 @@ extern int mpirank ;
 #endif
 #ifdef PINSIGHT_BACKTRACE
 #include <backtrace.h>
+#else
+#define LTTNG_UST_TP_FIELDS_BACKTRACE
 #endif
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
