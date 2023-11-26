@@ -297,12 +297,13 @@ use a config file to do that.
 The `PINSIGHT_TRACE_RATE` env can be used to specifying the tracing and sampling rate with four integers. The format is
 `<trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>`, e.g. `PINSIGHT_TRACE_RATE=10:20:100:10`.
 The meaning of each of the four number can be found from the lexgion_trace_config_keys[] declaration. E.g.:
-     `PINSIGHT_TRACE_RATE=0:0:10:1`, This is the system default (in `lexgion_trace_config_sysdefault` function).
+
+     PINSIGHT_TRACE_RATE=0:0:10:1, This is the system default (in `lexgion_trace_config_sysdefault` function).
                 It indicates to start recording from the first execution, then record the first 0 traces,
                 then after that, record one trace per 1 execution and in total max 10 traces should be recorded.
-     `PINSIGHT_TRACE_RATE=0:0:-1:-1`, record all the traces.
-     `PINSIGHT_TRACE_RATE=0:0:-1:10`, record 1 trace per 10 executions for all the executions.
-     `PINSIGHT_TRACE_RATE=0:20:20:-1`, record the first 20 iterations
+     PINSIGHT_TRACE_RATE=0:0:-1:-1, record all the traces.
+     PINSIGHT_TRACE_RATE=0:0:-1:10, record 1 trace per 10 executions for all the executions.
+     PINSIGHT_TRACE_RATE=0:20:20:-1, record the first 20 iterations
  
 #### Using a config file to specify runtime tracing options
 The file name can be specified using the `PINSIGHT_TRACE_CONFIG` env. Please check the sample file in the src folder.

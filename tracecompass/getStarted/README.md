@@ -28,7 +28,10 @@ This folder contains instructions and sample files/traces to help one start deve
 
 <img width="1440" alt="Screenshot 2023-09-08 at 9 38 48 PM" src="https://github.com/passlab/pinsight/assets/135630264/3de002f0-95b7-49ba-941c-0c785ad76242">
 
-12. You should see the following after you click the PInsight OpenMP Trace Review button deep in the Traces. You will be able to see the data like this.
+12. Make sure to select the trace type as shown in the picture below.
+    <img width="1440" alt="Screenshot 2023-10-19 at 1 52 02 PM" src="https://github.com/passlab/pinsight/assets/135630264/05b2fcef-c5f9-4e82-9430-9711afe53e99">
+
+13. You should see the following after you click the PInsight OpenMP Trace Review button deep in the Traces. You will be able to see the data like this.
     <img width="1440" alt="Screenshot 2023-09-08 at 9 44 58 PM" src="https://github.com/passlab/pinsight/assets/135630264/c1fbff01-a334-4802-853c-e516afbbce60">
 
 
