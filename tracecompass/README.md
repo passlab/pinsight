@@ -29,7 +29,7 @@ To be able to view the state changes in a reasonable way in TraceCompass, we hav
  * Study the developer guide and browse the source code.
  * [Eclipse plugin tutorial](http://www.vogella.com/tutorials/EclipsePlugin/article.html).
 
-TraceCompass user guide and developer guide provide details about how to visualize more of the trace data. The doc are from https://wiki.eclipse.org/Trace_Compass and there are more info can be found linking from the main website https://www.eclipse.org/tracecompass/ 
+ TraceCompass user guide and developer guide provide details about how to visualize more of the trace data. The doc are from https://wiki.eclipse.org/Trace_Compass and there are more info can be found linking from the main website https://www.eclipse.org/tracecompass/ 
 
 The current visualization is based on Eclipse data-driven analysis (http://archive.eclipse.org/tracecompass/doc/stable/org.eclipse.tracecompass.doc.user/Data-driven-analysis.html#Data_driven_analysis) and The XML file (https://github.com/passlab/pinsight/blob/master/tracecompass/pinsight-analysis.xml) that is loaded to tracecompass will enable tracecompass to auto-visualize the trace data. We would like to enhance tracecompass to have more visualization. To get started:
 1. read the full userguide and play the tracecompass GUI interface to get familiar with the functionality and features of tracecompass
