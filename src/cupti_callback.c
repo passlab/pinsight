@@ -226,7 +226,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             data = get(&hash_t,cid);
             //print_callback_data(data); //crashing right here
             if (data  == NULL) {
-                printf("data is null\n");
+                printf("data is null callback\n");
                 data = (callback_data*)malloc(sizeof(callback_data));
                 callback_data_init(data);
                 data->cid = cid;
@@ -243,6 +243,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                 printf("address of lttng_ust_tracepoint: CALLBACK API IF %p lttng enabled status: %d \n", &lttng_ust_tracepoint_cupti_pinsight_lttng_ust___cudaMemcpy_end, lttng_enbaled);
                 pthread_mutex_unlock(&mutex);
             } else {
+                printf("data is not null callback\n");
                 data->cid = cid;
                 data->dst = p->dst;
                 data->src = p->src;
@@ -383,17 +384,18 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
             data = get(&hash_t,cid);
             //print_callback_data(data); //crashing right here
             if (data == NULL) {
+                printf("data is null activity\n");
                 data = (callback_data*)malloc(sizeof(callback_data));
                 callback_data_init(data);
                 data->stream = memcpyRecord->streamId;
                 hash_table_insert(&hash_t, data);
-                printf("null\n");
                 int lttng_enbaled = 777;
                 lttng_enbaled = lttng_ust_tracepoint_enabled(cupti_pinsight_lttng_ust, cudaMemcpy_begin);
                 //printf("lttng enabled status: %d\n", lttng_enbaled);
                 printf("address of lttng_ust_tracepoint: ACTICITY API IF %p lttng enabled status: %d \n", &lttng_ust_tracepoint_cupti_pinsight_lttng_ust___cudaMemcpy_end, lttng_enbaled);
                 pthread_mutex_unlock(&mutex);
             } else {
+                printf("data is not null activity\n");
                 data->stream = memcpyRecord->streamId;
                 printf("---ELSE BRANCH ACTIVITY API---\n");
 

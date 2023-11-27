@@ -1,0 +1,3 @@
+valgrind --tool=helgrind --trace-children=yes ./trace.sh /home/lune/Documents/UNCC/RESEARCH/LULESH/cuda/src/testTraces testtraces ../build/libpinsight.so /usr/local/cuda/lib64 /home/lune/Documents/UNCC/RESEARCH/LULESH/cuda/src/lulesh -s 45 &> helgrind.log
+
+./trace.sh /home/lune/Documents/UNCC/RESEARCH/cuda-samples/Samples/2_Concepts_and_Techniques/reduction/testTraces testtraces ../build/libpinsight.so /usr/local/cuda/lib64 /home/lune/Documents/UNCC/RESEARCH/cuda-samples/Samples/2_Concepts_and_Techniques/reduction/reduction

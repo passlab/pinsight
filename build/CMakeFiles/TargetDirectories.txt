@@ -1,7 +1,7 @@
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/pinsight.dir
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/edit_cache.dir
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/rebuild_cache.dir
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/list_install_components.dir
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/install.dir
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/install/local.dir
-/home/eingram4/Documents/cuda/pinsight/build/CMakeFiles/install/strip.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/pinsight.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/edit_cache.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/rebuild_cache.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/list_install_components.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/install.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/install/local.dir
+/home/lune/Documents/UNCC/RESEARCH/pinsight/build/CMakeFiles/install/strip.dir
