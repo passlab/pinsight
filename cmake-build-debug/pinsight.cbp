@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="pinsight"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;CMake Files\src\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="pinsight">
+				<Option output="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/libpinsight.so" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="3"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/lune/Documents/UNCC/RESEARCH/pinsight/src"/>
+					<Add directory="/usr/local/cuda/extras/CUPTI/include"/>
+					<Add directory="/usr/local/cuda/include"/>
+					<Add directory="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/src"/>
+					<Add directory="/usr/include/c++/12"/>
+					<Add directory="/usr/include/x86_64-linux-gnu/c++/12"/>
+					<Add directory="/usr/include/c++/12/backward"/>
+					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/12/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/include/x86_64-linux-gnu"/>
+					<Add directory="/usr/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 pinsight"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="pinsight/fast">
+				<Option output="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/libpinsight.so" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="3"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/lune/Documents/UNCC/RESEARCH/pinsight/src"/>
+					<Add directory="/usr/local/cuda/extras/CUPTI/include"/>
+					<Add directory="/usr/local/cuda/include"/>
+					<Add directory="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/src"/>
+					<Add directory="/usr/include/c++/12"/>
+					<Add directory="/usr/include/x86_64-linux-gnu/c++/12"/>
+					<Add directory="/usr/include/c++/12/backward"/>
+					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/12/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/include/x86_64-linux-gnu"/>
+					<Add directory="/usr/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 pinsight/fast"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="rebuild_cache">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="list_install_components">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 list_install_components"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="install">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 install"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="install/local">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 install/local"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="install/strip">
+				<Option working_dir="/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 install/strip"/>
+					<CompileFile command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/gmake -j12 -f &quot;/home/lune/Documents/UNCC/RESEARCH/pinsight/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/backtrace.c">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/backtrace.h">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/cupti_callback.c">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/cupti_lttng_ust_tracepoint.h">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/enter_exit.c">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/enter_exit_lttng_ust_tracepoint.h">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/lexgion_trace_config.c">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/lexgion_trace_config.h">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/ompt_callback.c">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/ompt_lttng_ust_tracepoint.h">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/pinsight.c">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/pinsight.h">
+			<Option target="pinsight"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/home/lune/Documents/UNCC/RESEARCH/pinsight/src/pinsight_config.h.cmake.in">
+			<Option virtualFolder="CMake Files\src\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>

@@ -131,6 +131,31 @@ LTTNG_UST_TRACEPOINT_EVENT(
         )
 )
 
+/*for cudaMemcpy activityAPi*/
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaMemcpy_activity,
+        LTTNG_UST_TP_ARGS(
+            CODEPTR_ARG,
+            void *, dst,
+            const void *, src,
+            size_t, count,
+            int, stream,
+            int, cid,
+            int, kind
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(unsigned int, dst, dst)
+            lttng_ust_field_integer(unsigned int, src, src)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_integer(unsigned int, stream, stream)
+            lttng_ust_field_integer(unsigned int, cid, cid)
+            lttng_ust_field_enum(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum, int, enumfield, kind)
+        )
+
+)
+
 /* for kernel launch event */
 LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
