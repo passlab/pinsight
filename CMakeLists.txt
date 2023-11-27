@@ -14,7 +14,7 @@ option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
 option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
 option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
-option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
+option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
