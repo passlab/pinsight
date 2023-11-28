@@ -36,6 +36,7 @@ extern int mpirank;
 extern __thread void * mpi_codeptr;
 #ifdef PINSIGHT_OPENMP
 extern __thread int global_thread_num;
+extern __thread int omp_team_num;
 extern __thread int omp_thread_num;
 #else
 #endif
@@ -54,6 +55,7 @@ extern __thread int omp_thread_num;
     COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
+    lttng_ust_field_integer(unsigned int, omp_team_num, omp_team_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer_hex(unsigned long int, mpi_codeptr, mpi_codeptr)
 #else

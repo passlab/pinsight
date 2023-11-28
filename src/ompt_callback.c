@@ -48,6 +48,7 @@ __thread const void * task_codeptr = NULL;
 __thread unsigned int task_record_id = -1;
 
 __thread int global_thread_num = 0;
+__thread int omp_team_num = 0;
 __thread int omp_thread_num = 0;
 
 static const char* ompt_thread_type_t_values[] = {

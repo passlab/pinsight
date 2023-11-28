@@ -35,6 +35,7 @@ extern int mpirank;
 #endif
 #ifdef PINSIGHT_OPENMP
 extern __thread int global_thread_num;
+extern __thread int omp_team_num;
 extern __thread int omp_thread_num;
 #endif
 #ifdef PINSIGHT_BACKTRACE
@@ -45,7 +46,7 @@ extern __thread int omp_thread_num;
 #endif
 
 /** Macros used to simplify the definition of LTTng LTTNG_UST_TRACEPOINT_EVENT */
-#define CODEPTR_ARG \
+#define COMMON_CUDA_ARG \
     unsigned int, devId, \
     unsigned int, correlationId, \
     unsigned long int, cupti_timeStamp, \
@@ -59,6 +60,7 @@ extern __thread int omp_thread_num;
     LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
+    lttng_ust_field_integer(unsigned int, omp_team_num, omp_team_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer(unsigned int, devId, devId) \
     lttng_ust_field_integer(unsigned int, correlationId, correlationId) \
@@ -79,6 +81,7 @@ extern __thread int omp_thread_num;
 #define COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP \
     LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
+    lttng_ust_field_integer(unsigned int, omp_team_num, omp_team_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer(unsigned int, devId, devId) \
     lttng_ust_field_integer(unsigned int, correlationId, correlationId) \
@@ -122,11 +125,11 @@ LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
         cudaMemcpy_begin,
         LTTNG_UST_TP_ARGS(
-            CODEPTR_ARG,
+            COMMON_CUDA_ARG,
             void *, dst,
             const void *, src,
             size_t, count,
-            int, kind
+            unsigned int, kind
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
@@ -141,7 +144,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
         cudaMemcpy_end,
         LTTNG_UST_TP_ARGS(
-            CODEPTR_ARG,
+            COMMON_CUDA_ARG,
             int, return_val
         ),
         LTTNG_UST_TP_FIELDS(
@@ -150,12 +153,52 @@ LTTNG_UST_TRACEPOINT_EVENT(
         )
 )
 
+
+/* for cudaMemcpyAsync event */
+//**NOTE: LTTng only allows to have max 10 args/fields. This tracepoint already has 10.
+// We thus do not include contextId at this moment. Filed a report to LLTng already
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaMemcpyAsync_begin,
+        LTTNG_UST_TP_ARGS(
+            COMMON_CUDA_ARG,
+            void *, dst,
+            const void *, src,
+            size_t, count,
+            unsigned int, kind,
+            unsigned int, streamId
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(unsigned int, dst, dst)
+            lttng_ust_field_integer(unsigned int, src, src)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_enum(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum, int, cudaMemcpyKind, kind)
+            lttng_ust_field_integer(unsigned int, streamId, streamId)
+        )
+)
+
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaMemcpyAsync_end,
+        LTTNG_UST_TP_ARGS(
+            COMMON_CUDA_ARG,
+            int, return_val
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(int, return_val, return_val)
+        )
+)
+
+
+
 /* for kernel launch event */
 LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
         cudaKernelLaunch_begin,
         LTTNG_UST_TP_ARGS(
-            CODEPTR_ARG
+            COMMON_CUDA_ARG
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
@@ -166,7 +209,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
         cudaKernelLaunch_end,
         LTTNG_UST_TP_ARGS(
-            CODEPTR_ARG
+            COMMON_CUDA_ARG
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP

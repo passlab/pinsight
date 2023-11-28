@@ -25,6 +25,7 @@ extern int mpirank ;
 #define LTTNG_UST_TP_FIELDS_BACKTRACE
 #endif
 extern __thread int global_thread_num;
+extern __thread int omp_team_num;
 extern __thread int omp_thread_num;
 extern __thread const void * parallel_codeptr;
 extern __thread unsigned int parallel_record_id;
@@ -40,6 +41,7 @@ extern __thread unsigned int task_record_id;
 	LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, mpirank, mpirank) \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
+    lttng_ust_field_integer(unsigned int, omp_team_num, omp_team_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer_hex(unsigned long int, parallel_codeptr, parallel_codeptr) \
     lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
@@ -47,6 +49,7 @@ extern __thread unsigned int task_record_id;
 #define COMMON_LTTNG_UST_TP_FIELDS_OMPT \
 	LTTNG_UST_TP_FIELDS_BACKTRACE \
     lttng_ust_field_integer(unsigned int, global_thread_num, global_thread_num) \
+    lttng_ust_field_integer(unsigned int, omp_team_num, omp_team_num) \
     lttng_ust_field_integer(unsigned int, omp_thread_num, omp_thread_num) \
     lttng_ust_field_integer_hex(unsigned long int, parallel_codeptr, parallel_codeptr) \
     lttng_ust_field_integer(unsigned int, parallel_record_id, parallel_record_id)
