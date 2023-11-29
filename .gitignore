@@ -63,3 +63,4 @@ CMakeFiles/*
 
 build/
 .idea/
+cmake-build-debug/
