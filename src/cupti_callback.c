@@ -43,10 +43,13 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
         cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
         const char *kernelName = cbInfo->symbolName;
+        cudaLaunchKernel_v7000_params *p = (cudaLaunchKernel_v7000_params*) cbInfo->functionParams;
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
             //printf("inside callback for kernelLaunch_begin: %s\n", kernelName);
+            cudaStream_t stream = p->stream;
+            unsigned int streamId; cuptiGetStreamIdEx(context, stream, 0, &streamId);
             uint64_t timeStamp; cuptiGetTimestamp(&timeStamp);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_begin, devId, correlationId, timeStamp, codeptr, kernelName);
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_begin, devId, correlationId, timeStamp, codeptr, kernelName, streamId);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             //printf("inside callback for kernelLaunch_end: %s\n", kernelName);
             uint64_t timeStamp; cuptiGetTimestamp(&timeStamp);

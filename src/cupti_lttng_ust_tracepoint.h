@@ -198,10 +198,12 @@ LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
         cudaKernelLaunch_begin,
         LTTNG_UST_TP_ARGS(
-            COMMON_CUDA_ARG
+            COMMON_CUDA_ARG,
+            unsigned int, streamId
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(unsigned int, streamId, streamId)
         )
 )
 
