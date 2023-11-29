@@ -60,3 +60,6 @@ dkms.conf
 *.cmake
 CMakeCache.txt
 CMakeFiles/*
+
+build/
+.idea/
