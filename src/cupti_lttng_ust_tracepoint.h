@@ -43,6 +43,12 @@ extern __thread int omp_thread_num;
 #else
 #define LTTNG_UST_TP_FIELDS_BACKTRACE
 #endif
+
+struct contextStreamId_t {
+	unsigned int contextId;
+	unsigned int streamId;
+};
+
 #endif
 
 /** Macros used to simplify the definition of LTTng LTTNG_UST_TRACEPOINT_EVENT */
@@ -97,7 +103,6 @@ extern __thread int omp_thread_num;
     lttng_ust_field_integer_hex(unsigned long int, cuda_codeptr, codeptr) \
     lttng_ust_field_string(kernel_func, func_name)
 #endif
-
 
 /* define cudaMemcpyKind enum
         cudaMemcpyHostToHost = 0
@@ -166,7 +171,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
             const void *, src,
             size_t, count,
             unsigned int, kind,
-            unsigned int, streamId
+			struct contextStreamId_t*, contextStreamId
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
@@ -174,7 +179,8 @@ LTTNG_UST_TRACEPOINT_EVENT(
             lttng_ust_field_integer(unsigned int, src, src)
             lttng_ust_field_integer(unsigned int, count, count)
             lttng_ust_field_enum(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum, int, cudaMemcpyKind, kind)
-            lttng_ust_field_integer(unsigned int, streamId, streamId)
+            lttng_ust_field_integer(unsigned int, contextId, contextStreamId->contextId)
+            lttng_ust_field_integer(unsigned int, streamId, contextStreamId->streamId)
         )
 )
 
@@ -191,19 +197,18 @@ LTTNG_UST_TRACEPOINT_EVENT(
         )
 )
 
-
-
 /* for kernel launch event */
 LTTNG_UST_TRACEPOINT_EVENT(
         cupti_pinsight_lttng_ust,
         cudaKernelLaunch_begin,
         LTTNG_UST_TP_ARGS(
             COMMON_CUDA_ARG,
-            unsigned int, streamId
+			struct contextStreamId_t*, contextStreamId
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
-            lttng_ust_field_integer(unsigned int, streamId, streamId)
+            lttng_ust_field_integer(unsigned int, contextId, contextStreamId->contextId)
+            lttng_ust_field_integer(unsigned int, streamId, contextStreamId->streamId)
         )
 )
 
