@@ -50,7 +50,16 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             unsigned int streamId; cuptiGetStreamIdEx(context, stream, 0, &streamId);
             struct contextStreamId_t ctxStreamId; ctxStreamId.contextId = cxtId; ctxStreamId.streamId = streamId;
             uint64_t timeStamp; cuptiGetTimestamp(&timeStamp);
-            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_begin, devId, correlationId, timeStamp, codeptr, kernelName, &ctxStreamId);
+            dim3 grid = p->gridDim;
+            dim3 block = p->blockDim;
+            unsigned int gridx = grid.x;
+            unsigned int gridy = grid.y;
+            unsigned int gridz = grid.z;
+            unsigned int blockx = block.x;
+            unsigned int blocky = block.y;
+            unsigned int blockz = block.z;
+            struct dimension_t dim; dim.gridx = gridx; dim.gridy = gridy; dim.gridz = gridz; dim.blockx = blockx; dim.blocky = blocky; dim.blockz = blockz;
+            lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_begin, devId, correlationId, timeStamp, codeptr, kernelName, &ctxStreamId, &dim);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             //printf("inside callback for kernelLaunch_end: %s\n", kernelName);
             uint64_t timeStamp; cuptiGetTimestamp(&timeStamp);
