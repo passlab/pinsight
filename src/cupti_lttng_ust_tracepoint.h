@@ -49,6 +49,16 @@ struct contextStreamId_t {
 	unsigned int streamId;
 };
 
+struct dimension_t {
+    unsigned int gridx;
+    unsigned int gridy;
+    unsigned int gridz;
+    unsigned int blockx;
+    unsigned int blocky;
+    unsigned int blockz;
+
+};
+
 #endif
 
 /** Macros used to simplify the definition of LTTng LTTNG_UST_TRACEPOINT_EVENT */
@@ -203,12 +213,19 @@ LTTNG_UST_TRACEPOINT_EVENT(
         cudaKernelLaunch_begin,
         LTTNG_UST_TP_ARGS(
             COMMON_CUDA_ARG,
-			struct contextStreamId_t*, contextStreamId
+			struct contextStreamId_t*, contextStreamId,
+                        struct dimension_t*, dimension
         ),
         LTTNG_UST_TP_FIELDS(
             COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
             lttng_ust_field_integer(unsigned int, contextId, contextStreamId->contextId)
             lttng_ust_field_integer(unsigned int, streamId, contextStreamId->streamId)
+            lttng_ust_field_integer(unsigned int, gridDimX, dimension->gridx)
+            lttng_ust_field_integer(unsigned int, gridDimY, dimension->gridy)
+            lttng_ust_field_integer(unsigned int, gridDimZ, dimension->gridz)
+            lttng_ust_field_integer(unsigned int, blockDimX, dimension->blockx)
+            lttng_ust_field_integer(unsigned int, blockDimY, dimension->blocky)
+            lttng_ust_field_integer(unsigned int, blockDimZ, dimension->blockz)
         )
 )
 
