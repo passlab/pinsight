@@ -72,6 +72,9 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
             int kind = funcParams->kind;
             //printf("inside callback for cudaMemcpy_begin: %s\n", funName);
             uint64_t timeStamp; cuptiGetTimestamp(&timeStamp);
+            /** Here we did not separate the cudaMemcpy kind in order to reduce the overhead of doing that, and separating memcpy kind
+             * is done in the trace analysis
+             */
             lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpy_begin, devId, correlationId, timeStamp, codeptr, funName, dst, src, count, kind);
         } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
             int return_val = *((int *) cbInfo->functionReturnValue);
