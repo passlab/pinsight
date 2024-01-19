@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <omp-tools.h>
 
 // --------------------------------------------------------
 // Environment config variables
@@ -139,8 +140,11 @@ typedef struct lexgion_trace_config {  /* all the config fields MUST be from the
  */
 typedef struct omp_trace_config_t {
 	int event_callback; 	//The enum value of the callback
+	ompt_callback_t callback; //the callback func pointer
 	unsigned int implemented;  	//Whether the callback is implemented by PInsight
-	unsigned int enabled;    //Whether the callback is enabled or not
+	unsigned int status;    //Current setting, 0 or 1 representing disabled or enabled.
+	unsigned int toChange; //Whether the newStatus is set or not
+	unsigned int newStatus; //new setting, 0 or 1 indicating to disable or to enable
 } omp_trace_config_t;
 
 typedef struct mpi_trace_config_t {
@@ -150,5 +154,12 @@ typedef struct mpi_trace_config_t {
 typedef struct cuda_trace_config_t {
 
 } cuda_trace_config_t;
+
+extern lexgion_trace_config_t *sysdefault_trace_config;
+extern lexgion_trace_config_t *rtdefault_trace_config;
+extern lexgion_trace_config_t *lexgion_trace_config;
+extern omp_trace_config_t omp_trace_configs[64];
+extern mpi_trace_config_t mpi_trace_configs[64];
+extern cuda_trace_config_t cuda_trace_configs[64];
 
 #endif // LEXGION_TRACE_CONFIG_H

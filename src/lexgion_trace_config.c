@@ -78,6 +78,7 @@ static void lexgion_trace_config_sysdefault() {
     }
 }
 
+
 /**
  * This function is not thread safe, but it might not hurt called by multiple threads
  */
