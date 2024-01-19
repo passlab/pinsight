@@ -90,33 +90,65 @@ typedef struct lexgion_trace_config {  /* all the config fields MUST be from the
 } lexgion_trace_config_t;
 
 /**
- * There are two ways to set the configuration options for PInsight tracing:
- * 1) via environment variables, and 2) via a config file.
+ * This struct maintains the event/callbacks that are implemented and enabled/disabled at the runtime for runtime to perform fine-grainularity control of
+ * which events are to be traced and which events can be skipped
  *
- * 1) For env variables, below are the variables and their optional values that one can use to set the runtime tracing options.
- * Env settings are applied to the runtime default configuration for all lexgions. If you want lexgion-specific configuration,
- * you have to use the second way which is using a config file.
- * PINSIGHT_TRACE_OPENMP=TRUE|FALSE
- * PINSIGHT_TRACE_MPI=TRUE|FALSE
- * PINSIGHT_TRACE_CUDA=TRUE|FALSE
- * PINSIGHT_TRACE_ENERGY=TRUE|FALSE
- * PINSIGHT_TRACE_BACKTRACE=TRUE|FALSE
- * PINSIGHT_TRACE_RATE=<trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>
+ * It should list the same as the following enum defined in omp-tools.h file (https://github.com/llvm/llvm-project/blob/main/openmp/runtime/src/include/omp-tools.h.var#L214)
  *
- * The PINSIGHT_TRACE_RATE env can be used to specifying the tracing and sampling rate with four integers. The format is
- * <trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>, e.g. PINSIGHT_TRACE_RATE=10:20:100:10.
- * The meaning of each of the four number can be found from the above for the lexgion_trace_config_keys[] declaration. E.g.:
- *      PINSIGHT_TRACE_RATE=0:0:10:1, This is the system default (lexgion_trace_config_sysdefault function).
- *         It starting recording from the first execution, then record the first 0 traces,
-                then after that, record one trace per 1 execution and in total max 10 traces should be recorded.
-        PINSIGHT_TRACE_RATE=0:0:-1:-1, Record all the traces.
-        PINSIGHT_TRACE_RATE=0:0:-1:10, record 1 trace per 10 executions for all the executions.
-        PINSIGHT_TRACE_RATE=0:20:20:-1, record the first 20 iterations
+ * typedef enum ompt_callbacks_t {
+  ompt_callback_thread_begin             = 1,
+  ompt_callback_thread_end               = 2,
+  ompt_callback_parallel_begin           = 3,
+  ompt_callback_parallel_end             = 4,
+  ompt_callback_task_create              = 5,
+  ompt_callback_task_schedule            = 6,
+  ompt_callback_implicit_task            = 7,
+  ompt_callback_target                   = 8,
+  ompt_callback_target_data_op           = 9,
+  ompt_callback_target_submit            = 10,
+  ompt_callback_control_tool             = 11,
+  ompt_callback_device_initialize        = 12,
+  ompt_callback_device_finalize          = 13,
+  ompt_callback_device_load              = 14,
+  ompt_callback_device_unload            = 15,
+  ompt_callback_sync_region_wait         = 16,
+  ompt_callback_mutex_released           = 17,
+  ompt_callback_dependences              = 18,
+  ompt_callback_task_dependence          = 19,
+  ompt_callback_work                     = 20,
+  ompt_callback_master     DEPRECATED_51 = 21,
+  ompt_callback_masked                   = 21,
+  ompt_callback_target_map               = 22,
+  ompt_callback_sync_region              = 23,
+  ompt_callback_lock_init                = 24,
+  ompt_callback_lock_destroy             = 25,
+  ompt_callback_mutex_acquire            = 26,
+  ompt_callback_mutex_acquired           = 27,
+  ompt_callback_nest_lock                = 28,
+  ompt_callback_flush                    = 29,
+  ompt_callback_cancel                   = 30,
+  ompt_callback_reduction                = 31,
+  ompt_callback_dispatch                 = 32,
+  ompt_callback_target_emi               = 33,
+  ompt_callback_target_data_op_emi       = 34,
+  ompt_callback_target_submit_emi        = 35,
+  ompt_callback_target_map_emi           = 36,
+  ompt_callback_error                    = 37
+} ompt_callbacks_t;
  *
- * 2) For using a config file to specify runtime tracing options, the file name can be specified using the PINSIGHT_TRACE_CONFIG env.
- * Please check the sample file in the src folder.
- *
- * If both ways are used by the users, the options provided by the config file will be used.
  */
+typedef struct omp_trace_config_t {
+	int event_callback; 	//The enum value of the callback
+	unsigned int implemented;  	//Whether the callback is implemented by PInsight
+	unsigned int enabled;    //Whether the callback is enabled or not
+} omp_trace_config_t;
+
+typedef struct mpi_trace_config_t {
+
+} mpi_trace_config_t;
+
+typedef struct cuda_trace_config_t {
+
+} cuda_trace_config_t;
 
 #endif // LEXGION_TRACE_CONFIG_H

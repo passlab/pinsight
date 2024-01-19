@@ -96,7 +96,7 @@ lttng add-context -u -t procname -t vpid -t vtid -t ip
 
 # Experimental kernel events
 #lttng add-context --kernel --type=callstack-user --type=callstack-kernel
-lttng enable-event --kernel --all
+# lttng enable-event --kernel --all
 
 # Start LTTng tracing.
 lttng start

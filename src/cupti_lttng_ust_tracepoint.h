@@ -56,7 +56,6 @@ struct dimension_t {
     unsigned int blockx;
     unsigned int blocky;
     unsigned int blockz;
-
 };
 
 #endif
