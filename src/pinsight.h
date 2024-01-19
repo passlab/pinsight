@@ -62,7 +62,7 @@ typedef enum LEXGION_CLASS {
  * The reasons we need type for identify a lexgion are:
  * 1). OpenMP combined and composite construct, e.g. parallel for
  * 2). implicit barrier, e.g. parallel.
- * Becasue of that, the events for those constructs may use the same codeptr_ra for the callback, thus we need further
+ * Because of that, the events for those constructs may use the same codeptr_ra for the callback, thus we need further
  * check the type so we know whether we need to create two different lexgion objects
  *
  * This is per-thread data structure, i.e. for the same code region, an object is created for each thread when it is needed.
@@ -78,7 +78,7 @@ typedef struct lexgion {
                * For OpenMP, we use trace record event id as the type of each lexgion; For MPI, we define a macro for each MPI methods */
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
     struct lexgion_trace_config * trace_config;
-    unsigned int num_exes_after_last_trace; /* counter to control the sampling */
+    unsigned int num_exes_after_last_trace; /* counter to control the sampling based on trace rate */
 
     //fields for logging purpose
     /* we need volatile and atomic inc this counter only in the situation where two master threads enter into the same region */
@@ -90,11 +90,11 @@ typedef struct lexgion {
 
 /* This macro check whether to trace or not: trace_bit is set if trace_enable is set AND
  * traces for the initial number of exes or when reaching sampling rate */
-#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->OpenMP_trace_enabled && (lgp->trace_config->trace_starts_at <= lgp->counter) && \
+#define lexgion_set_trace_bit(lgp) {trace_bit = lgp->trace_config->OpenMP_trace_enabled && (lgp->trace_config->trace_starts_at <= lgp->counter-1) && \
                             (lgp->trace_counter < lgp->trace_config->initial_trace_count || \
                             (lgp->trace_counter < lgp->trace_config->max_num_traces && lgp->num_exes_after_last_trace == lgp->trace_config->tracing_rate));}
 
-#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; if (lgp->trace_counter == 1) lgp->first_trace_num = lgp->counter-1; lgp->num_exes_after_last_trace=0; lgp->last_trace_num = lgp->counter;}
+#define lexgion_post_trace_update(lgp) {lgp->trace_counter++; if (lgp->trace_counter == 1) lgp->first_trace_num = lgp->counter-1; lgp->num_exes_after_last_trace=0; lgp->last_trace_num = lgp->counter-1;}
 
 /**
  * The runtime instance/frame/record of a lexgion of a thread

@@ -273,11 +273,11 @@ In comparison with static tracing that when tracing are started, no changes can 
 Dynamic tracing enables highly optimized tracing according to the needs and behavior of the program execution. 
 This is achieved by allowing enabling and disabling tracing in multiple granularity level. 
 Currently, PInsight implements two ways for users to set the configuration options for tracing:
-1) via environment variables that can be used for setting the default tracing config, and 2) via a config file which can be
+1) via environment variables that can be used for setting the runtime default tracing config, and 2) via a config file which can be
 used for setting both the default tracing config and lexgion-specific tracing config.
 The tracing config is read from env variables or config file when the `pinsight` library is loaded.
-The tracing config can be re-read at the runtime if we implement it in the library or expose the library to external interface to
-allow re-reading.
+The tracing config can be re-read at the runtime, allowing runtime reconfiguration of tracing behavior. This feature has not yet
+implemented, but the function is available to use by the external interface or utilities. 
 
 If both env and config file are used to provide the default tracing config, the options provided in the config file 
 will overwrite the options provided in the env variable.
@@ -301,9 +301,10 @@ The meaning of each of the four number can be found from the lexgion_trace_confi
      PINSIGHT_TRACE_RATE=0:0:10:1, This is the system default (in `lexgion_trace_config_sysdefault` function).
                 It indicates to start recording from the first execution, then record the first 0 traces,
                 then after that, record one trace per 1 execution and in total max 10 traces should be recorded.
-     PINSIGHT_TRACE_RATE=0:0:-1:-1, record all the traces.
+     PINSIGHT_TRACE_RATE=0:0:-1:1, record all the traces.
      PINSIGHT_TRACE_RATE=0:0:-1:10, record 1 trace per 10 executions for all the executions.
-     PINSIGHT_TRACE_RATE=0:20:20:-1, record the first 20 iterations
+     PINSIGHT_TRACE_RATE=0:20:20:1, record the first 20 iterations
+     PINSIGHT_TRACE_RATE=x:0:0:x,  do not record any iterations
  
 #### Using a config file to specify runtime tracing options
 The file name can be specified using the `PINSIGHT_TRACE_CONFIG` env. Please check the sample file in the src folder.
@@ -311,8 +312,8 @@ The file name can be specified using the `PINSIGHT_TRACE_CONFIG` env. Please che
 Further improvement: to completely turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
 1. One approach is to use an env varabile and a global flag for setting and checking upon entry to each PInsight/OMPT/PMPI/CUPTI call, though this still introduces the overhead of making those calls and one step of checking. 
 2. Another approach is to completely shutdown/finalize the OMPT/PMPI/CUPTI for the program and unload/unlink the libpinsight.so. For OpenMP, this can be accomplished by ompt_finalize call, which turn off OMPT, thus the whole PInsight is turned off and the libpinsight.so can be unloaded. For MPI, this can be accomplished by unlinking libpinsight.so. For CUPTI, **TBD**. With this approach, the program does not expect to re-enable the tracing later on. 
-3. This approach can be used for enable/disable specific tracing of OpenMP, MPI or CUPTI. With this approach, we need to build three different librarys each for OpenMP/MPI/CUPTI. 
-4. This approach can also be used in the debugging situation that after the debuger and performance analysis know the configuration, and set the configuration, tracing can be disabled to eliminate the overhead otherwise that would be introduced with tracing
+3. This approach can be used for enable/disable specific tracing of OpenMP, MPI or CUPTI. With this approach, we need to build three different libraries each for OpenMP/MPI/CUPTI. 
+4. This approach can also be used in the debugging situation that after the debugger and performance analysis know the configuration, and set the configuration, tracing can be disabled to eliminate the overhead otherwise that would be introduced with tracing
 
 ---------------------------------------------------------------------------
 
