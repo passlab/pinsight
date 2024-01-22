@@ -112,8 +112,6 @@ typedef struct lexgion_record_t {
  * the thread-local object that store data for each thread
  */
 typedef struct pinsight_thread_data {
-    /* the stack for storing the lexgion */
-    //lexgion_t *lexgion_stack;
     int initial_thread;
 
     /* the runtime stack for lexgion instances */
