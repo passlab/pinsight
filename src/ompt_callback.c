@@ -201,6 +201,24 @@ on_ompt_callback_thread_begin(
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_begin, (short)thread_type ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 
     if (thread_type == ompt_thread_initial) { //For initial thread, we need to setup the initial parallel region and initial implicit task
+
+#if 0
+    	ompt_data_t *parallel_data;
+    	int team_size;
+    	int retv = ompt_get_parallel_info(0, &parallel_data, &team_size);
+    	if (retv == 2) printf("initial implicit parallel region is ready, team size: %d, parallel data: %p\n", team_size, parallel_data);
+    	else if (retv == 1) printf("ancestor exist, but the initial implicit parallel region is not ready\n");
+    	else printf("system has not ready for the initial implicit parallel region\n");
+
+    	ompt_data_t *task_parallel_data;
+    	ompt_data_t *task_data;
+    	int task_flag;
+    	int thread_num;
+    	retv = ompt_get_task_info(0, &task_flag, &task_data, NULL, &task_parallel_data, &thread_num);
+    	if (retv == 2) printf("initial implicit task is ready, thread num: %d, parallel data: %p, task_data: %p\n", thread_num, task_parallel_data, task_data);
+    	else if (retv == 1) printf("ancestor exist, but the initial implicit task is not ready\n");
+    	else printf("system has not ready for the initial implicit task\n");
+#endif
         pinsight_thread_data.initial_thread = 1;
 
         //Setup the initial parallel region, and this could be a call to the callback, but we will elaborate it here
@@ -338,6 +356,18 @@ on_ompt_callback_thread_end(
 #endif
 }
 
+/**
+ * This callback is used for both parallel and teams constructs, and
+ * (flags & ompt_parallel_league) evaluates to true for teams
+ * (flags & ompt_parallel_team) evaluates to true for parallel, from spec:
+ *
+ * typedef enum ompt_parallel_flag_t {
+        ompt_parallel_invoker_program = 0x00000001,
+        ompt_parallel_invoker_runtime = 0x00000002,
+        ompt_parallel_league = 0x40000000,
+        ompt_parallel_team = 0x80000000
+   } ompt_parallel_flag_t;
+ */
 static void
 on_ompt_callback_parallel_begin(
         ompt_data_t *parent_task,         /* data of encountering task           */
@@ -377,6 +407,9 @@ on_ompt_callback_parallel_begin(
   }
 }
 
+/**
+ * Also for both teams and parallel constructs, use flag to know which one, check parallel_begin
+ */
 static void
 on_ompt_callback_parallel_end(
         ompt_data_t *parallel_data,
@@ -420,6 +453,8 @@ on_ompt_callback_parallel_end(
 
 /**
  * only parallel, teams and initial implicit tasks can trigger this callback
+ * (flags & ompt_task_initial) evaluates to true for the initial implicit task created from the initial implicit parallel region
+ * (flags & ompt_task_implicit) evaluates to true for the regular implicit tasks of both teams and parallel region
  */
 static void
 on_ompt_callback_implicit_task(
@@ -433,8 +468,10 @@ on_ompt_callback_implicit_task(
   switch(endpoint)
   {
     case ompt_scope_begin: {
-      if (flags & ompt_task_initial) { //For the initial parallel region, there is no parallel_begin event, thus we set the parallel_data here
-          parallel_data->ptr = (void*)enclosing_parallel_lexgion_record;
+      if (flags & ompt_task_initial) { //For the initial implicit task of the initial parallel region: there is no parallel_begin event, thus we set the parallel_data here
+                                       //initial implicit task callback is fired here, not in callback_task_create
+    	  parallel_data->ptr = (void*)enclosing_parallel_lexgion_record;
+          //printf("callback_implicit_task fired for ompt_task_initial\n");
       }
 
       //These three setup are redundant for the main thread since they are already setup by the parallel_begin. But they are needed for worker threads
@@ -1274,11 +1311,10 @@ on_ompt_callback_task_create(
   if (new_task_data->ptr)
     printf("0: new_task_data initially not null\n");
 
-  //there is no parallel_begin callback for implicit parallel region
-  //thus it is initialized in initial task
+  /** this is not useful anymore since the initial implicit task callback is triggered as callback_implicit_task, not callback_task_create
+   */
+  //printf("callback_task_create fired\n");
   if (type & ompt_task_initial) {
-    /* the initial task */
-    //lexgion_t * lgp = lexgion_begin(ompt_callback_task_create, (void*)0xFFFFFFFF, &new_task_data->value);
   }
 }
 
@@ -1364,6 +1400,7 @@ int ompt_initialize(
   ompt_get_partition_place_nums = (ompt_get_partition_place_nums_t) lookup("ompt_get_partition_place_nums");
   ompt_get_proc_id = (ompt_get_proc_id_t) lookup("ompt_get_proc_id");
 
+#if 0
 //  register_callback(ompt_callback_mutex_acquire);
 //  register_callback_t(ompt_callback_mutex_acquired, ompt_callback_mutex_t);
 //  register_callback_t(ompt_callback_mutex_released, ompt_callback_mutex_t);
@@ -1387,6 +1424,14 @@ int ompt_initialize(
 //  register_callback(ompt_callback_task_dependence);
   register_callback(ompt_callback_thread_begin);
   register_callback(ompt_callback_thread_end);
+
+#endif
+
+  void omp_config_set_sysdefault ();
+  void omp_config_config();
+
+  omp_config_set_sysdefault ();
+  omp_config_config();
 
   // Query environment variables to enable/dsiable debug printouts.
   debug_on = env_get_long(PINSIGHT_DEBUG_ENABLE, PINSIGHT_DEBUG_ENABLE_DEFAULT);
@@ -1426,6 +1471,7 @@ ompt_start_tool_result_t* ompt_start_tool(
 do {                                                          \
 	omp_trace_configs[name].event_callback = name; \
 	omp_trace_configs[name].callback = (ompt_callback_t) &cbf; \
+	omp_trace_configs[name].implemented = __implemented__; \
 	omp_trace_configs[name].status = __status__; \
 	omp_trace_configs[name].toChange = __toChange__; \
 	omp_trace_configs[name].newStatus = __newStatus__; \
@@ -1448,56 +1494,76 @@ do {                                                  \
 	omp_trace_configs[name].newStatus = __newStatus__; \
 } while(0)
 
-void omp_trace_config_sysdefault () {
+//* place holder for callback funcs
+void on_ompt_callback_target(){}
+void on_ompt_callback_target_data_op(){}
+void on_ompt_callback_target_submit(){}
+void on_ompt_callback_device_initialize(){}
+void on_ompt_callback_device_finalize(){}
+void on_ompt_callback_device_load(){}
+void on_ompt_callback_device_unload(){}
+void on_ompt_callback_target_map(){}
+void on_ompt_callback_target_emi(){}
+void on_ompt_callback_target_data_op_emi(){}
+void on_ompt_callback_target_submit_emi(){}
+void on_ompt_callback_target_map_emi(){}
+void on_ompt_callback_reduction(){}
+void on_ompt_callback_dispatch(){}
+void on_ompt_callback_error(){}
+
+void omp_config_set_sysdefault () {
 	omp_callback_setting_name_full(ompt_callback_thread_begin, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
 	omp_callback_setting_name_full(ompt_callback_thread_end, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
 	omp_callback_setting_name_full(ompt_callback_parallel_begin, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
-	omp_callback_setting_name_full(ompt_callback_task_create, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
+	omp_callback_setting_name_full(ompt_callback_parallel_end, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
+
+	omp_callback_setting_name_full(ompt_callback_task_create, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_task_schedule, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_implicit_task, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
-//	omp_callback_setting_name_full(ompt_callback_target, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_data_op, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_submit, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+
+	omp_callback_setting_name_full(ompt_callback_target, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_data_op, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_submit, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_control_tool, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_device_initialize, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_device_finalize, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_device_load, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_device_unload, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_device_initialize, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_device_finalize, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_device_load, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_device_unload, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_sync_region_wait, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
-//	omp_callback_setting_name_full(ompt_callback_mutex_released, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_dependences, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_task_dependence, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_mutex_released, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_dependences, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_task_dependence, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_work, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
 	omp_callback_setting_name_full(ompt_callback_masked, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_map, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_map, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_sync_region, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
-//	omp_callback_setting_name_full(ompt_callback_lock_init, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_lock_destroy, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_mutex_acquire, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_mutex_acquired, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_nest_lock, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_flush, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_cancel, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_reduction, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_dispatch, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_data_op_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_submit_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_target_map_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
-//	omp_callback_setting_name_full(ompt_callback_error, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_lock_init, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_lock_destroy, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_mutex_acquire, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_mutex_acquired, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_nest_lock, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_flush, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_cancel, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_reduction, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_dispatch, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_data_op_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_submit_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_map_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_error, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 }
 
 /**
  * Check the configuration (enable or disable) of the callback to enable or disable it based on the requested
  * reconfiguration setting in the callback config object.
  */
-static void omp_config_check2change(ompt_callbacks_t callback) {
+static void omp_config_check2config(ompt_callbacks_t callback) {
 	omp_trace_config_t * config = &omp_trace_configs[callback];
 	if (config->event_callback == callback) {
 		if (config->toChange == STATUS_TO_CHANGE) {
 			int newStatus = config->newStatus;
 			if (newStatus == NEW_STATUS_ENABLED) {//to enable/register it
-				if (config->implemented) {
+				if (config->implemented == CALLBACK_IMPLEMENTED) {
 					if (config->status == CURRENT_STATUS_ENABLED) { //already enabled, report and do not anything
 						printf("OMP event callback %d has already been enabled and registered\n", callback);
 					} else {
@@ -1532,43 +1598,44 @@ static void omp_config_check2change(ompt_callbacks_t callback) {
 /**
  * sysdefault config is set according to whether the callback is implemented or not in omp_callback.c file
  */
-void omp_trace_config_reconfig() {
-	omp_config_check2change(ompt_callback_thread_begin);
-	omp_config_check2change(ompt_callback_thread_end);
-	omp_config_check2change(ompt_callback_parallel_begin);
-	omp_config_check2change(ompt_callback_parallel_end);
-	omp_config_check2change(ompt_callback_task_create);
-	omp_config_check2change(ompt_callback_task_schedule);
-	omp_config_check2change(ompt_callback_implicit_task);
-	omp_config_check2change(ompt_callback_target);
-	omp_config_check2change(ompt_callback_target_data_op);
-	omp_config_check2change(ompt_callback_target_submit);
-	omp_config_check2change(ompt_callback_control_tool);
-	omp_config_check2change(ompt_callback_device_initialize);
-	omp_config_check2change(ompt_callback_device_finalize);
-	omp_config_check2change(ompt_callback_device_load);
-	omp_config_check2change(ompt_callback_device_unload);
-	omp_config_check2change(ompt_callback_sync_region_wait);
-	omp_config_check2change(ompt_callback_mutex_released);
-	omp_config_check2change(ompt_callback_dependences);
-	omp_config_check2change(ompt_callback_task_dependence);
-	omp_config_check2change(ompt_callback_masked);
-	omp_config_check2change(ompt_callback_target_map);
-	omp_config_check2change(ompt_callback_sync_region);
-	omp_config_check2change(ompt_callback_lock_init);
-	omp_config_check2change(ompt_callback_lock_destroy);
-	omp_config_check2change(ompt_callback_mutex_acquire);
-	omp_config_check2change(ompt_callback_mutex_acquired);
-	omp_config_check2change(ompt_callback_nest_lock);
-	omp_config_check2change(ompt_callback_flush);
-	omp_config_check2change(ompt_callback_cancel);
-	omp_config_check2change(ompt_callback_reduction);
-	omp_config_check2change(ompt_callback_dispatch);
-	omp_config_check2change(ompt_callback_target_emi);
-	omp_config_check2change(ompt_callback_target_data_op_emi);
-	omp_config_check2change(ompt_callback_target_submit_emi);
-	omp_config_check2change(ompt_callback_target_map_emi);
-	omp_config_check2change(ompt_callback_error);
+void omp_config_config() {
+	omp_config_check2config(ompt_callback_thread_begin);
+	omp_config_check2config(ompt_callback_thread_end);
+	omp_config_check2config(ompt_callback_parallel_begin);
+	omp_config_check2config(ompt_callback_parallel_end);
+	omp_config_check2config(ompt_callback_task_create);
+	omp_config_check2config(ompt_callback_task_schedule);
+	omp_config_check2config(ompt_callback_implicit_task);
+	omp_config_check2config(ompt_callback_target);
+	omp_config_check2config(ompt_callback_target_data_op);
+	omp_config_check2config(ompt_callback_target_submit);
+	omp_config_check2config(ompt_callback_control_tool);
+	omp_config_check2config(ompt_callback_device_initialize);
+	omp_config_check2config(ompt_callback_device_finalize);
+	omp_config_check2config(ompt_callback_device_load);
+	omp_config_check2config(ompt_callback_device_unload);
+	omp_config_check2config(ompt_callback_sync_region_wait);
+	omp_config_check2config(ompt_callback_mutex_released);
+	omp_config_check2config(ompt_callback_dependences);
+	omp_config_check2config(ompt_callback_task_dependence);
+	omp_config_check2config(ompt_callback_work);
+	omp_config_check2config(ompt_callback_masked);
+	omp_config_check2config(ompt_callback_target_map);
+	omp_config_check2config(ompt_callback_sync_region);
+	omp_config_check2config(ompt_callback_lock_init);
+	omp_config_check2config(ompt_callback_lock_destroy);
+	omp_config_check2config(ompt_callback_mutex_acquire);
+	omp_config_check2config(ompt_callback_mutex_acquired);
+	omp_config_check2config(ompt_callback_nest_lock);
+	omp_config_check2config(ompt_callback_flush);
+	omp_config_check2config(ompt_callback_cancel);
+	omp_config_check2config(ompt_callback_reduction);
+	omp_config_check2config(ompt_callback_dispatch);
+	omp_config_check2config(ompt_callback_target_emi);
+	omp_config_check2config(ompt_callback_target_data_op_emi);
+	omp_config_check2config(ompt_callback_target_submit_emi);
+	omp_config_check2config(ompt_callback_target_map_emi);
+	omp_config_check2config(ompt_callback_error);
 }
 
 #ifdef __cplusplus
