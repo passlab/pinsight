@@ -10,7 +10,7 @@
 
 //For adding backtrace into trace record. They are defined in OMPT/PMPI/CUPTI, but properly guarded so only one place needs to define them
 extern __thread void * backtrace_ip[];
-extern __thread char * backtrace_symbol[];
+extern __thread char ** backtrace_symbol;
 extern __thread int backtrace_depth;
 
 #define LTTNG_UST_TP_FIELDS_BACKTRACE \

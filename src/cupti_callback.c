@@ -20,21 +20,6 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     unsigned int devId; //cudaGetDevice(&devId);
     cuptiGetDeviceId(context, &devId);
     unsigned int correlationId = cbInfo->correlationId;
-    const void *codeptr = __builtin_return_address(2);
-#ifdef PINSIGHT_BACKTRACE
-    retrieve_backtrace();
-#endif
-
-    /*
-    printf("codeptr 1: %x\n", __builtin_return_address(1));
-    printf("codeptr 2: %x\n", __builtin_return_address(2));
-    printf("codeptr 3: %x\n", __builtin_return_address(3));
-    printf("codeptr 4: %x\n", __builtin_return_address(4));
-    printf("codeptr 5: %x\n", __builtin_return_address(5));
-    printf("codeptr 6: %x\n", __builtin_return_address(6));
-    printf("codeptr 7: %x\n", __builtin_return_address(7));
-    printf("==============================\n");
-	*/
 
     if (domain != CUPTI_CB_DOMAIN_RUNTIME_API) {
         return;
@@ -42,6 +27,13 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
         cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
+        const void *codeptr = __builtin_return_address(9);
+        //9 is the calldepth from the user program that makes kernel call to this point, i.e. 9 function call from user program to driver and to this callback
+        //This is found by comparing looking at each backtrace address and their offset and see which one can be addr2line-ed to the user program
+        //The same way is used to find the calldepth for cudaMemcpy, which is 6
+#ifdef PINSIGHT_BACKTRACE
+        retrieve_backtrace();
+#endif
         const char *kernelName = cbInfo->symbolName;
         cudaLaunchKernel_v7000_params *p = (cudaLaunchKernel_v7000_params*) cbInfo->functionParams;
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
@@ -71,6 +63,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     }
 
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020) {
+        const void *codeptr = __builtin_return_address(6);
+#ifdef PINSIGHT_BACKTRACE
+        retrieve_backtrace();
+#endif
         const char *funName = cbInfo->functionName;
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
             // Store parameters passed to cudaMemcpy
@@ -96,6 +92,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
     }
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020) {
+        const void *codeptr = __builtin_return_address(6);
+#ifdef PINSIGHT_BACKTRACE
+        retrieve_backtrace();
+#endif
         const char *funName = cbInfo->functionName;
         cudaMemcpyAsync_v3020_params *p = (cudaMemcpyAsync_v3020_params *) cbInfo->functionParams;
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
