@@ -115,6 +115,24 @@ static void print_ids(int level)
   }
 }
 
+static void get_parallel_task_info() {
+    	ompt_data_t *parallel_data;
+    	int team_size;
+    	int retv = ompt_get_parallel_info(0, &parallel_data, &team_size);
+    	if (retv == 2) printf("initial implicit parallel region is ready, team size: %d, parallel data: %p\n", team_size, parallel_data);
+    	else if (retv == 1) printf("ancestor exist, but the initial implicit parallel region is not ready\n");
+    	else printf("system has not ready for the initial implicit parallel region: %p\n", parallel_data);
+
+    	ompt_data_t *task_parallel_data;
+    	ompt_data_t *task_data;
+    	int task_flag;
+    	int thread_num;
+    	retv = ompt_get_task_info(0, &task_flag, &task_data, NULL, &task_parallel_data, &thread_num);
+    	if (retv == 2) printf("initial implicit task is ready, thread num: %d, parallel data: %p, task_data: %p\n", thread_num, task_parallel_data, task_data);
+    	else if (retv == 1) printf("ancestor exist, but the initial implicit task is not ready\n");
+    	else printf("system has not ready for the initial implicit task: %p of the implicit parallel region :%p\n", task_data, task_parallel_data);
+}
+
 /*
 #define print_frame(level)\
 do {\
@@ -202,23 +220,7 @@ on_ompt_callback_thread_begin(
 
     if (thread_type == ompt_thread_initial) { //For initial thread, we need to setup the initial parallel region and initial implicit task
 
-#if 0
-    	ompt_data_t *parallel_data;
-    	int team_size;
-    	int retv = ompt_get_parallel_info(0, &parallel_data, &team_size);
-    	if (retv == 2) printf("initial implicit parallel region is ready, team size: %d, parallel data: %p\n", team_size, parallel_data);
-    	else if (retv == 1) printf("ancestor exist, but the initial implicit parallel region is not ready\n");
-    	else printf("system has not ready for the initial implicit parallel region\n");
-
-    	ompt_data_t *task_parallel_data;
-    	ompt_data_t *task_data;
-    	int task_flag;
-    	int thread_num;
-    	retv = ompt_get_task_info(0, &task_flag, &task_data, NULL, &task_parallel_data, &thread_num);
-    	if (retv == 2) printf("initial implicit task is ready, thread num: %d, parallel data: %p, task_data: %p\n", thread_num, task_parallel_data, task_data);
-    	else if (retv == 1) printf("ancestor exist, but the initial implicit task is not ready\n");
-    	else printf("system has not ready for the initial implicit task\n");
-#endif
+    	get_parallel_task_info();
         pinsight_thread_data.initial_thread = 1;
 
         //Setup the initial parallel region, and this could be a call to the callback, but we will elaborate it here
@@ -1443,6 +1445,8 @@ int ompt_initialize(
   // Initialize RAPL subsystem.
   rapl_sysfs_discover_valid();
 #endif
+
+  get_parallel_task_info();
 
   return 1; //success
 }

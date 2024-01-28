@@ -123,6 +123,9 @@ typedef struct pinsight_thread_data {
     lexgion_t lexgions[MAX_NUM_LEXGIONS]; /* the array to store all the lexgions */
     int num_lexgions; /* the last lexgion in the lexgion array */
     int recent_lexgion; /* the most-recently used lexgion in the lexgion array */
+
+    //thread local
+
 } pinsight_thread_data_t;
 
 /* information to put in the event records */
