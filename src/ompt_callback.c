@@ -191,23 +191,31 @@ static void print_current_address()
   }
 }
 
+#define INITIAL_PARALLEL_CODEPTR 0x000000000000
+#define UNKNOWN_END_CODEPTR      0x100000000000
+#define NULL_DEFAULT_CODEPTR     0x200000000000
 /**
- * We manually set the codeptr_ra as 0x00000FFFFFF for the initial thread-local parallel_codeptr
- * and task_codeptr variable for each thread. A lexgion is created for this codeptr address with thread_begin event.
- * This lexgion will be at the bottom of the lexgion stack of each thread.
+ * This function setup the thread_data.
  *
- * For the initial task lexgion of the whole program, which is created in the task_create callback, we could
- * set the codeptr_ra as 0x00000FFFFFFFF, so far, we do not know what it will be used for. But since it is
+ * We manually set the codeptr_ra as 0x00000000000 for initial parallel region (parallel_codeptr) and initial task
+ * The initial parallel lexgion is created for this codeptr_ra address in this thread_begin event.
+ * This lexgion will be at the bottom of the lexgion stack of each thread. From the spec, this initial parallel region
+ * is the one enclosing the whole OpenMP program. Thus technically, it should be created before the main program is entered.
+ * The same for the initial task, which should be created when the main program starts.
+ * We can implement this by calling the init_thread_data and initializing the initial parallel region and initial task
+ * in the enter_pinsight_func, which is before the OpenMP runtime and OMPT is setup. This however looks wired.
+ * Thus in this implementation, we initialize the initial parallel region in the thread_begin event, and the initial task in the implicit_task
+ * callback. In this way, for the execution between when the main program starts to the first OpenMP calls, they are not traced. This has to be
+ * understood in order to show this execution as sequential portion of the program execution in the analysis.
+ *
+ * For the initial task lexgion of the whole program, which is created in the implicit_task callback, we
+ * set the codeptr_ra as 0x000000000, so far, we do not know what it will be used for. But since it is
  * part of the standard and the OMPT implements this, we can add that lexgion in case it become useful for
- * the future. Again, it is only one instance of that.
+ * the future.
  *
- * We do not have lexgion for the implicit parallel region.
  * @param thread_type
  * @param thread_data
  */
-#define INITIAL_PARALLEL_CODEPTR 0xFFFFFFFFFFFF
-#define UNKNOWN_END_CODEPTR      0x100000000000
-#define NULL_DEFAULT_CODEPTR     0x200000000000
 static void
 on_ompt_callback_thread_begin(
         ompt_thread_t thread_type,
@@ -218,9 +226,9 @@ on_ompt_callback_thread_begin(
 #endif
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_begin, (short)thread_type ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 
-    if (thread_type == ompt_thread_initial) { //For initial thread, we need to setup the initial parallel region and initial implicit task
-
-    	get_parallel_task_info();
+    //For initial thread, we need to setup the initial parallel region, which is done here. The initial task is setup in the implicit_task callback
+    if (thread_type == ompt_thread_initial) {
+        //get_parallel_task_info();
         pinsight_thread_data.initial_thread = 1;
 
         //Setup the initial parallel region, and this could be a call to the callback, but we will elaborate it here
@@ -231,21 +239,10 @@ on_ompt_callback_thread_begin(
         parallel_record_id = enclosing_parallel_lexgion_record->record_id;
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, 1, ompt_parallel_team || ompt_parallel_invoker_runtime, NULL ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
 
+        //As if the initial parallel region starts/started
         omp_thread_num = 0;
 
-        //NO NEED THIS ANYMORE since initial implicit task is setup by the callback_implicit_task
-#if 0
-        //Setup the initial implicit task, not sure whether this can be a call to the on_ompt_callback_implicit_task
-        enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, (void*)INITIAL_PARALLEL_CODEPTR);
-        debugging_initial_implicit_task = enclosing_task_lexgion_record->lgp;
-        task_codeptr = (void*)INITIAL_PARALLEL_CODEPTR;
-        task_record_id = enclosing_task_lexgion_record->record_id;
-        printf("thread_begin: initial implicit task lexgion: %p, record_id: %d\n", enclosing_task_lexgion_record->lgp, task_record_id);
-#ifdef PINSIGHT_BACKTRACE
-        retrieve_backtrace();
-#endif
-        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_begin, 1 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-#endif
+        //NO NEED for setting up the initial task since it is setup by the callback_implicit_task
     } else {
         pinsight_thread_data.initial_thread = 0;
     }
