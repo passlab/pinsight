@@ -24,16 +24,34 @@ extern void LTTNG_CUPTI_Init (int rank);
 extern void LTTNG_CUPTI_Fini (int rank);
 #endif
 
+/**
+ * This has to be the initial/main thread of the main program and I do not see a situation that this is not true
+ */
 void enter_pinsight_func() {
     pid = getpid();
     gethostname(hostname, 48);
     //printf("entering pinsight at host: %s by process: %d\n", hostname, pid);
     lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
+#ifdef PINSIGHT_OPENMP
+    //OpenMP support is initialized by ompt_start_tool() callback that is implemented in ompt_callback.c, thus we do not need to initialize here.
+#endif
+#ifdef PINSIGHT_MPI
+#endif
+#ifdef PINSIGHT_CUDA
+    //TODO: Also need runtime check
     LTTNG_CUPTI_Init (0); //TODO: rank argument should be MPI rank I think, need to fix here when MPI is supported as well
+#endif
+#ifdef PINSIGHT_ENERGY
+#endif
+#ifdef PINSIGHT_BACKTRACE
+#endif
 }
 
 void exit_pinsight_func() {
     //printf("exiting pinsight at host: %s by process: %d\n", hostname, pid);
     lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, exit_pinsight);
+#ifdef PINSIGHT_CUDA
+    //TODO: also need runtime check
     LTTNG_CUPTI_Fini(0);
+#endif
 }

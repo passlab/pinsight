@@ -112,7 +112,9 @@ typedef struct lexgion_record_t {
  * the thread-local object that store data for each thread
  */
 typedef struct pinsight_thread_data {
-    int initial_thread;
+	int initialized;    //flag to indicate whether the thread data is initialized or not
+	int initial_parallel_task_initialized_flag; //flag to indicate whether the initial parallel region and task are initialized or not, only for the initial thread
+    int initial_thread; //flag to indicate whether this is initial thread or not
 
     /* the runtime stack for lexgion instances */
     struct lexgion_record_t lexgion_stack[MAX_LEXGION_STACK_DEPTH];
@@ -125,7 +127,16 @@ typedef struct pinsight_thread_data {
     int recent_lexgion; /* the most-recently used lexgion in the lexgion array */
 
     //thread local
+    int global_thread_num;
+    int omp_team_num;
+    int omp_thread_num;
+    lexgion_record_t * enclosing_parallel_lexgion_record;
+    lexgion_record_t * enclosing_task_lexgion_record;
 
+    int omp_trace_flag; //flag for enabling and disabling OMPT traces
+    int mpi_trace_flag; //flag for enabling and disabling MPI-P traces
+    int cuda_trace_flag; //flag for enabling and disabling CUPTI traces
+    int backtrace_flag;  //flag for enabling and disabling backtrace
 } pinsight_thread_data_t;
 
 /* information to put in the event records */

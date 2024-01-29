@@ -14,6 +14,8 @@ pinsight_thread_data_t * init_thread_data(int _thread_num) {
     pinsight_thread_data.num_lexgions = 0;
     pinsight_thread_data.recent_lexgion = -1;
 
+    pinsight_thread_data.initialized = 1;
+
     return &pinsight_thread_data;
 }
 
