@@ -31,6 +31,13 @@
 	max_num_traces = 2000
 	tracing_rate = 1 
 
+[thread]
+
+[process]
+
+[device]
+
+
 [lexgion.0x4010bd]
 	trace_starts_at = 20
 	initial_trace_count = 20
@@ -87,3 +94,10 @@
 	ompt_callback_target_submit_emi        = 35,
 	ompt_callback_target_map_emi           = 36,
 	ompt_callback_error                    = 37
+	
+[mpi]
+
+
+[cuda]
+
+

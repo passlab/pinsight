@@ -8,6 +8,51 @@
 #include <stdlib.h>
 #include <omp-tools.h>
 
+
+/**
+ * Runtime configuration and reconfiguration of tracing is critical to truly enable dynamic,
+ * application-specific and low to minimum overhead tracing. To support this feature, the design needs to
+ * consider 1) what can/should be reconfigured, 2) what configuration can be used,
+ * 3) when the reconfiguration should be applied, 4) how the reconfiguration should be specified,
+ * and 5) how the implementation supports
+ *
+ * For what can/should be configured, which we call class. There are three classes that tracing configuration can be applied to:
+ * 1. Domain class, e.g. MPI, OMP, CUDA, Backtrace, and Energy can be reconfigured completely
+ * 2. Event class, i.e. specific event within a domain, e.g. OMP barrier, MPI_Bcast, CUDA Memcpy, etc can be reconfigured
+ * 3. TPD class, TPD stands for thread/process/device. For this class, we can configure tracing for specific threads, processes or accelerator devices
+ * 4. Lexgion class, which is a specific code region identified via codeptr that can be add2lined to sourceFile:lineNumber.
+ *    A lexgion can have multiple events from the same or different domains.
+ *
+ * For configuration options:
+ * 1. Counted tracing, which is by tracing only a specific amount of tracing. Counted tracing requires
+ *    internal book-keeping (for counting) that involves array lookup, thus overhead is high
+ * 2. Uncounted tracing, which is by tracing all the events with simple checking. No internal book-keeping
+ *    for lookup and counting, just record the trace to the LTTng. Low overhead
+ * 3. No tracing (disabled)
+ *
+ * For each class, the options that are available to are:
+ * 1. Domain class:  disabled and enabled
+ * 2. Event class:   disabled, counted and uncounted (not sure whether we need to counted and uncounted
+ * 3. TPD class:     For all TPD, TPD 0 only, or specific TPDs
+ * 3. Lexgion class: disabled, counted and uncounted
+ *
+ * For when to apply reconfiguration:
+ * 1. When the program starts, 2) pre-defined reconfiguration point, e.g. counted tracing will need to change the configuration when traces reach count, and 3) through signal handler, and 4)debug breakpoint
+ *
+ * For how the configuration should be specified
+ * Two options are used to provide configuration setting: 1) via environment variable, and 2) via config file.
+ *
+ * For implementation:
+ * Data structure for storing the configuration, for updating the configuration object, and for apply the configuration.
+ *
+ * For procedure of checking configuration, inside a tracing function, e.g.  an OMP callback,
+ * it should first check domain configuration, and then event configuration, and then lexgion configuration
+ *
+ * Tracing configuration takes effects on per process/thread-basis such that every thread process tracing control by itself. But configuration setting are applied globally.
+ *
+ */
+
+
 // --------------------------------------------------------
 // Environment config variables
 
