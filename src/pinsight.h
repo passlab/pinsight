@@ -11,6 +11,7 @@
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
 
+//TODO: rename it to domain, and use bit-operation to check domain. FOr that, each domain will be numbered as 0, 2, 4, 8, 16, ...
 typedef enum LEXGION_CLASS {
     OPENMP_LEXGION = 0,     /* OMPT, www.openmp.org */
     MPI_LEXGION,        /* P-MPI, e.g. https://www.open-mpi.org/faq/?category=perftools#PMPI */
