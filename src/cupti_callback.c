@@ -2,14 +2,47 @@
 // Created by Yonghong Yan on 12/12/19.
 //
 
+
+#define UNW_LOCAL_ONLY
 #include <stdio.h>
 #include <cuda.h>
 #include <cupti.h>
 #include "pinsight.h"
+#include <libunwind.h>
+
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "cupti_lttng_ust_tracepoint.h"
+
+void show_call_stack() {
+    unw_cursor_t cursor; 
+    unw_context_t context;
+
+    // Initialize the cursor to the current frame
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    // Walk the call stack up to 5 frames or until no more frames are found
+    int frame = 0;
+    while (unw_step(&cursor) > 0 && frame < 9) {
+        unw_word_t offset, pc;
+        char functionName[256];
+
+        if (unw_get_reg(&cursor, UNW_REG_IP, &pc)) {
+            printf("Error reading program counter\n");
+            break;
+        }
+
+        if (unw_get_proc_name(&cursor, functionName, sizeof(functionName), &offset) == 0) {
+            printf("Frame %d: %s (+0x%lx)\n", frame, functionName, offset);
+        } else {
+            printf("Frame %d: -- unknown function --\n", frame);
+        }
+
+        frame++;
+    }
+}
 
 void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              CUpti_CallbackId cbid, const CUpti_CallbackData *cbInfo) {
@@ -28,6 +61,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
         cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
         const void *codeptr = __builtin_return_address(9);
+        show_call_stack();
         //9 is the calldepth from the user program that makes kernel call to this point, i.e. 9 function call from user program to driver and to this callback
         //This is found by comparing looking at each backtrace address and their offset and see which one can be addr2line-ed to the user program
         //The same way is used to find the calldepth for cudaMemcpy, which is 6
