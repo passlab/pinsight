@@ -14,7 +14,7 @@
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "cupti_lttng_ust_tracepoint.h"
-
+//test
 void show_call_stack() {
     unw_cursor_t cursor; 
     unw_context_t context;
