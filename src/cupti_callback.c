@@ -22,6 +22,7 @@ void show_call_stack() {
     // Initialize the cursor to the current frame
     unw_getcontext(&context);
     unw_init_local(&cursor, &context);
+    unw_word_t ip, rdi;
 
     // Walk the call stack up to 5 frames or until no more frames are found
     int frame = 0;
@@ -34,8 +35,10 @@ void show_call_stack() {
             break;
         }
 
-        if (unw_get_proc_name(&cursor, functionName, sizeof(functionName), &offset) == 0) {
+        if ((unw_get_proc_name(&cursor, functionName, sizeof(functionName), &offset) == 0)) {
             printf("Frame %d: %s (+0x%lx)\n", frame, functionName, offset);
+            unw_get_reg(&cursor, UNW_X86_64_RSI, &rdi);
+            printf("rsi is %d\n", *((int*)rdi));
         } else {
             printf("Frame %d: -- unknown function --\n", frame);
         }
