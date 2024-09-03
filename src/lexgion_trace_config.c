@@ -12,6 +12,16 @@ omp_trace_config_t omp_trace_configs[64]; //The trace config to keep the informa
 mpi_trace_config_t mpi_trace_configs[64];
 cuda_trace_config_t cuda_trace_configs[64];
 
+/**
+ * Simple int array for flags, each elemnt (0, or 1) indicate whether the tracing of the thread (index) is disabled or enabled
+ *
+ * Right now, max 512 teams or threads are supported
+ */
+int omp_team_config[512];  //a flat to indicate to turn on or off tracing of a specific OMP thread team indexed by team id
+int omp_thread_config[512];  //a flat to indicate to turn on or off tracing of a specific thread indexed by thread id
+int mpi_process_config[]; //a flag to indicate to turn on or off tracing of a specific process indexed by rank
+int cuda_device_config[64]; //a flag to indicate to turn on or off tracing of a specific NVIDIA GPU device indexed by device id
+
 //forward declaration
 void print_lexgion_trace_config();
 void lexgion_trace_config_read_file();
