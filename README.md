@@ -1,4 +1,4 @@
-# PInsight: Dynamic and Asynchronous Tracing and Visualization for OpenMP, MPI and CUDA Programs
+# PInsight: Dynamic and Asynchronous Tracing for OpenMP, MPI and CUDA Programs
 
 PInsight is a performance tool that help developers trace and measure the performance of the 
 execution of parallel applications, and to analyze and visualize the tracing to identify performance issues. 
