@@ -22,48 +22,12 @@
 
 # The default section of the config provides settings for those options that are not specified explicitly in the config file for each lexgion
 
-[default]
-	OpenMP_trace_enabled = 1
-	MPI_trace_enabled = 0
-	CUDA_trace_enabled = 0
-	trace_starts_at = 0
-	initial_trace_count = 10
-	max_num_traces = 2000
-	tracing_rate = 1 
-
-[OpenMP team]
-
-# For specifying to enable/disable tracing of specific threads. 
-[OpenMP thread]
-	enabled = *
-	enabled = 0,2..4,15
-	disabled = 10,12
-
-[MPI process]
-
-[CUDA device]
-
-
-[lexgion.0x4010bd]
-	trace_starts_at = 20
-	initial_trace_count = 20
-	max_num_traces = 200
-	tracing_rate = 10
-
-[lexgion.0x4012d9]
-    	trace_starts_at = 30
-    	initial_trace_count = 30
-    	max_num_traces = 300
-    	tracing_rate = 5
-
-[lexgion.0x401176]
-    	trace_starts_at = 40
-    	initial_trace_count = 40
-    	max_num_traces = 400
-    	tracing_rate = 3
-
-[omp]
-	ompt_callback_thread_begin             = on,
+[OpenMP]
+    global = 0
+    enable.team = *
+    enable.thread = * # or 1,2,3-5,
+    enable.device = * # 
+    ompt_callback_thread_begin             = on,
 	ompt_callback_thread_end               = on,
 	ompt_callback_parallel_begin           = on,
 	ompt_callback_parallel_end             = on,
@@ -100,9 +64,48 @@
 	ompt_callback_target_submit_emi        = off,
 	ompt_callback_target_map_emi           = off,
 	ompt_callback_error                    = off 
-[mpi]
+   
+[OpenMP.thread.1] 
 
 
-[cuda]
+[OpenMP.device.4]
+     
+    
+[MPI]
+    default = off
+    enable.rank = *
+    
+[MPI.rank.1]
+    
+     
+     
+[CUDA]
+    default = off
+    enable.device = *
 
+[CUDA.device.1]
+    
 
+[lexgion]
+	trace_starts_at = 0
+	initial_trace_count = 10
+	max_num_traces = 2000
+	tracing_rate = 1 
+
+[lexgion.0x4010bd]
+	trace_starts_at = 20
+	initial_trace_count = 20
+	max_num_traces = 200
+	tracing_rate = 10
+
+[lexgion.0x4012d9]
+    trace_starts_at = 30
+    initial_trace_count = 30
+    max_num_traces = 300
+    tracing_rate = 5
+
+[lexgion.0x401176]
+    trace_starts_at = 40
+    initial_trace_count = 40
+    max_num_traces = 400
+    tracing_rate = 3
