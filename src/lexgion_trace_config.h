@@ -20,10 +20,10 @@
  * For what can/should be configured, there are four scopes, from high level to low level,
  * that tracing configuration can be applied to:
  *   1. Domain scope, e.g. MPI, OMP, CUDA, Backtrace, and Energy can be reconfigured completely
- *   2. TPD scope, TPD stands for thread/process/device. For this scope, we can configure tracing for specific threads, processes or accelerator devices
- *   3. Event scope, i.e. specific event within a domain, e.g. OMP barrier, MPI_Bcast, CUDA Memcpy, etc can be reconfigured
+ *   2. Event scope, i.e. specific event within a domain, e.g. OMP barrier, MPI_Bcast, CUDA Memcpy, etc can be reconfigured
+ *   3. TPD scope, TPD stands for thread/process/device. For this scope, we can configure tracing for specific threads, processes or accelerator devices
  *   4. Lexgion scope, which is a specific code region identified via codeptr that can be add2lined to sourceFile:lineNumber.
- *    A lexgion can have multiple events from the same or different domains.
+ *      A lexgion can have multiple events from the same or different domains.
  *
  * For configuration options:
  * For the first three scopes, the option is either enabled or disabled. For the lexgion scope, the options are
@@ -36,8 +36,8 @@
  *
  * Thus for each scope, the options that are available are:
  *   1. Domain scope:  disabled and enabled
- *   2. TPD scope:     Specified by numbers
- *   3. Event scope:   disabled and enabled
+ *   2. Event scope:   disabled and enabled
+ *   3. TPD scope:     Specified by numbers
  *   4. Lexgion scope: disabled, counted and uncounted
  *
  * For when to apply reconfiguration, considering the following points of execution of a program:
@@ -201,6 +201,17 @@ typedef struct omp_trace_config_t {
 	unsigned int toChange; //Whether the newStatus is set or not
 	unsigned int newStatus; //new setting, 0 or 1 indicating to disable or to enable
 } omp_trace_config_t;
+
+typedef struct scope_event_config {
+	int event_id;
+	unsigned int implemented:2;
+	unsigned int status:2;
+	unsigned int toChange:2;
+	unsigned int newStatus:2;
+	void * callback;
+} scope_event_config_t;
+
+
 
 typedef struct mpi_trace_config_t {
 
