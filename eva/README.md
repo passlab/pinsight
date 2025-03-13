@@ -5,11 +5,10 @@ To compare with existing performance measurement tools, including Score-P and TA
 We will collect the following metrics between PInsight with those tools using LULESH/other proxy-app, Jacobi, NPB/spec omp, 
  * full-trace overhead as pecentage of the execution time as well as the execution time of tracing using different tools. 
  * dynamic-trace overhead, when using hybrid tracing-sampling approach in comparision with other tools
- * trace file sizes. 
+ * comparision of trace file sizes. 
 
 ### Feature demonstration and enhancement
-1. Figures to shows LULESH timegraph, and 3D graph per-thread summary for OpenMP program of both CPU and GPU offloading
-3. The LLVM OpenMP runtime that has the most recent OMPT inmplementation: https://github.com/OpenMPToolsInterface/LLVM-openmp/
+1. Figures to shows LULESH timegraph, and per-thread summary for OpenMP program of both CPU and GPU offloading
 4. OpenMP tasking support with OMPT and PInsight. 
 
 ### Future feature enhancement
@@ -17,8 +16,10 @@ We will collect the following metrics between PInsight with those tools using LU
 1. For MPI, shows p2p and collective message passing calls.  
 
 ### Hardware and Software Setup
-Check [fornax.md](fornax.md) file
-
+1. [cci-carina](https://github.com/passlab/passlab.github.io/wiki/Hardware-and-Resources#cci-carina)
+2. [cci-aries](https://github.com/passlab/passlab.github.io/wiki/Hardware-and-Resources#cci-aries)
+3. Ubuntu 20.04 and clang-18: Install using instructions from https://apt.llvm.org/. It will be installed at /usr/lib/llvm-18 with headers (omp.h and ompt.h) in /usr/lib/llvm-18/lib/clang/18/include and library (libomp.so) in usr/lib/llvm-18/lib
+   
 ### LULESH
 Change in Makefile CXX compiler. For all the compilation, `-fopenmp, -g -O3` is the compiler flag, 32 threads are used by setting `OMP_NUM_THREADS=32`
 1. Standard compilation, use clang++ 12.0.0, MPI is disabled. This version is used for PInsight evaluation and baseline with no tool or tracing
@@ -27,7 +28,7 @@ Change in Makefile CXX compiler. For all the compilation, `-fopenmp, -g -O3` is 
        make  # produce lulesh2.0 executable
        ./lulesh2.0   //baseline
        export PINSIGHT_LEXGION_TRACE_CONFIG=src/lexgion_trace_config_LULESH_selective.txt # Setting lexgion trace config
-       ./scripts/trace.sh ./traces/LULESH LULESH build/libpinsight.so /opt/llvm/clang+llvm-12.0.0-x86_64-linux-gnu-ubuntu-16.04/ eva/proxyapps/LULESH/lulesh2.0 // PInsight evaluation. The LULESH itself output execution time info. 
+       ./scripts/trace.sh ./traces/LULESH LULESH build/libpinsight.so /lib/llvm-18/lib eva/proxyapps/LULESH/lulesh2.0 // PInsight evaluation. The LULESH itself output execution time info. 
        change the configuration and run the trace.sh again to collect data
        df -u traces/LULESH  # check trace file size
   
