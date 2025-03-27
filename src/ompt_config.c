@@ -35,20 +35,42 @@ do {                                                  \
 } while(0)
 
 //* place holder for callback funcs
+void on_ompt_callback_thread_begin(){}
+void on_ompt_callback_thread_end(){}
+void on_ompt_callback_parallel_begin(){}
+void on_ompt_callback_parallel_end(){}
+void on_ompt_callback_task_create(){}
+void on_ompt_callback_task_schedule(){}
+void on_ompt_callback_implicit_task(){}
 void on_ompt_callback_target(){}
 void on_ompt_callback_target_data_op(){}
 void on_ompt_callback_target_submit(){}
+void on_ompt_callback_control_tool(){}
 void on_ompt_callback_device_initialize(){}
 void on_ompt_callback_device_finalize(){}
 void on_ompt_callback_device_load(){}
 void on_ompt_callback_device_unload(){}
+void on_ompt_callback_sync_region_wait(){}
+void on_ompt_callback_mutex_released(){}
+void on_ompt_callback_dependences(){}
+void on_ompt_callback_task_dependence(){}
+void on_ompt_callback_work(){}
+void on_ompt_callback_masked(){}
+void on_ompt_callback_sync_region(){}
+void on_ompt_callback_lock_init(){}
+void on_ompt_callback_lock_destroy(){}
+void on_ompt_callback_mutex_acquire(){}
+void on_ompt_callback_mutex_acquired(){}
+void on_ompt_callback_nest_lock(){}
+void on_ompt_callback_flush(){}
+void on_ompt_callback_cancel(){}
+void on_ompt_callback_reduction(){}
+void on_ompt_callback_dispatch(){}
 void on_ompt_callback_target_map(){}
 void on_ompt_callback_target_emi(){}
 void on_ompt_callback_target_data_op_emi(){}
 void on_ompt_callback_target_submit_emi(){}
 void on_ompt_callback_target_map_emi(){}
-void on_ompt_callback_reduction(){}
-void on_ompt_callback_dispatch(){}
 void on_ompt_callback_error(){}
 
 void omp_config_set_sysdefault () {
@@ -75,7 +97,6 @@ void omp_config_set_sysdefault () {
 	omp_callback_setting_name_full(ompt_callback_task_dependence, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_work, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
 	omp_callback_setting_name_full(ompt_callback_masked, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
-	omp_callback_setting_name_full(ompt_callback_target_map, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_sync_region, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_ENABLED);
 	omp_callback_setting_name_full(ompt_callback_lock_init, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_lock_destroy, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
@@ -86,6 +107,7 @@ void omp_config_set_sysdefault () {
 	omp_callback_setting_name_full(ompt_callback_cancel, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_reduction, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_dispatch, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
+	omp_callback_setting_name_full(ompt_callback_target_map, CALLBACK_NOT_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_target_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_target_data_op_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);
 	omp_callback_setting_name_full(ompt_callback_target_submit_emi, CALLBACK_IMPLEMENTED, STATUS_TO_CHANGE, CURRENT_STATUS_DISABLED, NEW_STATUS_DISABLED);

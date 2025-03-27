@@ -9,8 +9,6 @@ lexgion_trace_config_t *sysdefault_trace_config; //trace_configs[0]    //system 
 lexgion_trace_config_t *rtdefault_trace_config;  //trace_configs[1]    //runtime default config, configured at runtime
 lexgion_trace_config_t *lexgion_trace_config;    //trace_configs[2...] //lexgion-specific config, configured at runtime
 omp_trace_config_t omp_trace_configs[64]; //The trace config to keep the information about whether a certain omp event/callback should be enabled or not
-mpi_trace_config_t mpi_trace_configs[64];
-cuda_trace_config_t cuda_trace_configs[64];
 
 /**
  * Simple int array for flags, each elemnt (0, or 1) indicate whether the tracing of the thread (index) is disabled or enabled
