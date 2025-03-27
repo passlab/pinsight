@@ -15,7 +15,7 @@
  *          2) what configuration options can be used for each scope,
  *          3) when the reconfiguration should be applied,
  *          4) how the reconfiguration should be specified, and
- *          5) how the implementation supports
+ *          5) how to support efficient implementation
  *
  * For what can/should be configured, there are four scopes, from high level to low level,
  * that tracing configuration can be applied to:
@@ -202,31 +202,26 @@ typedef struct omp_trace_config_t {
 	unsigned int newStatus; //new setting, 0 or 1 indicating to disable or to enable
 } omp_trace_config_t;
 
-typedef struct scope_event_config {
-	int event_id;
+typedef struct domain_event_config {
+	int id;
 	unsigned int implemented:2;
 	unsigned int status:2;
 	unsigned int toChange:2;
 	unsigned int newStatus:2;
 	void * callback;
-} scope_event_config_t;
+} domain_event_config_t;
 
-
-
-typedef struct mpi_trace_config_t {
-
-} mpi_trace_config_t;
-
-typedef struct cuda_trace_config_t {
-
-} cuda_trace_config_t;
+typedef struct rate_trace_config {
+    unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
+    unsigned int initial_trace_count;  //integer: the number of traces to be collected after the trace starts the first time
+    unsigned int max_num_traces;       //integer: total number of traces to be collected
+    unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
+} rate_trace_config_t;
 
 extern lexgion_trace_config_t *sysdefault_trace_config;
 extern lexgion_trace_config_t *rtdefault_trace_config;
 extern lexgion_trace_config_t *lexgion_trace_config;
 extern omp_trace_config_t omp_trace_configs[64];
-extern mpi_trace_config_t mpi_trace_configs[64];
-extern cuda_trace_config_t cuda_trace_configs[64];
 extern int omp_team_config[];  //a flat to indicate to turn on or off tracing of a specific OMP thread team indexed by team id
 extern int omp_thread_config[];  //a flat to indicate to turn on or off tracing of a specific thread indexed by thread id
 extern int mpi_process_config[]; //a flag to indicate to turn on or off tracing of a specific process indexed by rank
