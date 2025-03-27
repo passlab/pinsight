@@ -31,7 +31,12 @@ Change in Makefile CXX compiler. For all the compilation, `-fopenmp, -g -O3` is 
        ./scripts/trace.sh ./traces/LULESH LULESH build/libpinsight.so /lib/llvm-18/lib eva/proxyapps/LULESH/lulesh2.0 // PInsight evaluation. The LULESH itself output execution time info. 
        change the configuration and run the trace.sh again to collect data
        df -u traces/LULESH  # check trace file size
-  
+
+       # For Quicksilver
+       ./scripts/trace.sh traces/Quicksilver-16t Quicksilver-16t ./build/libpinsight.so /usr/lib/llvm-20/lib eva/Quicksilver/src/qs --nParticles=10000000  
+
+       # For AMG
+       ./test/amg -n 512 512 512
 2.  score-p tracing compilation 
 
         CXX = scorep --openmp --thread=omp --keep-files clang++ -DUSE_MPI=0
