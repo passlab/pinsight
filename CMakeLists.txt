@@ -43,6 +43,7 @@ if (PINSIGHT_OPENMP)
     list(APPEND SOURCE_FILES
             src/ompt_lttng_ust_tracepoint.h
             src/ompt_callback.c
+            src/ompt_config.c
             )
 endif()
 
