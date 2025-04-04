@@ -5,26 +5,23 @@
 
 USAGE=$(cat <<EOF
 Usage for this tracing script for use with PInsight:
-    trace.sh TRACEFILE_DEST TRACE_NAME PINSIGHT_LIB LD_LIBRARY_PATH_PREPEND PROG_AND_ARGS...
+    trace.sh PINSIGHT_LIB LD_LIBRARY_PATH_PREPEND TRACE_NAME TRACEFILE_DEST PROG_AND_ARGS...
 
 Arguments:
-  TRACEFILE_DEST    Where to write the LTTng traces.
-  TRACE_NAME	    Give a proper name for the trace to be displayed in tracecompass.  
   PINSIGHT_LIB      Full-path PInsight shared library file name to use with user application.
   LD_LIBRARY_PATH_PREPEND   A list of paths separated by :. The list is prepended to 
 		    the LD_LIBRARY_PATH env. This argument can be used to provide
 	            path for the libraries used by the pinsight tracing, such as
 		    path for libomp.so or libmpi.so. If none is needed, e.g. the path are
-		    already set in the LD_LIBRARY_PATH, : should be provided for this arg.  
+		    already set in the LD_LIBRARY_PATH, : should be provided for this arg.
+  TRACE_NAME	    Give a proper name for the trace to be displayed in tracecompass.
+  TRACEFILE_DEST    Where to write the LTTng traces.
+  PROG_AND_ARGS...  The program and its argument to be traced
 
 Examples:
-    trace.sh ./traces/jacobi jacobi \\ 
-      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib \\
-      ./test/jacobi 2048 2048
+    trace.sh /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib jacobi ./traces/jacobi ./test/jacobi 2048 2048
     
-    trace.sh ./traces/LULESH LULESH \\ 
-      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib \\
-      mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
+    trace.sh /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib LULESH ./traces/LULESH mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
 EOF
 )
 
@@ -41,10 +38,10 @@ fi
 
 # Read in positional parameters, then shift array.
 # This leaves only the program command line in `$@`.
-TRACING_OUTPUT_DEST=$1
-TRACE_NAME=$2
-PINSIGHT_LIB=$3
-LD_LIBRARY_PATH_PREPEND=$4
+PINSIGHT_LIB=$1
+LD_LIBRARY_PATH_PREPEND=$2
+TRACE_NAME=$3
+TRACING_OUTPUT_DEST=$4
 shift 4 
 
 # setting LD_LIBRARY_PATH with the provided LD_LIBRARY_PATH_PREPEND
