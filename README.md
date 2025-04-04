@@ -112,34 +112,30 @@ mpirun can be used as command to launch MPI applications. The instruction of usi
 
 ```
 Usage for this tracing script for use with PInsight:
-    trace.sh TRACEFILE_DEST TRACE_NAME PINSIGHT_LIB LD_LIBRARY_PATH_PREPEND PROG_AND_ARGS...
+    trace.sh PINSIGHT_LIB LD_LIBRARY_PATH_PREPEND TRACE_NAME TRACEFILE_DEST PROG_AND_ARGS...
 
 Arguments:
-  TRACEFILE_DEST    Where to write the LTTng traces.
-  TRACE_NAME	    Give a proper name for the trace to be displayed in tracecompass.  
   PINSIGHT_LIB      Full-path PInsight shared library file name to use with user application.
   LD_LIBRARY_PATH_PREPEND   A list of paths separated by :. The list is prepended to 
-		    the LD_LIBRARY_PATH env. This argument can be used to provide
-	            path for the libraries used by the pinsight tracing, such as
-		    path for libomp.so or libmpi.so. If none is needed, e.g. the path are
-		    already set in the LD_LIBRARY_PATH, : should be provided for this arg.  
+                    the LD_LIBRARY_PATH env. This argument can be used to provide
+                    path for the libraries used by the pinsight tracing, such as
+                    path for libomp.so or libmpi.so. If none is needed, e.g. the path are
+                    already set in the LD_LIBRARY_PATH, : should be provided for this arg.
+  TRACE_NAME        Give a proper name for the trace to be displayed in tracecompass.
+  TRACEFILE_DEST    Where to write the LTTng traces.
+  PROG_AND_ARGS...  The program and its argument to be traced
 
 Examples:
-    trace.sh ./traces/jacobi jacobi \ 
-      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib \
-      ./test/jacobi 2048 2048
+    trace.sh /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib jacobi ./traces/jacobi ./test/jacobi 2048 2048
     
-    trace.sh ./traces/LULESH LULESH \ 
-      /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib \ 
-      mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
-
+    trace.sh /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib LULESH ./traces/LULESH mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
 ```
 
 Example using the `jacobi` application with `8` threads:
 
 ```
 yyan7@yyan7-Ubuntu:~/tools/pinsight$ export OMP_NUM_THREADS=8
-yyan7@yyan7-Ubuntu:~/tools/pinsight$ ./scripts/trace.sh ./traces/jacobi jacobi ./build/libpinsight.so /home/yyan7/compiler/llvm-openmp-install/lib test/jacobi/jacobi 512
+yyan7@yyan7-Ubuntu:~/tools/pinsight$ ./scripts/trace.sh ./build/libpinsight.so /home/yyan7/compiler/llvm-openmp-install/lib jacobi ./traces/jacobi test/jacobi/jacobi 512
 Session jacobi-tracing-session created.
 Traces will be written in /home/yyan7/tools/pinsight/traces/jacobi
 UST event lttng_pinsight_enter_exit:* created in channel channel0
@@ -212,9 +208,8 @@ yyan7@yyan7-Ubuntu:~/tools/pinsight$
 
 #### Tracing MPI or MPI+X applications, e.g. trace LULESH
 
-     scripts/trace.sh traces/LULESH-MPI-8npX4th LULESH-MPI-8npX4th ./lib/libpinsight.so \
-     /home/yanyh/tools/llvm-openmp-install:/opt/openmpi-install/lib \
-     mpirun -np 8 ./test/LULESH/build/lulesh2.0 
+     scripts/trace.sh ./lib/libpinsight.so /home/yanyh/tools/llvm-openmp-install:/opt/openmpi-install/lib \
+     LULESH-MPI-8npX4th traces/LULESH-MPI-8npX4th mpirun -np 8 ./test/LULESH/build/lulesh2.0
 
 #### Dump the trace data to text using babeltrace
 After tracing complete, you can use babeltrace tools to dump the trace data to text on the terminal

@@ -1399,7 +1399,6 @@ int ompt_initialize(
   ompt_get_partition_place_nums = (ompt_get_partition_place_nums_t) lookup("ompt_get_partition_place_nums");
   ompt_get_proc_id = (ompt_get_proc_id_t) lookup("ompt_get_proc_id");
 
-#if 0
 //  register_callback(ompt_callback_mutex_acquire);
 //  register_callback_t(ompt_callback_mutex_acquired, ompt_callback_mutex_t);
 //  register_callback_t(ompt_callback_mutex_released, ompt_callback_mutex_t);
@@ -1424,13 +1423,11 @@ int ompt_initialize(
   register_callback(ompt_callback_thread_begin);
   register_callback(ompt_callback_thread_end);
 
-#endif
-
   void omp_config_set_sysdefault ();
   void omp_config_config();
 
-  omp_config_set_sysdefault ();
-  omp_config_config();
+  //omp_config_set_sysdefault ();
+  //omp_config_config();
 
   // Query environment variables to enable/dsiable debug printouts.
   debug_on = env_get_long(PINSIGHT_DEBUG_ENABLE, PINSIGHT_DEBUG_ENABLE_DEFAULT);
