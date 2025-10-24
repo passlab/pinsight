@@ -10,7 +10,7 @@
 
 /**
  * Runtime configuration and reconfiguration of tracing is critical to truly enable dynamic,
- * application-specific and low to minimum overhead tracing. To support this feature, the design needs to
+ * region-specific and low-overhead tracing. To support this feature, the design needs to
  * consider 1) config/reconfig scope, i.e. what can/should be reconfigured,
  *          2) what configuration options can be used for each scope,
  *          3) when the reconfiguration should be applied,

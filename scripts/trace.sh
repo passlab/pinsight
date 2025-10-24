@@ -95,6 +95,8 @@ lttng add-context -u -t procname -t vpid -t vtid -t ip
 #lttng add-context --kernel --type=callstack-user --type=callstack-kernel
 # lttng enable-event --kernel --all
 
+#lttng enable-rotation --timer=100ms
+
 # Start LTTng tracing.
 lttng start
 
