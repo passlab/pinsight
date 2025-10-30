@@ -23,14 +23,15 @@
 # The default section of the config provides settings for those options that are not specified explicitly in the config file for each lexgion
 
 [OpenMP.install]
-# [OpenMP.device.install]
 [MPI.install]
 [CUDA.install]
 [OpenCL.install]
 [HIP.install]
+[Lexgion.install]
 
-[OpenMP.default]
-    global = 0
+[OpenMP.default: OpenMP.install]
+	enable = true
+	iff MPI.rank == 1 
     ompt_callback_thread_begin             = on,
 	ompt_callback_thread_end               = on,
 	ompt_callback_parallel_begin           = on,
@@ -69,10 +70,15 @@
 	ompt_callback_target_map_emi           = off,
 	ompt_callback_error                    = off 
 	
-[MPI.default]
-[CUDA.default]
-[OpenCL.default]
-[HIP.default]
+[MPI.default: MPI.install]
+[CUDA.default: CUDA.install]
+[OpenCL.default: OpenCL.install ]
+[HIP.default: HIP.install]
+[Lexgion.default: Lexgion.install]
+	trace_starts_at = 0
+	initial_trace_count = 10
+	max_num_traces = 2000
+	tracing_rate = 1 
 
 [OpenMP.team.thread.default]
 [OpenMP.device.default]
@@ -81,11 +87,7 @@
 [OpenCL.device.default]
 [HIP.device.default]
 
-[Lexgion.default]
-	trace_starts_at = 0
-	initial_trace_count = 10
-	max_num_traces = 2000
-	tracing_rate = 1 
+
 	
 [MPI.lexgion.default: Lexgion.default]
 [CUDA.lexgion.default: Lexgion.default]
@@ -94,6 +96,11 @@
 [OpenMP.lexgion.default: Lexgion.default]
 
 [OpenMP.team.thread.0: OpenMP.team.thread.default]
+    OpenMP.team.thread == [0, 2]
+    MPI.rank == [0, 2]
+    CUDA.device == [0]
+    
+    
 
 [OpenMP.device.0: OpenMP.device.default]
 
