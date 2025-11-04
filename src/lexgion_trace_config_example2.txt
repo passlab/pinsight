@@ -29,7 +29,7 @@
 [HIP.install]
 [Lexgion.install]
 
-[OpenMP.default: OpenMP.install]
+[OpenMP.default:: OpenMP.install]
 	enable = true
 	iff MPI.rank == 1 
     ompt_callback_thread_begin             = on,
@@ -70,45 +70,40 @@
 	ompt_callback_target_map_emi           = off,
 	ompt_callback_error                    = off 
 	
-[MPI.default: MPI.install]
-[CUDA.default: CUDA.install]
-[OpenCL.default: OpenCL.install ]
-[HIP.default: HIP.install]
-[Lexgion.default: Lexgion.install]
+[MPI.default:: MPI.install]
+[CUDA.default:: CUDA.install]
+[OpenCL.default:: OpenCL.install ]
+[HIP.default:: HIP.install]
+[Lexgion.default:: Lexgion.install]
 	trace_starts_at = 0
 	initial_trace_count = 10
 	max_num_traces = 2000
 	tracing_rate = 1 
 
-[OpenMP.team.thread.default]
-[OpenMP.device.default]
-[MPI.rank.default]
-[CUDA.device.default]
-[OpenCL.device.default]
-[HIP.device.default]
+[OpenMP.team.thread.default:: OpenMP.default]
+[OpenMP.device.default:: OpenMP.default]
+[MPI.rank.default:: MPI.default]
+[CUDA.device.default:: CUDA.default]
+[OpenCL.device.default:: OpenCL.default]
+[HIP.device.default:: HIP.default]
 
+[Lexgion.MPI.default:: Lexgion.default, MPI.default]
+[Lexgion.OpenMP.default:: Lexgion.default, OpenMP.default]
+[Lexgion.CUDA.default:: Lexgion.default, CUDA.default]
+[Lexgion.OpenCL.default:: Lexgion.default, OpenCL.default]
+[Lexgion.HIP.default:: Lexgion.default, HIP.default]
 
-	
-[MPI.lexgion.default: Lexgion.default]
-[CUDA.lexgion.default: Lexgion.default]
-[OpenCL.lexgion.default: Lexgion.default]
-[HIP.lexgion.default: Lexgion.default]
-[OpenMP.lexgion.default: Lexgion.default]
-
-[OpenMP.team.thread.0: OpenMP.team.thread.default]
-    OpenMP.team.thread == [0, 2]
+[OpenMP.team.thread.0:: OpenMP.team.thread.default]
     MPI.rank == [0, 2]
     CUDA.device == [0]
     
-    
+[OpenMP.device.0:: OpenMP.device.default]
 
-[OpenMP.device.0: OpenMP.device.default]
+[MPI.rank.0:: MPI.rank.default]
 
-[MPI.rank.0: MPI.rank.default]
+[CUDA.device.0:: CUDA.device.default]
 
-[CUDA.device.0: CUDA.device.default]
-
-[OpenMP.lexgion.0x4010bd: OpenMP.lexgion.default]
+[Lexgion.OpenMP.0x4010bd: MPI.rank.0, CUDA.device.0: Lexgion.OpenMP.default]
 	trace_starts_at = 20
 	initial_trace_count = 20
 	max_num_traces = 200
