@@ -1,0 +1,314 @@
+
+
+
+[OpenMP.install]
+    omp_parallel_begin = off
+    omp_parallel_end = off
+
+    omp_thread_start = off
+    omp_thread_end = off
+
+    omp_task_create = off
+    omp_task_schedule = off
+    omp_task_execute = off
+    omp_task_complete = off
+
+    omp_loop_begin = off
+    omp_loop_end = off
+
+    omp_section_begin = off
+    omp_section_end = off
+
+    omp_barrier_begin = off
+    omp_barrier_end = off
+
+    omp_master_begin = off
+    omp_master_end = off
+
+    omp_single_begin = off
+    omp_single_end = off
+
+    omp_critical_begin = off
+    omp_critical_end = off
+
+    omp_atomic_begin = off
+    omp_atomic_end = off
+
+    omp_lock_init = off
+    omp_lock_destroy = off
+    omp_lock_acquire = off
+    omp_lock_release = off
+
+    omp_flush = off
+
+    omp_target_begin = off
+    omp_target_end = off
+    omp_target_data_begin = off
+    omp_target_data_end = off
+    omp_target_update_begin = off
+    omp_target_update_end = off
+
+    omp_taskgroup_begin = off
+    omp_taskgroup_end = off
+
+    omp_reduction_begin = off
+    omp_reduction_end = off
+    
+[MPI.install]
+    MPI_Init = off
+    MPI_Init_thread = off
+    MPI_Finalize = off
+
+    MPI_Send = off
+    MPI_Isend = off
+    MPI_Recv = off
+    MPI_Irecv = off
+    MPI_Sendrecv = off
+    MPI_Wait = off
+    MPI_Waitall = off
+    MPI_Test = off
+
+    MPI_Bcast = off
+    MPI_Barrier = off
+    MPI_Reduce = off
+    MPI_Allreduce = off
+    MPI_Scatter = off
+    MPI_Gather = off
+    MPI_Allgather = off
+    MPI_Alltoall = off
+
+    MPI_Comm_rank = off
+    MPI_Comm_size = off
+    MPI_Comm_split = off
+    MPI_Comm_create = off
+    MPI_Comm_dup = off
+
+    MPI_Type_commit = off
+    MPI_Type_free = off
+
+    MPI_Wtime = off
+    MPI_Wtick = off
+
+    MPI_Win_create = off
+    MPI_Win_lock = off
+    MPI_Win_unlock = off
+    MPI_Put = off
+    MPI_Get = off
+    MPI_Accumulate = off
+
+    MPI_File_open = off
+    MPI_File_close = off
+    MPI_File_read = off
+    MPI_File_write = off
+
+[CUDA.install]
+    CUDA_context_create = off
+    CUDA_context_destroy = off
+
+    CUDA_device_init = off
+    CUDA_device_reset = off
+    CUDA_device_synchronize = off
+
+    CUDA_stream_create = off
+    CUDA_stream_destroy = off
+    CUDA_stream_synchronize = off
+
+    CUDA_event_create = off
+    CUDA_event_record = off
+    CUDA_event_synchronize = off
+    CUDA_event_destroy = off
+
+    CUDA_memcpy_HtoD = off
+    CUDA_memcpy_DtoH = off
+    CUDA_memcpy_DtoD = off
+    CUDA_memcpy_HtoH = off
+    CUDA_memcpy_async = off
+
+    CUDA_memset = off
+    CUDA_malloc = off
+    CUDA_free = off
+    CUDA_malloc_host = off
+    CUDA_free_host = off
+    CUDA_malloc_managed = off
+
+    CUDA_kernel_launch = off
+    CUDA_kernel_complete = off
+    CUDA_kernel_enqueue = off
+
+    CUDA_api_enter = off
+    CUDA_api_exit = off
+
+    CUDA_driver_call = off
+    CUDA_runtime_call = off
+
+    CUDA_synchronize = off
+    CUDA_context_push = off
+    CUDA_context_pop = off
+
+    CUDA_module_load = off
+    CUDA_module_unload = off
+    CUDA_function_load = off
+
+    CUDA_graph_create = off
+    CUDA_graph_launch = off
+    CUDA_graph_destroy = off
+
+    CUDA_unified_memory_migrate = off
+    CUDA_unified_memory_prefetch = off
+
+    CUDA_nvtx_range_push = off
+    CUDA_nvtx_range_pop = off
+    CUDA_nvtx_mark = off
+
+[OpenCL.install]
+    OpenCL_platform_init = off
+    OpenCL_platform_release = off
+
+    OpenCL_device_create = off
+    OpenCL_device_release = off
+    OpenCL_device_info = off
+
+    OpenCL_context_create = off
+    OpenCL_context_release = off
+
+    OpenCL_command_queue_create = off
+    OpenCL_command_queue_release = off
+    OpenCL_command_queue_flush = off
+    OpenCL_command_queue_finish = off
+
+    OpenCL_program_create = off
+    OpenCL_program_build = off
+    OpenCL_program_release = off
+
+    OpenCL_kernel_create = off
+    OpenCL_kernel_set_arg = off
+    OpenCL_kernel_release = off
+    OpenCL_kernel_enqueue = off
+    OpenCL_kernel_complete = off
+
+    OpenCL_mem_create_buffer = off
+    OpenCL_mem_create_image = off
+    OpenCL_mem_release = off
+    OpenCL_mem_read = off
+    OpenCL_mem_write = off
+    OpenCL_mem_copy = off
+    OpenCL_mem_map = off
+    OpenCL_mem_unmap = off
+
+    OpenCL_event_create = off
+    OpenCL_event_complete = off
+    OpenCL_event_wait = off
+    OpenCL_event_release = off
+
+    OpenCL_sampler_create = off
+    OpenCL_sampler_release = off
+
+    OpenCL_enqueue_ndrange_kernel = off
+    OpenCL_enqueue_task = off
+    OpenCL_enqueue_native_kernel = off
+
+    OpenCL_enqueue_read_buffer = off
+    OpenCL_enqueue_write_buffer = off
+    OpenCL_enqueue_copy_buffer = off
+    OpenCL_enqueue_read_image = off
+    OpenCL_enqueue_write_image = off
+    OpenCL_enqueue_copy_image = off
+    OpenCL_enqueue_map_buffer = off
+    OpenCL_enqueue_unmap_buffer = off
+    OpenCL_enqueue_barrier = off
+    OpenCL_enqueue_marker = off
+    OpenCL_enqueue_wait_for_events = off
+
+    OpenCL_build_program_begin = off
+    OpenCL_build_program_end = off
+
+    OpenCL_compile_program_begin = off
+    OpenCL_compile_program_end = off
+
+    OpenCL_link_program_begin = off
+    OpenCL_link_program_end = off
+
+    OpenCL_profile_command_start = off
+    OpenCL_profile_command_end = off
+
+    OpenCL_host_to_device_transfer = off
+    OpenCL_device_to_host_transfer = off
+    OpenCL_device_to_device_transfer = off
+
+    OpenCL_api_call_enter = off
+    OpenCL_api_call_exit = off
+
+[HIP.install]
+    HIP_init = off
+    HIP_finalize = off
+
+    HIP_device_init = off
+    HIP_device_reset = off
+    HIP_device_synchronize = off
+    HIP_device_get = off
+    HIP_device_set = off
+    HIP_device_enable_peer_access = off
+    HIP_device_disable_peer_access = off
+
+    HIP_context_create = off
+    HIP_context_destroy = off
+    HIP_context_push = off
+    HIP_context_pop = off
+
+    HIP_stream_create = off
+    HIP_stream_destroy = off
+    HIP_stream_synchronize = off
+    HIP_stream_wait_event = off
+    HIP_stream_add_callback = off
+
+    HIP_event_create = off
+    HIP_event_record = off
+    HIP_event_synchronize = off
+    HIP_event_destroy = off
+    HIP_event_elapsed_time = off
+
+    HIP_malloc = off
+    HIP_free = off
+    HIP_malloc_host = off
+    HIP_free_host = off
+    HIP_malloc_managed = off
+    HIP_memcpy_HtoD = off
+    HIP_memcpy_DtoH = off
+    HIP_memcpy_DtoD = off
+    HIP_memcpy_HtoH = off
+    HIP_memcpy_async = off
+    HIP_memset = off
+    HIP_memset_async = off
+
+    HIP_kernel_launch = off
+    HIP_kernel_complete = off
+    HIP_kernel_enqueue = off
+
+    HIP_graph_create = off
+    HIP_graph_add_kernel = off
+    HIP_graph_launch = off
+    HIP_graph_destroy = off
+
+    HIP_module_load = off
+    HIP_module_unload = off
+    HIP_function_load = off
+    HIP_function_unload = off
+
+    HIP_peer_access_enable = off
+    HIP_peer_access_disable = off
+
+    HIP_api_enter = off
+    HIP_api_exit = off
+    HIP_driver_call = off
+    HIP_runtime_call = off
+
+    HIP_synchronize = off
+    HIP_nvtx_range_push = off
+    HIP_nvtx_range_pop = off
+    HIP_nvtx_mark = off
+
+    HIP_unified_memory_migrate = off
+    HIP_unified_memory_prefetch = off
+    HIP_unified_memory_advise = off
+
+	

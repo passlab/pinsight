@@ -69,6 +69,28 @@
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
 #define PINSIGHT_DEBUG_DEFAULT 0
 
+#define MAX_DOMAIN_EVENTS 64
+
+typedef struct event_table_entry {
+	int id;
+	char name[64];
+	void * callback;
+}event_table[MAX_DOMAIN_EVENTS];
+
+typedef struct domain_scope_info {
+	char domain_name[8];
+	char scope[8];
+} domain_scope_info[] =
+{
+		{"MPI", "rank"},
+		{"OpenMP", "team.thread"},
+		{"OpenMP", "device"},
+		{"CUDA", "device"},
+		{"OpenCL", "device"},
+		{"HIP", "device"},
+};
+
+
 // --------------------------------------------------------
 // Safe environment variable query functions
 long env_get_long(const char* varname, long default_value);
@@ -210,6 +232,7 @@ typedef struct domain_event_config {
 	unsigned int newStatus:2;
 	void * callback;
 } domain_event_config_t;
+
 
 typedef struct rate_trace_config {
     unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
