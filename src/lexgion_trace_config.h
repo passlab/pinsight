@@ -69,13 +69,81 @@
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
 #define PINSIGHT_DEBUG_DEFAULT 0
 
-#define MAX_DOMAIN_EVENTS 64
+#define MAX_DOMAIN_EVENTS 63
 
+/**
+ * So far mainly for programming model and other features
+ */
+typedef enum prog_domain {
+	MPI,
+	OpenMP,
+	CUDA,
+//	OpenCL,
+//	HIP,
+	PYTHON, //via sys.monitoring events/callbacks
+	ENERGY,
+	BACKTRACE,
+	NUM_DOMAINS,
+};
+
+/**
+ * TODO: should we consider subdomain or not in the implementation?, e.g. for OpenMP, we have parallel, tasking, synchronization subdomain
+ * For MPI, we have p2p, collective communication, async communication
+ */
+
+/**
+ * scope is used for controlling which specific scope of a domain should be traced, e.g. we only want to trace
+ * certains events for MPI rank 0, OpenMP thread 0, etc.
+ */
+typedef enum domain_scope {
+	PROCESS_RANK,
+	TEAM_THREAD,
+	DEVICE,
+	NUM_SCOPES,
+};
+
+/**
+ * A table to keep the info of all the events for each domain
+ */
 typedef struct event_table_entry {
 	int id;
 	char name[64];
+	int subdomain; //Events can be categorized into subdomains, such as MPI p2p, collective, sync, etc; or OpenMP parallel, task, target, etc
 	void * callback;
-}event_table[MAX_DOMAIN_EVENTS];
+} event_table[NUM_DOMAINS][MAX_DOMAIN_EVENTS];
+
+/**
+ * We use a single bit (ON/OFF) to enable/disable the tracing of an event. For each domain, we allow to have max
+ * 63 events, with bit 63 as a global flag for enabling/disabling the domain
+ */
+typedef struct trace_event_config {
+	unsigned long int status;
+	unsigned long int toChange;
+	unsigned long int newStatus;
+} trace_event_config_t;
+
+typedef struct trace_rate_config {
+    unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
+    unsigned int initial_trace_count;  //integer: the number of traces to be collected after the trace starts the first time
+    unsigned int max_num_traces;       //integer: total number of traces to be collected
+    unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
+} trace_rate_config_t;
+
+/**
+ * This is per domain trace config, for each domain, we can configure the event tracing (ON/OFF) and the lexgion rate tracing.
+ * The configuration can be constrained by the specific scope specified as a range, e.g. from thread 0 to thread 3
+ */
+typedef struct trace_config {
+	struct {
+		unsigned int low;
+		unsigned int high;
+	} scope_range[NUM_SCOPES];
+	//Scope range is to add more constrains on which scope the trace config should be applied to, e.g.
+	//trace MPI_Send/Recv events only MPI process rank 0, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
+	trace_event_config_t event_config;
+	trace_rate_config_t rate_config;
+} trace_config_t;
+
 
 typedef struct domain_scope_info {
 	char domain_name[8];
@@ -89,7 +157,6 @@ typedef struct domain_scope_info {
 		{"OpenCL", "device"},
 		{"HIP", "device"},
 };
-
 
 // --------------------------------------------------------
 // Safe environment variable query functions
@@ -166,88 +233,5 @@ typedef struct lexgion_trace_config {  /* all the config fields MUST be from the
                                         * used __sync_bool_compare_and_swap to access it */
     int use_default;                   //a flag to indicate whether a config is copied from the rtdefault or set by the user provided in the config file.
 } lexgion_trace_config_t;
-
-/**
- * This struct maintains the event/callbacks that are implemented and enabled/disabled at the runtime for runtime to perform fine-grainularity control of
- * which events are to be traced and which events can be skipped
- *
- * It should list the same as the following enum defined in omp-tools.h file (https://github.com/llvm/llvm-project/blob/main/openmp/runtime/src/include/omp-tools.h.var#L214)
- *
- * typedef enum ompt_callbacks_t {
-  ompt_callback_thread_begin             = 1,
-  ompt_callback_thread_end               = 2,
-  ompt_callback_parallel_begin           = 3,
-  ompt_callback_parallel_end             = 4,
-  ompt_callback_task_create              = 5,
-  ompt_callback_task_schedule            = 6,
-  ompt_callback_implicit_task            = 7,
-  ompt_callback_target                   = 8,
-  ompt_callback_target_data_op           = 9,
-  ompt_callback_target_submit            = 10,
-  ompt_callback_control_tool             = 11,
-  ompt_callback_device_initialize        = 12,
-  ompt_callback_device_finalize          = 13,
-  ompt_callback_device_load              = 14,
-  ompt_callback_device_unload            = 15,
-  ompt_callback_sync_region_wait         = 16,
-  ompt_callback_mutex_released           = 17,
-  ompt_callback_dependences              = 18,
-  ompt_callback_task_dependence          = 19,
-  ompt_callback_work                     = 20,
-  ompt_callback_master     DEPRECATED_51 = 21,
-  ompt_callback_masked                   = 21,
-  ompt_callback_target_map               = 22,
-  ompt_callback_sync_region              = 23,
-  ompt_callback_lock_init                = 24,
-  ompt_callback_lock_destroy             = 25,
-  ompt_callback_mutex_acquire            = 26,
-  ompt_callback_mutex_acquired           = 27,
-  ompt_callback_nest_lock                = 28,
-  ompt_callback_flush                    = 29,
-  ompt_callback_cancel                   = 30,
-  ompt_callback_reduction                = 31,
-  ompt_callback_dispatch                 = 32,
-  ompt_callback_target_emi               = 33,
-  ompt_callback_target_data_op_emi       = 34,
-  ompt_callback_target_submit_emi        = 35,
-  ompt_callback_target_map_emi           = 36,
-  ompt_callback_error                    = 37
-} ompt_callbacks_t;
- *
- */
-typedef struct omp_trace_config_t {
-	int event_callback; 	//The enum value of the callback
-	ompt_callback_t callback; //the callback func pointer
-	unsigned int implemented;  	//Whether the callback is implemented by PInsight
-	unsigned int status;    //Current setting, 0 or 1 representing disabled or enabled.
-	unsigned int toChange; //Whether the newStatus is set or not
-	unsigned int newStatus; //new setting, 0 or 1 indicating to disable or to enable
-} omp_trace_config_t;
-
-typedef struct domain_event_config {
-	int id;
-	unsigned int implemented:2;
-	unsigned int status:2;
-	unsigned int toChange:2;
-	unsigned int newStatus:2;
-	void * callback;
-} domain_event_config_t;
-
-
-typedef struct rate_trace_config {
-    unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
-    unsigned int initial_trace_count;  //integer: the number of traces to be collected after the trace starts the first time
-    unsigned int max_num_traces;       //integer: total number of traces to be collected
-    unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
-} rate_trace_config_t;
-
-extern lexgion_trace_config_t *sysdefault_trace_config;
-extern lexgion_trace_config_t *rtdefault_trace_config;
-extern lexgion_trace_config_t *lexgion_trace_config;
-extern omp_trace_config_t omp_trace_configs[64];
-extern int omp_team_config[];  //a flat to indicate to turn on or off tracing of a specific OMP thread team indexed by team id
-extern int omp_thread_config[];  //a flat to indicate to turn on or off tracing of a specific thread indexed by thread id
-extern int mpi_process_config[]; //a flag to indicate to turn on or off tracing of a specific process indexed by rank
-extern int cuda_device_config[]; //a flag to indicate to turn on or off tracing of a specific NVIDIA GPU device indexed by device id
 
 #endif // LEXGION_TRACE_CONFIG_H

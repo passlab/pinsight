@@ -3,6 +3,10 @@
 #include "pinsight.h"
 
 __thread pinsight_thread_data_t pinsight_thread_data;
+
+/** The global default trace config */
+trace_config_t trace_config[NUM_DOMAINS];
+
 __thread int trace_bit = 0; /* 0 or 1 for enabling trace */
 
 /** init thread data

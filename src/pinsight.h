@@ -78,7 +78,7 @@ typedef struct lexgion {
     int type; /* the type of a lexgion in the class: e.g. parallel, master, singer, barrier, task, section, etc for OPENMP.
                * For OpenMP, we use trace record event id as the type of each lexgion; For MPI, we define a macro for each MPI methods */
     const void *end_codeptr_ra; /* the codeptr_ra at the end of the lexgion */
-    struct lexgion_trace_config * trace_config;
+    trace_config_t *trace_config;
     unsigned int num_exes_after_last_trace; /* counter to control the sampling based on trace rate */
 
     //fields for logging purpose
@@ -107,6 +107,9 @@ typedef struct lexgion_record_t {
    int tracing; /* a flag to indicate whether to trace this instance or not */
 } lexgion_record_t;
 
+/* The system-level default trace config */
+extern trace_config_t trace_config[];
+
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16
 /**
@@ -134,11 +137,17 @@ typedef struct pinsight_thread_data {
     lexgion_record_t * enclosing_parallel_lexgion_record;
     lexgion_record_t * enclosing_task_lexgion_record;
 
+    trace_config_t trace_config[NUM_DOMAINS];
+
     int omp_trace_flag; //flag for enabling and disabling OMPT traces
     int mpi_trace_flag; //flag for enabling and disabling MPI-P traces
     int cuda_trace_flag; //flag for enabling and disabling CUPTI traces
     int backtrace_flag;  //flag for enabling and disabling backtrace
 } pinsight_thread_data_t;
+
+typedef struct device_info {
+
+};
 
 /* information to put in the event records */
 extern __thread int global_thread_num;
