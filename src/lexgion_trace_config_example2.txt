@@ -74,14 +74,14 @@
 	max_num_traces = 2000
 	tracing_rate = 1 
 
-[OpenMP.team.thread.default: OpenMP.default]
+[OpenMP.thread.default: OpenMP.default]
 [OpenMP.device.default: OpenMP.default]
 [MPI.rank.default: MPI.default]
 [CUDA.device.default: CUDA.default]
 [OpenCL.device.default: OpenCL.default]
 [HIP.device.default: HIP.default]
 
-[OpenMP.team.thread.0: OpenMP.team.thread.default: MPI.rank == 0, CUDA.device != 0]
+[OpenMP.thread.0: OpenMP.thread.default: MPI.rank == 0, CUDA.device != 0]
     
 [OpenMP.device.0: OpenMP.device.default]
 
