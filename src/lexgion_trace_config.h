@@ -92,14 +92,16 @@ typedef enum prog_domain {
  */
 
 /**
- * scope is used for controlling which specific scope of a domain should be traced, e.g. we only want to trace
- * certains events for MPI rank 0, OpenMP thread 0, etc.
+ * We use the term punit (parallel unit) to denote the smallest schedulable and
+ * traceable execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
+ *
+ * A punit is numbered starting from 0 to N-1, where N is the total number of punits
  */
-typedef enum domain_scope {
+typedef enum domain_punit {
 	PROCESS_RANK,
 	TEAM_THREAD,
 	DEVICE,
-	NUM_SCOPES,
+	NUM_PUNIT_KIND,
 };
 
 /**
@@ -131,27 +133,30 @@ typedef struct trace_rate_config {
 
 /**
  * This is per domain trace config, for each domain, we can configure the event tracing (ON/OFF) and the lexgion rate tracing.
- * The configuration can be constrained by the specific scope specified as a range, e.g. from thread 0 to thread 3
+ * The configuration can be constrained by the specific punit specified as a range, e.g. from thread 0 to thread 3
+ *
+ * We use the term punit (parallel unit) to denote the smallest schedulable and traceable
+ * execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
  */
 typedef struct trace_config {
 	struct {
 		unsigned int low;
 		unsigned int high;
-	} scope_range[NUM_SCOPES];
-	//Scope range is to add more constrains on which scope the trace config should be applied to, e.g.
-	//trace MPI_Send/Recv events only MPI process rank 0, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
+	} punit_range[NUM_PUNIT_KIND];
+	//punit range is to add more constrains on which punits the trace config should be applied to, e.g.
+	//trace MPI_Send/Recv events only MPI process rank from 0 to 3, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
 	trace_event_config_t event_config;
 	trace_rate_config_t rate_config;
 } trace_config_t;
 
 
-typedef struct domain_scope_info {
+typedef struct domain_punit_info {
 	char domain_name[8];
-	char scope[8];
-} domain_scope_info[] =
+	char punit[8];
+} domain_punit_info[] =
 {
 		{"MPI", "rank"},
-		{"OpenMP", "team.thread"},
+		{"OpenMP", "thread"},
 		{"OpenMP", "device"},
 		{"CUDA", "device"},
 		{"OpenCL", "device"},

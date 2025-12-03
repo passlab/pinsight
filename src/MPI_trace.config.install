@@ -1,0 +1,56 @@
+
+[MPI.rank(0-127)]
+
+[MPI(init)]
+    MPI_Init = off
+    MPI_Init_thread = off
+    MPI_Finalize = off
+
+[MPI(p2p)]
+    MPI_Send = off
+    MPI_Recv = off
+    MPI_Sendrecv = off
+
+[MPI(asyncp2p)]
+    MPI_Isend = off
+    MPI_Irecv = off
+    MPI_Wait = off
+    MPI_Waitall = off
+    MPI_Test = off
+
+[MPI(collective)]
+    MPI_Bcast = off
+    MPI_Barrier = off
+    MPI_Reduce = off
+    MPI_Allreduce = off
+    MPI_Scatter = off
+    MPI_Gather = off
+    MPI_Allgather = off
+    MPI_Alltoall = off
+
+[MPI(others)]
+    MPI_Comm_rank = off
+    MPI_Comm_size = off
+    MPI_Comm_split = off
+    MPI_Comm_create = off
+    MPI_Comm_dup = off
+
+    MPI_Type_commit = off
+    MPI_Type_free = off
+
+    MPI_Wtime = off
+    MPI_Wtick = off
+
+[MPI(oneside)]
+    MPI_Win_create = off
+    MPI_Win_lock = off
+    MPI_Win_unlock = off
+    MPI_Put = off
+    MPI_Get = off
+    MPI_Accumulate = off
+
+[MPI(io)]
+    MPI_File_open = off
+    MPI_File_close = off
+    MPI_File_read = off
+    MPI_File_write = off

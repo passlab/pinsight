@@ -1,0 +1,109 @@
+# This is the config file for specifying the tracing behavior for the lexgions
+# So far, PInsight recognizes the following keys (defined in lexgion_trace_config.h file):
+
+#static const char *lexgion_trace_config_keys[] = {
+#        "OpenMP_trace_enabled",    //true or false: to enable/disable OpenMP trace
+#        "MPI_trace_enabled",       //true or false: to enable/disable MPI trace
+#        "CUDA_trace_enabled",      //true or false: to enable/disable CUDA trace
+#        "ENERGY_trace_enabled",    //true or false: to enable/disable energy tracing
+#        "BACKTRACE_enabled",       //true or false: to enable/disable backtrace.
+#        "trace_starts_at",         //integer: the number of execution of the region before tracing starts. 
+#        "initial_trace_count",     //integer: the number of traces to be collected after the trace starts the first time
+#        "max_num_traces",          //integer: total number of traces to be collected
+#        "tracing_rate",            //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region. 
+#};
+
+# Restrictions for using those keys to provide configuration:
+# 1) The value for each of the keys can only be an integer, TRUE or FALSE.
+# 2) Each setting should use one line and only one setting is allowed in a line.
+# 3) When providing the setting, e.g. trace_enabled = TRUE, at least one whitespace is required
+#    before and after the '='.
+# 4) A feature (OMP, MPI, CUDA, ENERGY, BACKTRACE) can only be enabled if the library is built to support it. 
+
+# The default section of the config provides settings for those options that are not specified explicitly in the config file for each lexgion
+
+[scope.domain.id]
+
+[default]
+	OpenMP_trace_enabled = 1
+	MPI_trace_enabled = 0
+	CUDA_trace_enabled = 0
+	trace_starts_at = 0
+	initial_trace_count = 10
+	max_num_traces = 2000
+	tracing_rate = 1 
+
+[OpenMP team]
+
+[OpenMP thread]
+
+[MPI process]
+
+[CUDA device]
+
+[thread.0,4-6,16]
+
+[device.
+
+[lexgion.0x4010bd]
+	trace_starts_at = 20
+	initial_trace_count = 20
+	max_num_traces = 200
+	tracing_rate = 10
+
+[lexgion.0x4012d9]
+    	trace_starts_at = 30
+    	initial_trace_count = 30
+    	max_num_traces = 300
+    	tracing_rate = 5
+
+[lexgion.0x401176]
+    	trace_starts_at = 40
+    	initial_trace_count = 40
+    	max_num_traces = 400
+    	tracing_rate = 3
+
+[omp]
+	ompt_callback_thread_begin             = on,
+	ompt_callback_thread_end               = on,
+	ompt_callback_parallel_begin           = on,
+	ompt_callback_parallel_end             = on,
+	ompt_callback_task_create              = off,
+	ompt_callback_task_schedule            = off,
+	ompt_callback_implicit_task            = on,
+	ompt_callback_target                   = off,
+	ompt_callback_target_data_op           = off,
+	ompt_callback_target_submit            = off,
+	ompt_callback_control_tool             = off,
+	ompt_callback_device_initialize        = off,
+	ompt_callback_device_finalize          = off,
+	ompt_callback_device_load              = off,
+	ompt_callback_device_unload            = off,
+	ompt_callback_sync_region_wait         = off,
+	ompt_callback_mutex_released           = off,
+	ompt_callback_dependences              = off,
+	ompt_callback_task_dependence          = off,
+	ompt_callback_work                     = on,
+	ompt_callback_masked                   = on,
+	ompt_callback_target_map               = off,
+	ompt_callback_sync_region              = on,
+	ompt_callback_lock_init                = off,
+	ompt_callback_lock_destroy             = off,
+	ompt_callback_mutex_acquire            = off,
+	ompt_callback_mutex_acquired           = off,
+	ompt_callback_nest_lock                = off,
+	ompt_callback_flush                    = off,
+	ompt_callback_cancel                   = off,
+	ompt_callback_reduction                = off,
+	ompt_callback_dispatch                 = off,
+	ompt_callback_target_emi               = off,
+	ompt_callback_target_data_op_emi       = off,
+	ompt_callback_target_submit_emi        = off,
+	ompt_callback_target_map_emi           = off,
+	ompt_callback_error                    = off 
+[mpi]
+
+
+[cuda]
+
+

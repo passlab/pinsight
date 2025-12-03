@@ -52,17 +52,17 @@
     omp_parallel_begin = off
     omp_parallel_end = off
 
-[OpenMP(thread)install]
+[OpenMP(thread).install]
     omp_thread_start = off
     omp_thread_end = off
 
-[OpenMP(task)install]
+[OpenMP(task).install]
     omp_task_create = off
     omp_task_schedule = off
     omp_task_execute = off
     omp_task_complete = off
 
-[OpenMP(workshare)install]
+[OpenMP(workshare).install]
     omp_loop_begin = off
     omp_loop_end = off
 
@@ -75,11 +75,11 @@
     omp_single_begin = off
     omp_single_end = off
 
-[OpenMP(barrier)install]
+[OpenMP(barrier).install]
     omp_barrier_begin = off
     omp_barrier_end = off
 
-[OpenMP(critical)install]
+[OpenMP(critical).install]
     omp_critical_begin = off
     omp_critical_end = off
     omp_lock_init = off
@@ -87,11 +87,11 @@
     omp_lock_acquire = off
     omp_lock_release = off
 
-[OpenMP(atomic)install]
+[OpenMP(atomic).install]
     omp_atomic_begin = off
     omp_atomic_end = off
 
-[OpenMP(target)install]
+[OpenMP(target).install]
     omp_target_begin = off
     omp_target_end = off
     omp_target_data_begin = off
@@ -101,31 +101,31 @@
     omp_taskgroup_begin = off
     omp_taskgroup_end = off
 
-[OpenMP(reduction)install]
+[OpenMP(reduction).install]
     omp_reduction_begin = off
     omp_reduction_end = off
 
-[OpenMP(others)install]
+[OpenMP(others).install]
     omp_flush = off
     
-[MPI(init)install]
+[MPI(init).install]
     MPI_Init = off
     MPI_Init_thread = off
     MPI_Finalize = off
 
-[MPI(p2p)install]
+[MPI(p2p).install]
     MPI_Send = off
     MPI_Recv = off
     MPI_Sendrecv = off
 
-[MPI(asyncp2p)install]
+[MPI(asyncp2p).install]
     MPI_Isend = off
     MPI_Irecv = off
     MPI_Wait = off
     MPI_Waitall = off
     MPI_Test = off
 
-[MPI(collective)install]
+[MPI(collective).install]
     MPI_Bcast = off
     MPI_Barrier = off
     MPI_Reduce = off
@@ -135,7 +135,7 @@
     MPI_Allgather = off
     MPI_Alltoall = off
 
-[MPI(others)install]
+[MPI(others).install]
     MPI_Comm_rank = off
     MPI_Comm_size = off
     MPI_Comm_split = off
@@ -148,7 +148,7 @@
     MPI_Wtime = off
     MPI_Wtick = off
 
-[MPI(oneside)install]
+[MPI(oneside).install]
     MPI_Win_create = off
     MPI_Win_lock = off
     MPI_Win_unlock = off
@@ -156,7 +156,7 @@
     MPI_Get = off
     MPI_Accumulate = off
 
-[MPI(io)install]
+[MPI(io).install]
     MPI_File_open = off
     MPI_File_close = off
     MPI_File_read = off
