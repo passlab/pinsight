@@ -1,0 +1,80 @@
+
+[OpenCL.device(0-16)]
+
+[OpenCL]
+    OpenCL_platform_init = off
+    OpenCL_platform_release = off
+
+    OpenCL_device_create = off
+    OpenCL_device_release = off
+    OpenCL_device_info = off
+
+    OpenCL_context_create = off
+    OpenCL_context_release = off
+
+    OpenCL_command_queue_create = off
+    OpenCL_command_queue_release = off
+    OpenCL_command_queue_flush = off
+    OpenCL_command_queue_finish = off
+
+    OpenCL_program_create = off
+    OpenCL_program_build = off
+    OpenCL_program_release = off
+
+    OpenCL_kernel_create = off
+    OpenCL_kernel_set_arg = off
+    OpenCL_kernel_release = off
+    OpenCL_kernel_enqueue = off
+    OpenCL_kernel_complete = off
+
+    OpenCL_mem_create_buffer = off
+    OpenCL_mem_create_image = off
+    OpenCL_mem_release = off
+    OpenCL_mem_read = off
+    OpenCL_mem_write = off
+    OpenCL_mem_copy = off
+    OpenCL_mem_map = off
+    OpenCL_mem_unmap = off
+
+    OpenCL_event_create = off
+    OpenCL_event_complete = off
+    OpenCL_event_wait = off
+    OpenCL_event_release = off
+
+    OpenCL_sampler_create = off
+    OpenCL_sampler_release = off
+
+    OpenCL_enqueue_ndrange_kernel = off
+    OpenCL_enqueue_task = off
+    OpenCL_enqueue_native_kernel = off
+
+    OpenCL_enqueue_read_buffer = off
+    OpenCL_enqueue_write_buffer = off
+    OpenCL_enqueue_copy_buffer = off
+    OpenCL_enqueue_read_image = off
+    OpenCL_enqueue_write_image = off
+    OpenCL_enqueue_copy_image = off
+    OpenCL_enqueue_map_buffer = off
+    OpenCL_enqueue_unmap_buffer = off
+    OpenCL_enqueue_barrier = off
+    OpenCL_enqueue_marker = off
+    OpenCL_enqueue_wait_for_events = off
+
+    OpenCL_build_program_begin = off
+    OpenCL_build_program_end = off
+
+    OpenCL_compile_program_begin = off
+    OpenCL_compile_program_end = off
+
+    OpenCL_link_program_begin = off
+    OpenCL_link_program_end = off
+
+    OpenCL_profile_command_start = off
+    OpenCL_profile_command_end = off
+
+    OpenCL_host_to_device_transfer = off
+    OpenCL_device_to_host_transfer = off
+    OpenCL_device_to_device_transfer = off
+
+    OpenCL_api_call_enter = off
+    OpenCL_api_call_exit = off

@@ -1,0 +1,77 @@
+
+[HIP.device(0-16)]
+
+[HIP]
+    HIP_init = off
+    HIP_finalize = off
+
+    HIP_device_init = off
+    HIP_device_reset = off
+    HIP_device_synchronize = off
+    HIP_device_get = off
+    HIP_device_set = off
+    HIP_device_enable_peer_access = off
+    HIP_device_disable_peer_access = off
+
+    HIP_context_create = off
+    HIP_context_destroy = off
+    HIP_context_push = off
+    HIP_context_pop = off
+
+    HIP_stream_create = off
+    HIP_stream_destroy = off
+    HIP_stream_synchronize = off
+    HIP_stream_wait_event = off
+    HIP_stream_add_callback = off
+
+    HIP_event_create = off
+    HIP_event_record = off
+    HIP_event_synchronize = off
+    HIP_event_destroy = off
+    HIP_event_elapsed_time = off
+
+    HIP_malloc = off
+    HIP_free = off
+    HIP_malloc_host = off
+    HIP_free_host = off
+    HIP_malloc_managed = off
+    HIP_memcpy_HtoD = off
+    HIP_memcpy_DtoH = off
+    HIP_memcpy_DtoD = off
+    HIP_memcpy_HtoH = off
+    HIP_memcpy_async = off
+    HIP_memset = off
+    HIP_memset_async = off
+
+    HIP_kernel_launch = off
+    HIP_kernel_complete = off
+    HIP_kernel_enqueue = off
+
+    HIP_graph_create = off
+    HIP_graph_add_kernel = off
+    HIP_graph_launch = off
+    HIP_graph_destroy = off
+
+    HIP_module_load = off
+    HIP_module_unload = off
+    HIP_function_load = off
+    HIP_function_unload = off
+
+    HIP_peer_access_enable = off
+    HIP_peer_access_disable = off
+
+    HIP_api_enter = off
+    HIP_api_exit = off
+    HIP_driver_call = off
+    HIP_runtime_call = off
+
+    HIP_synchronize = off
+    HIP_nvtx_range_push = off
+    HIP_nvtx_range_pop = off
+    HIP_nvtx_mark = off
+
+    HIP_unified_memory_migrate = off
+    HIP_unified_memory_prefetch = off
+    HIP_unified_memory_advise = off
+
+	
