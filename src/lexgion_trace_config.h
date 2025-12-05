@@ -104,15 +104,44 @@ typedef enum domain_punit {
 	NUM_PUNIT_KIND,
 };
 
-/**
- * A table to keep the info of all the events for each domain
- */
-typedef struct event_table_entry {
-	int id;
-	char name[64];
-	int subdomain; //Events can be categorized into subdomains, such as MPI p2p, collective, sync, etc; or OpenMP parallel, task, target, etc
-	void * callback;
-} event_table[NUM_DOMAINS][MAX_DOMAIN_EVENTS];
+typedef struct domain_punit_info {
+	char domain_name[8];
+	char punit[8];
+} domain_punit_info[] =
+{
+		{"MPI", "rank"},
+		{"OpenMP", "thread"},
+		{"OpenMP", "device"},
+		{"CUDA", "device"},
+		{"OpenCL", "device"},
+		{"HIP", "device"},
+};
+
+typedef struct domain_info {
+	char name[16];
+	struct subdomain {
+		char name[16];
+		BitSet events; //The events that are categorized into this subdomain
+	} subdomains[16]; //Max 16 subdomains
+	int num_subdomains;
+
+	struct event {
+		int native_id; //The id that is mapped to the native ID of the event for each domain
+		char name[64];
+		int subdomain; //Events can be categorized into subdomains, such as MPI p2p, collective, sync, etc; or OpenMP parallel, task, target, etc
+		void * callback;
+	} event_table[MAX_DOMAIN_EVENTS]; //max 63 events (b.c. the BitSet we use for event config
+	int num_events;
+	BitSet eventInstallStatus;  //For setting whether the event is enabled or not
+
+	struct punit {
+		char name[16];
+		unsigned int low; //should be 0
+		unsigned int high;
+	} punits[4];
+	int num_punits;
+} domain_info[];
+int num_domain;
 
 /**
  * We use a single bit (ON/OFF) to enable/disable the tracing of an event. For each domain, we allow to have max
@@ -148,20 +177,6 @@ typedef struct trace_config {
 	trace_event_config_t event_config;
 	trace_rate_config_t rate_config;
 } trace_config_t;
-
-
-typedef struct domain_punit_info {
-	char domain_name[8];
-	char punit[8];
-} domain_punit_info[] =
-{
-		{"MPI", "rank"},
-		{"OpenMP", "thread"},
-		{"OpenMP", "device"},
-		{"CUDA", "device"},
-		{"OpenCL", "device"},
-		{"HIP", "device"},
-};
 
 // --------------------------------------------------------
 // Safe environment variable query functions
