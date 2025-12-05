@@ -63,7 +63,7 @@
 
 [CUDA.device.(0): CUDA.device.default]
 
-[Lexgion(0x4010bd): Lexgion.default, OpenMP.default, MPI.default: MPI.rank == 0, CUDA.device == 0]
+[Lexgion(0x4010bd): Lexgion.default, OpenMP.default, MPI.default: MPI.rank(0), CUDA.device(0)]
 	trace_starts_at = 20
 	initial_trace_count = 20
 	max_num_traces = 200
