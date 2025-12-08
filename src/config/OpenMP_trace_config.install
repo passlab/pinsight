@@ -1,0 +1,64 @@
+[OpenMP.team(0-254)]
+
+[OpenMP.thread(0-1023)]
+
+[OpenMP.device(0-16)]
+
+[OpenMP(parallel)]
+    omp_parallel_begin = on
+    omp_parallel_end = on
+
+[OpenMP(thread)]
+    omp_thread_start = on
+    omp_thread_end = on
+
+[OpenMP(task)]
+    omp_task_create = off
+    omp_task_schedule = off
+    omp_task_execute = off
+    omp_task_complete = off
+
+[OpenMP(workshare)]
+    omp_loop_begin = off
+    omp_loop_end = off
+    omp_section_begin = off
+    omp_section_end = off
+    omp_master_begin = on
+    omp_master_end = on
+    omp_single_begin = off
+    omp_single_end = off
+
+[OpenMP(barrier)]
+    omp_barrier_begin = off
+    omp_barrier_end = off
+
+[OpenMP(critical)]
+    omp_critical_begin = off
+    omp_critical_end = off
+    omp_lock_init = off
+    omp_lock_destroy = off
+    omp_lock_acquire = off
+    omp_lock_release = off
+
+[OpenMP(atomic)]
+    omp_atomic_begin = off
+    omp_atomic_end = off
+
+[OpenMP(target)]
+    omp_target_begin = off
+    omp_target_end = off
+    omp_target_data_begin = off
+    omp_target_data_end = off
+    omp_target_update_begin = off
+    omp_target_update_end = off
+    omp_taskgroup_begin = off
+    omp_taskgroup_end = off
+
+[OpenMP(reduction)]
+    omp_reduction_begin = off
+    omp_reduction_end = off
+
+[OpenMP(others)]
+    omp_flush = off
+    omp_cancel = off
+

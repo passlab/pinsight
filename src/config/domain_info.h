@@ -1,5 +1,5 @@
-// domain_info.h (sketch)
-
+#ifndef DOMAIN_INFO_H
+#define DOMAIN_INFO_H
 #include "bitset.h"
 
 #define MAX_DOMAIN_EVENTS 63
@@ -33,3 +33,4 @@ struct domain_info {
 
 extern struct domain_info domain_info_table[MAX_DOMAINS];
 extern int num_domain;
+#endif

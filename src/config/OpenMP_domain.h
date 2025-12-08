@@ -1,4 +1,4 @@
-/* openmp_domain.h */
+/* OpenMP_domain.h */
 #ifndef OPENMP_DOMAIN_H
 #define OPENMP_DOMAIN_H
 

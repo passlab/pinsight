@@ -1,7 +1,7 @@
 
 [HIP.device(0-16)]
 
-[HIP]
+[HIP(all)]
     HIP_init = off
     HIP_finalize = off
 

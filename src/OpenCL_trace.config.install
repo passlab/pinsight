@@ -1,7 +1,7 @@
 
 [OpenCL.device(0-16)]
 
-[OpenCL]
+[OpenCL(all)]
     OpenCL_platform_init = off
     OpenCL_platform_release = off
 

@@ -3,7 +3,6 @@
 [CUDA(contextdevice)]
     CUDA_context_create = off
     CUDA_context_destroy = off
-
     CUDA_device_init = off
     CUDA_device_reset = off
     CUDA_device_synchronize = off
@@ -12,7 +11,6 @@
     CUDA_stream_create = off
     CUDA_stream_destroy = off
     CUDA_stream_synchronize = off
-
     CUDA_event_create = off
     CUDA_event_record = off
     CUDA_event_synchronize = off
@@ -41,25 +39,20 @@
 [CUDA(others)]
     CUDA_api_enter = off
     CUDA_api_exit = off
-
     CUDA_driver_call = off
     CUDA_runtime_call = off
-
     CUDA_synchronize = off
     CUDA_context_push = off
     CUDA_context_pop = off
-
     CUDA_module_load = off
     CUDA_module_unload = off
     CUDA_function_load = off
-
     CUDA_graph_create = off
     CUDA_graph_launch = off
     CUDA_graph_destroy = off
-
     CUDA_unified_memory_migrate = off
     CUDA_unified_memory_prefetch = off
-
     CUDA_nvtx_range_push = off
     CUDA_nvtx_range_pop = off
     CUDA_nvtx_mark = off
+

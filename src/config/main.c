@@ -9,16 +9,19 @@
 #include "bitset.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "openmp_domain.h"
+#include "MPI_domain.h"
+#include "CUDA_domain.h"
+#include "OpenMP_domain.h"
 
 void register_all_domains(void)
 {
 	struct domain_info *omp = register_openmp_domain();
-
-    printf("Registered domain: %s\n", omp->name);
+	struct domain_info *mpi = register_mpi_domain();
+	struct domain_info *cuda = register_cuda_domain();
 
     dsl_print_domain(omp);  // your pretty-printer
-    // register_mpi_domain(); // when you add MPI
+    dsl_print_domain(mpi);  // your pretty-printer
+    dsl_print_domain(cuda);  // your pretty-printer
 }
 
 int main(void) {
