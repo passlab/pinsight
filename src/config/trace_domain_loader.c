@@ -71,6 +71,7 @@ void dsl_add_event(int native_id,
     bitset_set(&d->subdomains[current_subdomain].events, idx);
 }
 
+#if 0
 static void print_indent(int level)
 {
     while (level--) printf("    ");
@@ -117,4 +118,56 @@ void dsl_print_domain(struct domain_info *d)
         printf("\n");
     }
 }
+#endif
+
+/*
+ * Pretty-print a domain into a file:
+ *      <domain>_trace_config.install
+ */
+void dsl_print_domain(struct domain_info *d)
+{
+    if (!d)
+        return;
+
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "%s_trace_config.install", d->name);
+
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        fprintf(stderr, "dsl_print_domain: cannot open file %s\n", filename);
+        return;
+    }
+
+    /* ---- Print PUNIT ranges ---- */
+    for (int i = 0; i < d->num_punits; ++i) {
+        struct punit *p = &d->punits[i];
+        fprintf(fp, "[%s.%s(%u-%u)]\n\n",
+                d->name, p->name, p->low, p->high);
+    }
+
+    /* ---- Print subdomains and events ---- */
+    for (int s = 0; s < d->num_subdomains; ++s) {
+        struct subdomain *sub = &d->subdomains[s];
+
+        fprintf(fp, "[%s(%s)]\n",
+                d->name, sub->name);
+
+        /* print events in this subdomain */
+        for (int e = 0; e < d->num_events; ++e) {
+            struct event *ev = &d->event_table[e];
+            if (ev->subdomain == s) {
+                int enabled = bitset_test(&d->eventInstallStatus, e);
+                fprintf(fp, "    %s = %s\n",
+                        ev->name,
+                        enabled ? "on" : "off");
+            }
+        }
+
+        fprintf(fp, "\n");
+    }
+
+    fclose(fp);
+}
+
 

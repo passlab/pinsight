@@ -1,43 +1,4 @@
 [OpenMP.default]
-	enable = true
-    ompt_callback_thread_begin             = on,
-	ompt_callback_thread_end               = on,
-	ompt_callback_parallel_begin           = on,
-	ompt_callback_parallel_end             = on,
-	ompt_callback_task_create              = off,
-	ompt_callback_task_schedule            = off,
-	ompt_callback_implicit_task            = on,
-	ompt_callback_target                   = off,
-	ompt_callback_target_data_op           = off,
-	ompt_callback_target_submit            = off,
-	ompt_callback_control_tool             = off,
-	ompt_callback_device_initialize        = off,
-	ompt_callback_device_finalize          = off,
-	ompt_callback_device_load              = off,
-	ompt_callback_device_unload            = off,
-	ompt_callback_sync_region_wait         = off,
-	ompt_callback_mutex_released           = off,
-	ompt_callback_dependences              = off,
-	ompt_callback_task_dependence          = off,
-	ompt_callback_work                     = on,
-	ompt_callback_masked                   = on,
-	ompt_callback_target_map               = off,
-	ompt_callback_sync_region              = on,
-	ompt_callback_lock_init                = off,
-	ompt_callback_lock_destroy             = off,
-	ompt_callback_mutex_acquire            = off,
-	ompt_callback_mutex_acquired           = off,
-	ompt_callback_nest_lock                = off,
-	ompt_callback_flush                    = off,
-	ompt_callback_cancel                   = off,
-	ompt_callback_reduction                = off,
-	ompt_callback_dispatch                 = off,
-	ompt_callback_target_emi               = off,
-	ompt_callback_target_data_op_emi       = off,
-	ompt_callback_target_submit_emi        = off,
-	ompt_callback_target_map_emi           = off,
-	ompt_callback_error                    = off 
-	
 [MPI.default]
 [CUDA.default]
 [OpenCL.default]
