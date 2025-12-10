@@ -137,7 +137,7 @@ typedef struct pinsight_thread_data {
     lexgion_record_t * enclosing_parallel_lexgion_record;
     lexgion_record_t * enclosing_task_lexgion_record;
 
-    trace_config_t trace_config[NUM_DOMAINS];
+    trace_config_t *trace_config; //The trace config cached for this thread so the thread does not need to check from the top level
 
     int omp_trace_flag; //flag for enabling and disabling OMPT traces
     int mpi_trace_flag; //flag for enabling and disabling MPI-P traces
