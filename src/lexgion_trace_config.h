@@ -69,6 +69,7 @@
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
 #define PINSIGHT_DEBUG_DEFAULT 0
 
+#define MAX_NUM_DOMAINS   8;
 #define MAX_DOMAIN_EVENTS 63
 
 /**
@@ -138,7 +139,7 @@ typedef struct domain_info {
 		char name[16];
 		unsigned int low; //should be 0
 		unsigned int high;
-	} punits[4];
+	} punits[4]; //max 4 punit kinds
 	int num_punits;
 } domain_info[];
 int num_domain;
@@ -147,18 +148,18 @@ int num_domain;
  * We use a single bit (ON/OFF) to enable/disable the tracing of an event. For each domain, we allow to have max
  * 63 events, with bit 63 as a global flag for enabling/disabling the domain
  */
-typedef struct trace_event_config {
+typedef struct event_trace_config {
 	unsigned long int status;
 	unsigned long int toChange;
 	unsigned long int newStatus;
-} trace_event_config_t;
+} event_trace_config_t;
 
-typedef struct trace_rate_config {
+typedef struct rate_trace_config {
     unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
     unsigned int initial_trace_count;  //integer: the number of traces to be collected after the trace starts the first time
     unsigned int max_num_traces;       //integer: total number of traces to be collected
     unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
-} trace_rate_config_t;
+} rate_trace_config_t;
 
 /**
  * This is per domain trace config, for each domain, we can configure the event tracing (ON/OFF) and the lexgion rate tracing.
@@ -168,14 +169,20 @@ typedef struct trace_rate_config {
  * execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
  */
 typedef struct trace_config {
+	int punit;
+	BitSet_t punit_ids;
 	struct {
-		unsigned int low;
-		unsigned int high;
-	} punit_range[NUM_PUNIT_KIND];
+		int domain;
+		int punit;
+		BitSet_t punit_ids
+	} punit_cond[NUM_PUNIT_KIND];
 	//punit range is to add more constrains on which punits the trace config should be applied to, e.g.
 	//trace MPI_Send/Recv events only MPI process rank from 0 to 3, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
-	trace_event_config_t event_config;
-	trace_rate_config_t rate_config;
+	event_trace_config_t event_config;
+	rate_trace_config_t rate_config;
+
+	struct trace_config * parent;
+	struct trace_config * next; //The link list for the config of the same punit of the domain
 } trace_config_t;
 
 // --------------------------------------------------------
