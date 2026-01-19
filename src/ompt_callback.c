@@ -30,6 +30,9 @@ static long long package_energy[MAX_PACKAGES];
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "ompt_lttng_ust_tracepoint.h"
 
+const char OPENMP_DOMAIN_NAME[] = "OpenMP";
+const char* OPENMP_DOMAIN_PUNIT[] = { "team", "thread", "device" };
+
 extern int __kmpc_global_thread_num(void *);
 extern int __kmpc_global_num_threads(void *);
 
@@ -50,6 +53,7 @@ __thread unsigned int task_record_id = -1;
 __thread int global_thread_num = 0;
 __thread int omp_team_num = 0;
 __thread int omp_thread_num = 0;
+__thread int omp_device_num = 0;
 
 static const char* ompt_thread_type_t_values[] = {
   NULL,

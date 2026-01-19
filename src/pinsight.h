@@ -6,7 +6,7 @@
 #define PINSIGHT_PINSIGHT_H
 #include <stdint.h>
 #include "pinsight_config.h"
-#include "lexgion_trace_config.h"
+#include "config/trace_config.h"
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
@@ -107,7 +107,7 @@ typedef struct lexgion_record_t {
    int tracing; /* a flag to indicate whether to trace this instance or not */
 } lexgion_record_t;
 
-/* The system-level default trace config */
+/* The system-level default trace config for each domain */
 extern trace_config_t trace_config[];
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
@@ -137,12 +137,7 @@ typedef struct pinsight_thread_data {
     lexgion_record_t * enclosing_parallel_lexgion_record;
     lexgion_record_t * enclosing_task_lexgion_record;
 
-    trace_config_t *trace_config; //The trace config cached for this thread so the thread does not need to check from the top level
-
-    int omp_trace_flag; //flag for enabling and disabling OMPT traces
-    int mpi_trace_flag; //flag for enabling and disabling MPI-P traces
-    int cuda_trace_flag; //flag for enabling and disabling CUPTI traces
-    int backtrace_flag;  //flag for enabling and disabling backtrace
+    trace_config_t *trace_config; //The trace config for this the thread
 } pinsight_thread_data_t;
 
 typedef struct device_info {

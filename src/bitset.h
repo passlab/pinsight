@@ -1,5 +1,5 @@
-#ifndef BITSET_H
-#define BITSET_H
+#ifndef CONFIG_BITSET_H
+#define CONFIG_BITSET_H
 
 #include <stddef.h>
 
@@ -64,4 +64,4 @@ int bitset_parse_ranges(BitSet *bs, const char *spec);
  */
 char *bitset_to_rangestring(const BitSet *bs);
 
-#endif /* BITSET_H */
+#endif /* CONFIG_BITSET_H */
