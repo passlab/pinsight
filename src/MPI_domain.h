@@ -1,9 +1,12 @@
 #ifndef MPI_DOMAIN_H
 #define MPI_DOMAIN_H
 
-#include "domain_info.h"
+extern int MPI_get_rank(void); //function to get the MPI rank
+
+
 #include "trace_domain_dsl.h"
 #include "trace_domain_loader.h"
+#include "trace_config.h"
 
 /* Provided by your core implementation (e.g. trace_domain_loader.c) */
 extern struct domain_info domain_info_table[];
@@ -12,10 +15,10 @@ extern int num_domain;
 /* --- 1. DSL BLOCK: MPI domain definition (data only) --- */
 
 #define MPI_DOMAIN_DEFINITION                                   \
-    TRACE_DOMAIN_BEGIN("MPI")                                   \
+    TRACE_DOMAIN_BEGIN("MPI", TRACE_EVENT_ID_NATIVE)            \
                                                                 \
         /* [MPI.rank(0-127)] */                                 \
-        TRACE_PUNIT("rank", 0, 127)                             \
+        TRACE_PUNIT("rank", 0, 127, MPI_get_rank)                             \
                                                                 \
         /* [MPI(init)] */                                       \
         TRACE_SUBDOMAIN_BEGIN("init")                           \
@@ -95,15 +98,15 @@ static inline struct domain_info *register_mpi_domain(void)
 
     /* Bind DSL macros to the generic helpers */
 
-    #define TRACE_IMPL_DOMAIN_BEGIN(name)   \
+    #define TRACE_IMPL_DOMAIN_BEGIN(name, mode)   \
         do {                                \
-            dsl_add_domain((name));
+            dsl_add_domain((name), (mode));
 
     #define TRACE_IMPL_DOMAIN_END()         \
         } while (0)
 
-    #define TRACE_IMPL_PUNIT(name, low, high) \
-            dsl_add_punit((name), (low), (high));
+	#define TRACE_IMPL_PUNIT(name, low, high, punit_id_func, arg, num_arg) \
+        dsl_add_punit((name), (low), (high), ((int(*)())(punit_id_func)), (arg), (num_arg));
 
     #define TRACE_IMPL_SUBDOMAIN_BEGIN(name) \
             { dsl_add_subdomain((name));

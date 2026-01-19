@@ -2,20 +2,24 @@
 #ifndef OPENMP_DOMAIN_H
 #define OPENMP_DOMAIN_H
 
+#include <omp-tools.h>
+#include <omp.h>
+
 #include "trace_domain_dsl.h"
 #include "trace_domain_loader.h"
+#include "trace_config.h"
 
 /* --- 1. DSL BLOCK: OpenMP domain definition (data only) --- */
 
 #define OPENMP_DOMAIN_DEFINITION                          \
-    TRACE_DOMAIN_BEGIN("OpenMP")                          \
+    TRACE_DOMAIN_BEGIN("OpenMP", TRACE_EVENT_ID_NATIVE)   \
                                                           \
-        /* Punis: [OpenMP.team.thread(0-1023|0-254)]      \
+        /* Punits: [OpenMP.team.thread(0-1023|0-254)]     \
          *        [OpenMP.device(0-16)]                   \
          */                                               \
-        TRACE_PUNIT("team",   0,  254)                    \
-        TRACE_PUNIT("thread", 0, 1023)                    \
-        TRACE_PUNIT("device", 0,   16)                    \
+        TRACE_PUNIT("team",   0,  254, omp_get_team_num)                    \
+        TRACE_PUNIT("thread", 0, 1023, omp_get_thread_num)                    \
+        TRACE_PUNIT("device", 0,   16, omp_get_device_num)                    \
                                                           \
         /* [OpenMP(parallel)] */                          \
         TRACE_SUBDOMAIN_BEGIN("parallel")                 \
@@ -106,15 +110,15 @@ static inline struct domain_info *register_openmp_domain(void)
     int domain_index_before = num_domain;
 
     /* Bind DSL macros to helpers */
-    #define TRACE_IMPL_DOMAIN_BEGIN(name)   \
+    #define TRACE_IMPL_DOMAIN_BEGIN(name, mode)   \
         do {                                \
-            dsl_add_domain((name));
+            dsl_add_domain((name), (mode));
 
     #define TRACE_IMPL_DOMAIN_END()         \
         } while (0)
 
-    #define TRACE_IMPL_PUNIT(name, low, high) \
-            dsl_add_punit((name), (low), (high));
+    #define TRACE_IMPL_PUNIT(name, low, high, punit_id_func, arg, num_arg) \
+            dsl_add_punit((name), (low), (high), ((int (*)())(punit_id_func)), (arg), (num_arg));
 
     #define TRACE_IMPL_SUBDOMAIN_BEGIN(name) \
             { dsl_add_subdomain((name));

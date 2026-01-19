@@ -1,21 +1,22 @@
 #ifndef CUDA_DOMAIN_H
 #define CUDA_DOMAIN_H
 
-#include "domain_info.h"
 #include "trace_domain_dsl.h"
 #include "trace_domain_loader.h"
+#include "trace_config.h"
+
+extern int CUDA_get_device_id(void*); //function to get the CUDA device id
 
 /* Provided by your core implementation (e.g., trace_domain_loader.c) */
 extern struct domain_info domain_info_table[];
 extern int num_domain;
 
 /* --- 1. DSL BLOCK: CUDA domain definition (data only) --- */
-
 #define CUDA_DOMAIN_DEFINITION                                      \
-    TRACE_DOMAIN_BEGIN("CUDA")                                      \
+    TRACE_DOMAIN_BEGIN("CUDA", TRACE_EVENT_ID_INTERNAL)                                      \
                                                                     \
         /* [CUDA.device(0-16)] */                                   \
-        TRACE_PUNIT("device", 0, 16)                                \
+        TRACE_PUNIT1("device", 0, 16, CUDA_get_device_id, NULL)                                \
                                                                     \
         /* [CUDA(contextdevice)] */                                 \
         TRACE_SUBDOMAIN_BEGIN("contextdevice")                      \
@@ -103,15 +104,15 @@ static inline struct domain_info *register_cuda_domain(void)
 
     /* Bind DSL macros to the generic helpers */
 
-    #define TRACE_IMPL_DOMAIN_BEGIN(name)   \
+    #define TRACE_IMPL_DOMAIN_BEGIN(name, mode)   \
         do {                                \
-            dsl_add_domain((name));
+            dsl_add_domain((name), (mode));
 
     #define TRACE_IMPL_DOMAIN_END()         \
         } while (0)
 
-    #define TRACE_IMPL_PUNIT(name, low, high) \
-            dsl_add_punit((name), (low), (high));
+	#define TRACE_IMPL_PUNIT(name, low, high, punit_id_func, arg, num_arg) \
+        dsl_add_punit((name), (low), (high), ((int(*)())(punit_id_func)), (arg), (num_arg));
 
     #define TRACE_IMPL_SUBDOMAIN_BEGIN(name) \
             { dsl_add_subdomain((name));

@@ -27,11 +27,15 @@ extern int mpirank ;
 extern __thread int global_thread_num;
 extern __thread int omp_team_num;
 extern __thread int omp_thread_num;
+extern __thread int omp_device_num;
 extern __thread const void * parallel_codeptr;
 extern __thread unsigned int parallel_record_id;
 extern __thread const void * task_codeptr;
 extern __thread unsigned int task_record_id;
 #endif
+
+extern const char OPENMP_DOMAIN_NAME[];
+extern const char* OPENMP_DOMAIN_PUNIT[];
 
 /** Macros used to simplify the definition of LTTNG_UST_TRACEPOINT_EVENT */
 //COMMON_LTTNG_UST_TP_FIELDS_OMPT are those fields in the thread-local storage. These fields will be added to all the trace records
