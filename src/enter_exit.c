@@ -19,7 +19,16 @@ void exit_pinsight_func() __attribute__((destructor));
 unsigned int pid;
 char hostname[48];
 
+#ifdef PINSIGHT_MPI
+#include "MPI_domain.h"
+#endif
+
+#ifdef PINSIGHT_OPENMP
+#include "OpenMP_domain.h"
+#endif
+
 #ifdef PINSIGHT_CUDA
+#include "CUDA_domain.h"
 extern void LTTNG_CUPTI_Init (int rank);
 extern void LTTNG_CUPTI_Fini (int rank);
 #endif
@@ -33,12 +42,15 @@ void enter_pinsight_func() {
     //printf("entering pinsight at host: %s by process: %d\n", hostname, pid);
     lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 #ifdef PINSIGHT_OPENMP
+    register_OpenMP_trace_domain();
     //OpenMP support is initialized by ompt_start_tool() callback that is implemented in ompt_callback.c, thus we do not need to initialize here.
 #endif
 #ifdef PINSIGHT_MPI
+    register_MPI_trace_domain();
 #endif
 #ifdef PINSIGHT_CUDA
     //TODO: Also need runtime check
+    register_CUDA_trace_domain();
     LTTNG_CUPTI_Init (0); //TODO: rank argument should be MPI rank I think, need to fix here when MPI is supported as well
 #endif
 #ifdef PINSIGHT_ENERGY

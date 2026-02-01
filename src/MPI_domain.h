@@ -11,6 +11,9 @@ extern int MPI_get_rank(void); //function to get the MPI rank
 /* Provided by your core implementation (e.g. trace_domain_loader.c) */
 extern struct domain_info domain_info_table[];
 extern int num_domain;
+extern int MPI_domain_index;
+extern domain_info_t *MPI_domain_info;
+extern trace_config_t *MPI_trace_config;
 
 /* --- 1. DSL BLOCK: MPI domain definition (data only) --- */
 
@@ -92,9 +95,9 @@ extern int num_domain;
 
 /* --- 2. Registration function (returns pointer to this MPI domain) --- */
 
-static inline struct domain_info *register_mpi_domain(void)
+static inline struct domain_info *register_MPI_trace_domain(void)
 {
-    int domain_index_before = num_domain;
+    int MPI_domain_index = num_domain;
 
     /* Bind DSL macros to the generic helpers */
 
@@ -129,7 +132,9 @@ static inline struct domain_info *register_mpi_domain(void)
     #undef TRACE_IMPL_DOMAIN_BEGIN
 
     /* Return pointer to this domain’s entry */
-    return &domain_info_table[domain_index_before];
+    MPI_domain_info = &domain_info_table[MPI_domain_index];
+    MPI_trace_config = &trace_config[MPI_domain_index];
+    return MPI_domain_info;
 }
 
 #endif /* MPI_DOMAIN_H */

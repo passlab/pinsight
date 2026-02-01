@@ -6,7 +6,7 @@
 #define PINSIGHT_PINSIGHT_H
 #include <stdint.h>
 #include "pinsight_config.h"
-#include "config/trace_config.h"
+#include "trace_config.h"
 
 /* For OpenMP, this is max number of code regions that use OpenMP directives */
 #define MAX_NUM_LEXGIONS 256
@@ -140,14 +140,9 @@ typedef struct pinsight_thread_data {
     trace_config_t *trace_config; //The trace config for this the thread
 } pinsight_thread_data_t;
 
-typedef struct device_info {
-
-};
-
 /* information to put in the event records */
 extern __thread int global_thread_num;
 extern __thread int omp_thread_num;
-//These two are used for book-keeping within runtime
 extern __thread lexgion_record_t * enclosing_parallel_lexgion_record;
 extern __thread lexgion_record_t * enclosing_task_lexgion_record;
 
@@ -176,7 +171,7 @@ extern lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_
 extern lexgion_t *lexgion_end(unsigned int * record_id);
 
 //implemented in lexgion_trace_cnofig.c
-extern lexgion_trace_config_t * retrieve_lexgion_trace_config(const void * codeptr);
+extern trace_config_t * retrieve_lexgion_trace_config(const void * codeptr);
 //read env or config file at runtime to allow for user to provide new config for tracing
 extern void lexgion_trace_reconfig();
 

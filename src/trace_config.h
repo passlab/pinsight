@@ -62,19 +62,17 @@
 //DOMAINS: MPI, OpenMP, CUDA, OPENCL, HIP, PYTHON, ENERGY, BACKTRACE
 #define MAX_NUM_DOMAINS   8
 //We use the term punit (parallel unit) to denote the smallest schedulable and
-//traceable execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
+//traceable execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA device.
 //A punit is numbered starting from 0 to N-1, where N is the total number of punits
-//PUNIT KINDS: process_rank, team, thread, device
+//PUNIT KINDS: process_rank, team, thread, device, number of punit kinds each domian can have max
 #define MAX_NUM_PUNIT_KINDS 4
-//MAX 63 events per domain (because we use a 64-bit BitSet to store event config, with bit 63 as global enable/disable flag
-#define MAX_NUM_DOMAIN_EVENTS 63
-//we do not consider subdomain in the implementation, e.g. for OpenMP, we have parallel, tasking, synchronization subdomain
-//For MPI, we have p2p, collective communication, async communication. The reason we do not consider subdomain is to reduce
-//the complexity of the implementation. But the data structure is designed to allow subdomain extension in
-
-#define MAX_EVENT_ID           (MAX_NUM_DOMAIN_EVENTS - 1)  /* 62 */
-#define DOMAIN_GLOBAL_BIT      (MAX_NUM_DOMAIN_EVENTS)      /* 63 */
-#define EVENT_STATUS_NBITS     (DOMAIN_GLOBAL_BIT)          /* max index */
+//MAX 64 events per domain because we use a 64-bit BitSet to store event config
+#define MAX_NUM_DOMAIN_EVENTS 64
+#define MAX_EVENT_ID           (MAX_NUM_DOMAIN_EVENTS - 1)  /* 63 */
+//Each domain has its own multiple subdomains, e.g. OpenMP domain can have parallel, tasking, synchronization subdomain
+//For MPI, we have p2p, collective communication, async communication.
+//In the tracing, we do not differentiate events between subdomains to reduce the complexity and overhead of checking multiple subdomain configs.
+//We however keep the event/subdomain info in the domain_info_table
 
 //Data structure for storing domain info, event info, punit info
 typedef struct domain_info {
@@ -117,9 +115,9 @@ extern struct domain_info domain_info_table[MAX_NUM_DOMAINS];
  * 63 events, with bit 63 as a global flag for enabling/disabling the domain
  */
 typedef struct event_trace_config {
-	unsigned long int status;
-	unsigned long int toChange;
-	unsigned long int newStatus;
+	BitSet status;
+	BitSet toChange;
+	BitSet newStatus;
 } event_trace_config_t;
 
 typedef struct rate_trace_config {
@@ -133,29 +131,40 @@ typedef struct rate_trace_config {
  * This is per domain-punit trace config, for each domain-punit, we can configure the event tracing (ON/OFF) and the lexgion rate tracing.
  * The configuration can be constrained by the specific punit specified as a range, e.g. from thread 0 to thread 3
  *
+ * a trace config can be applied to a specified list of punit of a specific punit kind, e.g. OpenMP thread 0,1,2,3, then it can
+ * be constrained by multiple punits of multiple punit kinds of other domains.
+ *
+ * trace config hierarchy/priority: global domain enable/disable ->punit enable/disable ->
+ *                                  event enable/disable -> lexgion rate tracing
+ * The global domain enable/disable config has the highest priority, if the domain is disabled, then no tracing is performed.
+ * The global domain setting must be checked against the installation status of each domain/event when a config is read or reconfigured.
+ *
  * We use the term punit (parallel unit) to denote the smallest schedulable and traceable
  * execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
  */
-typedef struct trace_config {
-	int punit; //which punit kind this config applies to, e.g. process_rank, team, thread, device
-	BitSet punit_ids; //The specific punits that the trace config applies to.
-	//Right now, we only support a single punit kind per config,
-	//how to support multiple punit kinds per config is TBD?
+typedef struct punit_trace_config {
 	struct {
-		int domain;
-		int punit;
-		BitSet punit_ids;
-	} punit_cond[MAX_NUM_PUNIT_KINDS];
-	int num_punit_conds;
-	//punit range is to add more constrains on which punits the trace config should be applied to, e.g.
+		int set; //The flag to indicate whether this domain's punit constraint is set
+		struct {
+			int set; //The flag to indicate whether this punit kind constraint is set
+			BitSet punit_ids;
+		} punit[MAX_NUM_PUNIT_KINDS];
+	} domain_punits[MAX_NUM_DOMAINS];
+	//domain/punit range for adding constrains on which punits the trace config should be applied to, e.g.
 	//trace MPI_Send/Recv events only MPI process rank from 0 to 3, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
 	event_trace_config_t event_config;
 	rate_trace_config_t rate_config;
 
-	struct trace_config * parent; //The pointer that forms the config tree/hierarchy according to the priority.
-	struct trace_config * punit_kind_next; //The link list for the config of all the punit kinds of the domain
-	struct trace_config * punit_next; //The link list for the config of the same punit group of the domain, e.g. for all threads config of OpenMP domain
+	struct punit_trace_config * next;  //The link list pointer to the next punit_trace_config of the same domain
+} punit_trace_config_t;
+
+typedef struct trace_config { //The trace config for a domain
+	int set; //The global flag to indicate whether tracing is enabled for this domain
+	event_trace_config_t event_config;
+	rate_trace_config_t rate_config;
+	struct punit_trace_config * punit_trace_config; //The link list for punit_id-specific config of the domain.
 } trace_config_t;
+extern trace_config_t trace_config[MAX_NUM_DOMAINS];
 
 // --------------------------------------------------------
 // Safe environment variable query functions

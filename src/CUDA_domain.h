@@ -10,6 +10,9 @@ extern int CUDA_get_device_id(void*); //function to get the CUDA device id
 /* Provided by your core implementation (e.g., trace_domain_loader.c) */
 extern struct domain_info domain_info_table[];
 extern int num_domain;
+extern int CUDA_domain_index;
+extern domain_info_t *CUDA_domain_info;
+extern trace_config_t *CUDA_trace_config;
 
 /* --- 1. DSL BLOCK: CUDA domain definition (data only) --- */
 #define CUDA_DOMAIN_DEFINITION                                      \
@@ -98,7 +101,7 @@ extern int num_domain;
 
 /* --- 2. Registration function (returns pointer to this CUDA domain) --- */
 
-static inline struct domain_info *register_cuda_domain(void)
+static inline struct domain_info *register_CUDA_trace_domain(void)
 {
     int domain_index_before = num_domain;
 
@@ -135,7 +138,9 @@ static inline struct domain_info *register_cuda_domain(void)
     #undef TRACE_IMPL_DOMAIN_BEGIN
 
     /* Return pointer to this domain’s entry */
-    return &domain_info_table[domain_index_before];
+    CUDA_domain_info = &domain_info_table[CUDA_domain_index];
+    CUDA_trace_config = &trace_config[CUDA_domain_index];
+    return CUDA_domain_info;
 }
 
 #endif /* CUDA_DOMAIN_H */

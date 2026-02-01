@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "pinsight.h"
+#include "MPI_domain.h"
 
 #ifndef _EXTERN_C_
 #ifdef __cplusplus
@@ -24,6 +25,9 @@
 
 int mpirank = 0;
 __thread void * mpi_codeptr = NULL;
+int MPI_domain_index;
+domain_info_t *MPI_domain_info;
+trace_config_t *MPI_trace_config;
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
