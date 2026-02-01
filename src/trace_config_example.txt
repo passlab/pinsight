@@ -9,20 +9,17 @@
 	max_num_traces = 2000
 	tracing_rate = 1 
 
-[OpenMP.thread.default: OpenMP.default]
-[OpenMP.device.default: OpenMP.default]
-[MPI.rank.default: MPI.default]
-[CUDA.device.default: CUDA.default]
-[OpenCL.device.default: OpenCL.default]
-[HIP.device.default: HIP.default]
+[OpenMP.thread(0-3): OpenMP.default: MPI.rank(0), CUDA.device(0)]
 
-[OpenMP.thread(0-3): OpenMP.thread.default: MPI.rank(0), CUDA.device(0)]
+[OpenMP.thread(4-*):: MPI.rank(0), CUDA.device(0)]
+
+[OpenMP.team(0-4).thread(0-15): OpenMP.default: MPI.rank(0), CUDA.device(0)]
     
-[OpenMP.device(0): OpenMP.device.default]
+[OpenMP.device(0): OpenMP.default]
 
-[MPI.rank(0): MPI.rank.default]
+[MPI.rank(0): MPI.default]
 
-[CUDA.device.(0): CUDA.device.default]
+[CUDA.device(0): CUDA.default]
 
 [Lexgion(0x4010bd): Lexgion.default, OpenMP.default, MPI.default: MPI.rank(0), CUDA.device(0)]
 	trace_starts_at = 20

@@ -9,6 +9,10 @@
 #include "trace_domain_loader.h"
 #include "trace_config.h"
 
+extern int OpenMP_domain_index;
+extern domain_info_t *OpenMP_domain_info;
+extern trace_config_t *OpenMP_trace_config;
+
 /* --- 1. DSL BLOCK: OpenMP domain definition (data only) --- */
 
 #define OPENMP_DOMAIN_DEFINITION                          \
@@ -17,28 +21,27 @@
         /* Punits: [OpenMP.team.thread(0-1023|0-254)]     \
          *        [OpenMP.device(0-16)]                   \
          */                                               \
-        TRACE_PUNIT("team",   0,  254, omp_get_team_num)                    \
-        TRACE_PUNIT("thread", 0, 1023, omp_get_thread_num)                    \
+        TRACE_PUNIT("team",   0,  255, omp_get_team_num)                    \
+        TRACE_PUNIT("thread", 0,  255, omp_get_thread_num)                    \
         TRACE_PUNIT("device", 0,   16, omp_get_device_num)                    \
                                                           \
         /* [OpenMP(parallel)] */                          \
         TRACE_SUBDOMAIN_BEGIN("parallel")                 \
-            TRACE_EVENT( 0, "omp_parallel_begin", 1)      \
-            TRACE_EVENT( 1, "omp_parallel_end",   1)      \
+            TRACE_EVENT(ompt_callback_parallel_begin, "omp_parallel_begin", 1)      \
+            TRACE_EVENT(ompt_callback_parallel_end, "omp_parallel_end",   1)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(thread)] */                            \
         TRACE_SUBDOMAIN_BEGIN("thread")                   \
-            TRACE_EVENT( 2, "omp_thread_start",   1)      \
-            TRACE_EVENT( 3, "omp_thread_end",     1)      \
+            TRACE_EVENT(ompt_callback_thread_begin, "omp_thread_begin",   1)      \
+            TRACE_EVENT(ompt_callback_thread_end, "omp_thread_end",     1)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(task)] */                              \
         TRACE_SUBDOMAIN_BEGIN("task")                     \
-            TRACE_EVENT( 4, "omp_task_create",    0)      \
-            TRACE_EVENT( 5, "omp_task_schedule",  0)      \
-            TRACE_EVENT( 6, "omp_task_execute",   0)      \
-            TRACE_EVENT( 7, "omp_task_complete",  0)      \
+            TRACE_EVENT(ompt_callback_task_create, "omp_task_create",    0)      \
+            TRACE_EVENT(ompt_callback_task_schedule, "omp_task_schedule",  0)      \
+            TRACE_EVENT(ompt_callback_implicit_task, "omp_implicit_task",   0)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(workshare)] */                         \
@@ -105,9 +108,9 @@
     TRACE_DOMAIN_END()
 
 /* --- 2. Registration function (inline, but built from the same DSL) --- */
-static inline struct domain_info *register_openmp_domain(void)
+static inline struct domain_info *register_OpenMP_trace_domain(void)
 {
-    int domain_index_before = num_domain;
+    int OpenMP_domain_index = num_domain;
 
     /* Bind DSL macros to helpers */
     #define TRACE_IMPL_DOMAIN_BEGIN(name, mode)   \
@@ -141,7 +144,9 @@ static inline struct domain_info *register_openmp_domain(void)
     #undef TRACE_IMPL_DOMAIN_BEGIN
 
     /* Return pointer to this domain */
-    return &domain_info_table[domain_index_before];
+    OpenMP_domain_info = &domain_info_table[OpenMP_domain_index];
+    OpenMP_trace_config = &trace_config[OpenMP_domain_index];
+    return OpenMP_domain_info;
 }
 
 #endif /* OPENMP_DOMAIN_H */

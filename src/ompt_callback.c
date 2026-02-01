@@ -1,13 +1,10 @@
 #include <stdio.h>
 #include <inttypes.h>
-#include <omp.h>
-#include <omp-tools.h>
 #include <execinfo.h>
 #ifdef OMPT_USE_LIBUNWIND
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
-#include "lexgion_trace_config.h"
 #include "pinsight.h"
 
 // --------------------------------------------------------
@@ -26,15 +23,20 @@ static int debug_on;
 static long long package_energy[MAX_PACKAGES];
 #endif
 
-#define LTTNG_UST_TRACEPOINT_CREATE_PROBES
-#define LTTNG_UST_TRACEPOINT_DEFINE
-#include "ompt_lttng_ust_tracepoint.h"
+#include "OpenMP_domain.h"
+//const char OPENMP_DOMAIN_NAME[] = "OpenMP";
+//const char* OPENMP_DOMAIN_PUNIT[] = { "team", "thread", "device" };
 
-const char OPENMP_DOMAIN_NAME[] = "OpenMP";
-const char* OPENMP_DOMAIN_PUNIT[] = { "team", "thread", "device" };
+int OpenMP_domain_index;
+domain_info_t *OpenMP_domain_info;
+trace_config_t *OpenMP_trace_config;
 
 extern int __kmpc_global_thread_num(void *);
 extern int __kmpc_global_num_threads(void *);
+
+#define LTTNG_UST_TRACEPOINT_CREATE_PROBES
+#define LTTNG_UST_TRACEPOINT_DEFINE
+#include "ompt_lttng_ust_tracepoint.h"
 
 #define get_global_thread_num() __kmpc_global_thread_num(NULL)
 #define get_global_num_threads() __kmpc_global_num_threads(NULL)

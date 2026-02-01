@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(pinsight)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -10,9 +10,9 @@ set(PINSIGHT_VERSION_MAJOR 0)
 set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
-option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
+option(PINSIGHT_OPENMP       "Build with OpenMP support"       FALSE)
 option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
-option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
+option(PINSIGHT_CUDA         "Build with CUDA support"         FALSE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
 
@@ -20,13 +20,20 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
 
 set(SOURCE_FILES
-        src/lexgion_trace_config.c
-        src/lexgion_trace_config.h
         src/pinsight.h
         src/pinsight.c
         src/backtrace.c
+        src/backtrace.h
+        src/bitset.c
+        src/bitset.h
+        src/trace_config.c
+        src/trace_config.h
+        src/trace_domain_dsl.h
+        src/trace_domain_loader.h
+        src/trace_domain_loader.c
         src/enter_exit.c
         src/enter_exit_lttng_ust_tracepoint.h
+        src/common_tp_fields_global_lttng_ust_tracepoint.h
         )
 
 ## For OpenMP, PInsight requires OMPT support in an OpenMP runtime. But buidling PInsight only needs omp.h and ompt.h,
@@ -43,18 +50,19 @@ if (PINSIGHT_OPENMP)
     list(APPEND SOURCE_FILES
             src/ompt_lttng_ust_tracepoint.h
             src/ompt_callback.c
-            src/ompt_config.c
+            src/OpenMP_domain.h
             )
 endif()
 
 ## MPI implementation supporting PMPI
 if (PINSIGHT_MPI)
-    find_package(MPI REQUIRED)
+#    find_package(MPI REQUIRED)
     include_directories(${MPI_C_INCLUDE_PATH} ${MPI_CXX_INCLUDE_PATH})
     #list(APPEND PINSIGHT_EXTERNAL_LIBS ${MPI_C_LIBRARIES} ${MPI_CXX_LIBRARIES})
     list(APPEND SOURCE_FILES
             src/pmpi_lttng_ust_tracepoint.h
             src/pmpi_mpi.c
+            src/MPI_domain.h
             )
 endif()
 
@@ -72,6 +80,7 @@ if (PINSIGHT_CUDA)
     list(APPEND SOURCE_FILES
             src/cupti_lttng_ust_tracepoint.h
             src/cupti_callback.c
+            src/CUDA_domain.h
             )
 endif()
 

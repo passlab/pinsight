@@ -9,14 +9,13 @@
     omp_parallel_end = on
 
 [OpenMP(thread)]
-    omp_thread_start = on
+    omp_thread_begin = on
     omp_thread_end = on
 
 [OpenMP(task)]
     omp_task_create = off
     omp_task_schedule = off
-    omp_task_execute = off
-    omp_task_complete = off
+    omp_implicit_task = off
 
 [OpenMP(workshare)]
     omp_loop_begin = off
