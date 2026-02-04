@@ -73,13 +73,86 @@
 //For MPI, we have p2p, collective communication, async communication.
 //In the tracing, we do not differentiate events between subdomains to reduce the complexity and overhead of checking multiple subdomain configs.
 //We however keep the event/subdomain info in the domain_info_table
+#define MAX_NUM_LEXGIONS 512
+
+/**
+ * We use a single bit (ON/OFF) to enable/disable the tracing of an event. For each domain, we allow to have max
+ * 63 events, with bit 63 as a global flag for enabling/disabling the domain
+ */
+/**
+ * This is per domain-punit trace config, for each domain-punit, we can configure the event tracing (ON/OFF) and the lexgion rate tracing.
+ * The configuration can be constrained by the specific punit specified as a range, e.g. from thread 0 to thread 3
+ *
+ * a trace config can be applied to a specified list of punit of a specific punit kind, e.g. OpenMP thread 0,1,2,3, then it can
+ * be constrained by multiple punits of multiple punit kinds of other domains.
+ *
+ * trace config hierarchy/priority: global domain enable/disable ->punit enable/disable ->
+ *                                  event enable/disable -> lexgion rate tracing
+ * The global domain enable/disable config has the highest priority, if the domain is disabled, then no tracing is performed.
+ * The global domain setting must be checked against the installation status of each domain/event when a config is read or reconfigured.
+ *
+ * We use the term punit (parallel unit) to denote the smallest schedulable and traceable
+ * execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
+
+ * Consider three kinds of tracing options: 
+ * 1) domain trace config where we only configure which events will be traced 
+ *    with punit constraints, e.g. OpenMP thread 0,1,2,3, then it can
+ *    be constrained by multiple punits of multiple punit kinds of other domains.
+ *    With this, it is pure flat tracing of the selected events for the selected punits. The only way to 
+ *    enable selective tracing is by using a timer, e.g. we only tracing for a certain period of time
+ * 2) lexgion trace config where we configure the tracing rate for a specific code region, thus achieving
+ *    selective tracing of the selected events for the selected punits. The event and punit constraints
+ *    can be applied by either with the domain trace config or specified in the lexgion trace config.
+ */
+
+
+//The punit set for a domain
+typedef struct domain_punit_set {
+	int set; //The flag to indicate whether this domain's punit constraint is set
+	struct {
+		int set; //The flag to indicate whether this punit kind constraint is set
+		BitSet punit_ids;
+	} punit[MAX_NUM_PUNIT_KINDS];
+} domain_punit_set_t;
+
+typedef struct punit_trace_config {
+	domain_punit_set_t domain_punits[MAX_NUM_DOMAINS];
+	//domain/punit range for adding constrains on which punits the trace config should be applied to, e.g.
+	//trace MPI_Send/Recv events only MPI process rank from 0 to 3, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
+	unsigned long int events; //The event config for the this punit set 
+
+	struct punit_trace_config * next;  //The link list pointer to the next punit_trace_config of the same domain
+} punit_trace_config_t;
+
+typedef struct domain_trace_config { //The trace config for a domain
+	int set; //The global flag to indicate whether tracing is enabled for this domain
+	unsigned long int events; //The default event config for the domain
+	struct punit_trace_config * punit_trace_config; //The link list for punit_id-specific config of the domain.
+} domain_trace_config_t;
+extern domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
+
+typedef struct lexgion_trace_config {
+	domain_punit_set_t domain_punits[MAX_NUM_DOMAINS]; //The punit set for this trace config
+	unsigned long int events[MAX_NUM_DOMAINS]; //The event settings for this trace config for each domain
+   
+	//rate trace config
+	unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
+    unsigned int max_num_traces;       //integer: total number of traces to be collected
+    unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
+
+    void * codeptr;
+
+	struct lexgion_trace_config * next;  //The link list pointer to the next punit_trace_config of the same domain
+} lexgion_trace_config_t;
+extern lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
+extern int num_lexgion_trace_configs;
 
 //Data structure for storing domain info, event info, punit info
 typedef struct domain_info {
 	char name[16];
 	struct subdomain {
 		char name[16];
-		BitSet events; //The events that are categorized into this subdomain
+		unsigned long int events; //The events that are categorized into this subdomain (a big map to specify which events)
 	} subdomains[16]; //Max 16 subdomains
 	int num_subdomains;
 
@@ -92,8 +165,9 @@ typedef struct domain_info {
 	} event_table[MAX_NUM_DOMAIN_EVENTS]; //max 63 events (b.c. the BitSet we use for event config
     int num_events;        /* number of events declared (dense count) */
     int event_id_upper;    /* iteration upper bound: max_event_id + 1 */
-	BitSet eventInstallStatus;  //For setting whether the event is enabled or not
 
+	unsigned long int eventInstallStatus;  //For setting whether the event is enabled or not
+	
 	struct punit {
 		char name[16];
 		unsigned int low; //should be 0
@@ -109,62 +183,6 @@ typedef struct domain_info {
 } domain_info_t;
 extern int num_domain;
 extern struct domain_info domain_info_table[MAX_NUM_DOMAINS];
-
-/**
- * We use a single bit (ON/OFF) to enable/disable the tracing of an event. For each domain, we allow to have max
- * 63 events, with bit 63 as a global flag for enabling/disabling the domain
- */
-typedef struct event_trace_config {
-	BitSet status;
-	BitSet toChange;
-	BitSet newStatus;
-} event_trace_config_t;
-
-typedef struct rate_trace_config {
-    unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
-    unsigned int initial_trace_count;  //integer: the number of traces to be collected after the trace starts the first time
-    unsigned int max_num_traces;       //integer: total number of traces to be collected
-    unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
-} rate_trace_config_t;
-
-/**
- * This is per domain-punit trace config, for each domain-punit, we can configure the event tracing (ON/OFF) and the lexgion rate tracing.
- * The configuration can be constrained by the specific punit specified as a range, e.g. from thread 0 to thread 3
- *
- * a trace config can be applied to a specified list of punit of a specific punit kind, e.g. OpenMP thread 0,1,2,3, then it can
- * be constrained by multiple punits of multiple punit kinds of other domains.
- *
- * trace config hierarchy/priority: global domain enable/disable ->punit enable/disable ->
- *                                  event enable/disable -> lexgion rate tracing
- * The global domain enable/disable config has the highest priority, if the domain is disabled, then no tracing is performed.
- * The global domain setting must be checked against the installation status of each domain/event when a config is read or reconfigured.
- *
- * We use the term punit (parallel unit) to denote the smallest schedulable and traceable
- * execution entity—e.g., an MPI rank, an OpenMP thread, or a CUDA thread/warp.
- */
-typedef struct punit_trace_config {
-	struct {
-		int set; //The flag to indicate whether this domain's punit constraint is set
-		struct {
-			int set; //The flag to indicate whether this punit kind constraint is set
-			BitSet punit_ids;
-		} punit[MAX_NUM_PUNIT_KINDS];
-	} domain_punits[MAX_NUM_DOMAINS];
-	//domain/punit range for adding constrains on which punits the trace config should be applied to, e.g.
-	//trace MPI_Send/Recv events only MPI process rank from 0 to 3, trace parallel_begin/end only for OpenMP thread 0 and MPI process rank 4
-	event_trace_config_t event_config;
-	rate_trace_config_t rate_config;
-
-	struct punit_trace_config * next;  //The link list pointer to the next punit_trace_config of the same domain
-} punit_trace_config_t;
-
-typedef struct trace_config { //The trace config for a domain
-	int set; //The global flag to indicate whether tracing is enabled for this domain
-	event_trace_config_t event_config;
-	rate_trace_config_t rate_config;
-	struct punit_trace_config * punit_trace_config; //The link list for punit_id-specific config of the domain.
-} trace_config_t;
-extern trace_config_t trace_config[MAX_NUM_DOMAINS];
 
 // --------------------------------------------------------
 // Safe environment variable query functions

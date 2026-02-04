@@ -4,8 +4,6 @@
 
 __thread pinsight_thread_data_t pinsight_thread_data;
 
-__thread int trace_bit = 0; /* 0 or 1 for enabling trace */
-
 /** init thread data
  */
 pinsight_thread_data_t * init_thread_data(int _thread_num) {
@@ -90,7 +88,7 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int 
  * This is a thread-specific call
  *
  */
-lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
+lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra, lexgion_trace_config_t * trace_config) {
     if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
         fprintf(stderr, "FATAL: Max number of lexgions (%d) allowed in the source code reached, cannot continue\n",
                 MAX_NUM_LEXGIONS);
@@ -113,7 +111,11 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
         lgp->counter = 0;
         lgp->trace_counter = 0;
         lgp->num_exes_after_last_trace = 0;
-        lgp->trace_config = retrieve_lexgion_trace_config(codeptr_ra);
+        if (trace_config != NULL) {
+            lgp->trace_config = trace_config;
+        } else {
+            lgp->trace_config = retrieve_lexgion_trace_config(codeptr_ra);
+        }
     }
     pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 

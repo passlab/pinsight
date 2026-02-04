@@ -13,7 +13,7 @@ extern struct domain_info domain_info_table[];
 extern int num_domain;
 extern int MPI_domain_index;
 extern domain_info_t *MPI_domain_info;
-extern trace_config_t *MPI_trace_config;
+extern domain_trace_config_t *MPI_trace_config;
 
 /* --- 1. DSL BLOCK: MPI domain definition (data only) --- */
 
@@ -133,7 +133,7 @@ static inline struct domain_info *register_MPI_trace_domain(void)
 
     /* Return pointer to this domain’s entry */
     MPI_domain_info = &domain_info_table[MPI_domain_index];
-    MPI_trace_config = &trace_config[MPI_domain_index];
+    MPI_trace_config = &domain_trace_config[MPI_domain_index];
     return MPI_domain_info;
 }
 

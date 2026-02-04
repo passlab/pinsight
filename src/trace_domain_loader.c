@@ -33,7 +33,7 @@ void dsl_add_domain(const char *name, int event_id_mode)
     d->event_id_upper = 0;
 
     /* bitsets cover IDs 0..MAX_DOMAIN_EVENTS-1 */
-    bitset_init(&d->eventInstallStatus, MAX_NUM_DOMAIN_EVENTS - 1);
+    d->eventInstallStatus = 0;
 
     current_subdomain = -1;
 }
@@ -65,7 +65,7 @@ void dsl_add_subdomain(const char *name)
     struct subdomain *sd = &d->subdomains[idx];
 
     strncpy(sd->name, name, sizeof(sd->name) - 1);
-    bitset_init(&sd->events, MAX_NUM_DOMAIN_EVENTS - 1);
+    sd->events = 0;
 
     current_subdomain = idx;
 }
@@ -116,11 +116,11 @@ void dsl_add_event(int native_id,
     strncpy(ev->name, name, sizeof(ev->name) - 1);
 
     /* initial status bit indexed by event_id */
-    if (initial_status) bitset_set(&d->eventInstallStatus, (size_t)event_id);
-    else                bitset_clear(&d->eventInstallStatus, (size_t)event_id);
+    if (initial_status) d->eventInstallStatus |= (1UL << event_id);
+    else                d->eventInstallStatus &= ~(1UL << event_id);
 
     /* subdomain membership bit indexed by event_id */
-    bitset_set(&d->subdomains[current_subdomain].events, (size_t)event_id);
+    d->subdomains[current_subdomain].events |= (1UL << event_id);
 
     /* num_events is ALWAYS count of declared events */
     d->num_events++;
@@ -165,7 +165,7 @@ void dsl_print_domain(struct domain_info *d)
             if (!ev->valid) continue;
             if (ev->subdomain != s) continue;
 
-            int enabled = bitset_test(&d->eventInstallStatus, (size_t)eid);
+            int enabled = (d->eventInstallStatus >> eid) & 1;
             fprintf(fp, "    %s = %s\n", ev->name, enabled ? "on" : "off");
         }
 

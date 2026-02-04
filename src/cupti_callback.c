@@ -6,11 +6,11 @@
 #include <cuda.h>
 #include <cupti.h>
 #include "pinsight.h"
-#include "CUPTI_domain.h"
+#include "CUDA_domain.h"
 
 int CUDA_domain_index;
 domain_info_t *CUDA_domain_info;
-trace_config_t *CUDA_trace_config;
+domain_trace_config_t *CUDA_trace_config;
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
