@@ -12,7 +12,7 @@ extern struct domain_info domain_info_table[];
 extern int num_domain;
 extern int CUDA_domain_index;
 extern domain_info_t *CUDA_domain_info;
-extern trace_config_t *CUDA_trace_config;
+extern domain_trace_config_t *CUDA_trace_config;
 
 /* --- 1. DSL BLOCK: CUDA domain definition (data only) --- */
 #define CUDA_DOMAIN_DEFINITION                                      \
@@ -139,7 +139,7 @@ static inline struct domain_info *register_CUDA_trace_domain(void)
 
     /* Return pointer to this domain’s entry */
     CUDA_domain_info = &domain_info_table[CUDA_domain_index];
-    CUDA_trace_config = &trace_config[CUDA_domain_index];
+    CUDA_trace_config = &domain_trace_config[CUDA_domain_index];
     return CUDA_domain_info;
 }
 

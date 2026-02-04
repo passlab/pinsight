@@ -29,7 +29,7 @@ static long long package_energy[MAX_PACKAGES];
 
 int OpenMP_domain_index;
 domain_info_t *OpenMP_domain_info;
-trace_config_t *OpenMP_trace_config;
+domain_trace_config_t *OpenMP_trace_config;
 
 extern int __kmpc_global_thread_num(void *);
 extern int __kmpc_global_num_threads(void *);
@@ -239,7 +239,7 @@ on_ompt_callback_thread_begin(
 
         //Setup the initial parallel region, and this could be a call to the callback, but we will elaborate it here
         //on_ompt_callback_parallel_begin(NULL, NULL, &pinsight_thread_data.lexgion_stack[0], 1, ompt_parallel_team || ompt_parallel_invoker_runtime, INITIAL_PARALLEL_CODEPTR);
-        enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL_CODEPTR);
+        enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, (void*)INITIAL_PARALLEL_CODEPTR, NULL);
         //printf("thread_begin: initial parallel lexgion: %p\n", enclosing_parallel_lexgion_record->lgp);
         parallel_codeptr = (void*)INITIAL_PARALLEL_CODEPTR;
         parallel_record_id = enclosing_parallel_lexgion_record->record_id;
@@ -270,29 +270,16 @@ on_ompt_callback_thread_end(
         unsigned int record_id;
         lexgion_t * lgp;
 
-        //NO NEED THIS ANYMORE since initial implicit task is processed by the callback_implicit_task
-#if 0
-		lgp = lexgion_end(&record_id); //pop up initial implicit task
-        lgp->end_codeptr_ra = (void*)INITIAL_PARALLEL_CODEPTR;
-        assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL_CODEPTR);
-        printf("thread_end: initial implicit task lexgion: %p\n", lgp);
-        printf("counter: %d, lgp->counter: %d\n", record_id, lgp->record_id);
-        //assert(counter == lgp->counter);
-        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_end, 1 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-        lexgion_post_trace_update(lgp);
-#endif
-
         lgp = lexgion_end(&record_id); //pop up initial parallel region
         lgp->end_codeptr_ra = (void*)UNKNOWN_END_CODEPTR;
         assert(lgp->codeptr_ra == (void*)INITIAL_PARALLEL_CODEPTR);
-        //printf("thread_end: initial parallel lexgion: %p\n", lgp);
         assert(record_id == lgp->counter == 1); //both should be 1, since it is only recorded once
 
 #ifdef PINSIGHT_BACKTRACE
         retrieve_backtrace();
 #endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end, ompt_parallel_team || ompt_parallel_invoker_runtime ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-        lexgion_post_trace_update(lgp);
+        //lexgion_post_trace_update(lgp);
     } else {
     }
 #ifdef PINSIGHT_ENERGY
@@ -386,7 +373,7 @@ on_ompt_callback_parallel_begin(
 	//printf("codeptr: %x, extracted: %x\n", codeptr_ra, extracted_codeptr_ra);
 //  parallel_data->value = ompt_get_unique_id();
 //  printf("parallel_begin: codeptr_ra: 0x%" PRIx64 "\n", codeptr_ra);
-  enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
+  enclosing_parallel_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra, NULL);
   //This parallel_data->ptr will be passed to the callback of implicit tasks,
   parallel_data->ptr = enclosing_parallel_lexgion_record;
   //lgp->num_exes_after_last_trace ++;
@@ -397,7 +384,7 @@ on_ompt_callback_parallel_begin(
   omp_thread_num = 0;
   lexgion_t * lgp = enclosing_parallel_lexgion_record->lgp;
   lexgion_set_trace_bit(lgp);
-  if (trace_bit) {
+  if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
       rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -428,7 +415,7 @@ on_ompt_callback_parallel_end(
   //turn off this assertation. LLVM openmp runtime has a bug that for serialized parallel region, codeptr_ra for parallel_end callback is NULL 
   //assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and parallel_end event */
   //printf("parallel_end: begin codeptr_ra: %x, end codeptr_ra: %x\n", lgp->codeptr_ra, codeptr_ra);
-  if (trace_bit) {
+  if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
       rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -486,13 +473,13 @@ on_ompt_callback_implicit_task(
 
       omp_thread_num = thread_num;
       /// Here a new lexgion with the same codeptr as the parallel region is created, but this lexgion has implicit_task type
-      enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
+      enclosing_task_lexgion_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr, enclosing_parallel_lexgion_record->lgp->trace_config);
       task_data->ptr = (void*)enclosing_task_lexgion_record;
       task_codeptr = parallel_codeptr;
       task_record_id = enclosing_task_lexgion_record->record_id;
       lexgion_t * lgp = enclosing_task_lexgion_record->lgp;
       lexgion_set_trace_bit(lgp);
-      if (trace_bit) {
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -511,7 +498,7 @@ on_ompt_callback_implicit_task(
       }
       lexgion_t * lgp = lexgion_end(NULL);
       lgp->end_codeptr_ra = (void*)UNKNOWN_END_CODEPTR; //Sadly, it is unknow at this point since parallel_end happens after this event callback
-      if (trace_bit) {
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -541,31 +528,38 @@ on_ompt_callback_work(
         uint64_t count,
         const void *codeptr_ra)
 {
+  lexgion_record_t * record;
+  lexgion_t * lgp;
   switch(endpoint)
   {
     case ompt_scope_begin:
       if (codeptr_ra != parallel_codeptr && codeptr_ra != task_codeptr) {
         /* safety check for combined construct, such as parallel_for */
-        lexgion_record_t * record = lexgion_begin(OPENMP_LEXGION, ompt_callback_work, codeptr_ra);
-        lexgion_t *lgp = record->lgp;
+        record = lexgion_begin(OPENMP_LEXGION, ompt_callback_work, codeptr_ra, NULL);
+        lgp = record->lgp;
         lexgion_set_trace_bit(lgp);
-
-        if (trace_bit) {
+      } else { //combined construct with the parallel/task/team
+        fprintf(stderr, "The work_scope_begin lexgion codeptr is the same as enclosing parallel or task codeptr combined construct? %p", codeptr_ra);
+        record = (lexgion_record_t *)task_data->ptr;
+        if (record == enclosing_task_lexgion_record) {
+          fprintf(stderr, "The workshop begin lexgion record is the same as task lexgion record, combined  construct? %p", codeptr_ra);
+        }
+        lgp = record->lgp;
+      }
+        
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0) {
-            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-          }
+        if (global_thread_num == 0) {
+          rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+        }
 #endif
 #ifdef PINSIGHT_BACKTRACE
-          retrieve_backtrace();
+        retrieve_backtrace();
 #endif
-          lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_begin, (short) wstype, codeptr_ra, (void *) 0x000000, record->record_id,
+        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_begin, (short) wstype, codeptr_ra, (void *) 0x000000, record->record_id,
                      count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-        }
-      } else {
-        fprintf(stderr, "The work_scope_begin lexgion codeptr is the same as enclosing parallel or task codeptr, "
-                "something wrong. %p", codeptr_ra);
       }
+        
       switch(wstype) {
          case ompt_work_loop:
            break;
@@ -588,28 +582,33 @@ on_ompt_callback_work(
        * of the lexgion as index, thus here we need to retrieve back the beginning address */
       ;
       unsigned int record_id;
-      lexgion_t *lgp = lexgion_end(&record_id);
-      lgp->end_codeptr_ra = codeptr_ra;
       if (lgp->codeptr_ra != parallel_codeptr && lgp->codeptr_ra != task_codeptr) {/* safety check */
-        if (trace_bit) {
+        lgp = lexgion_end(&record_id);
+        lgp->end_codeptr_ra = codeptr_ra;
+      } else { //combined construct with the parallel/task/team
+        fprintf(stderr, "The work_scope_end lexgion codeptr is the same as enclosing parallel or task codeptr combined construct? %p", codeptr_ra);
+        record = (lexgion_record_t *)task_data->ptr;
+        if (record == enclosing_task_lexgion_record) {
+          fprintf(stderr, "The work_scope_end lexgion record is the same as task lexgion record, combined  construct? %p", codeptr_ra);
+        }
+        lgp = record->lgp;
+        record_id = record->record_id;
+      }
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0) {
-            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-          }
+        if (global_thread_num == 0) {
+          rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+        }
 #endif
 #ifdef PINSIGHT_BACKTRACE
-          retrieve_backtrace();
+        retrieve_backtrace();
 #endif
-          lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_end, (short) wstype, lgp->codeptr_ra, codeptr_ra, record_id,
+        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_end, (short) wstype, lgp->codeptr_ra, codeptr_ra, record_id,
                      count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-          lexgion_post_trace_update(lgp);
-        }
-      } else {
-        fprintf(stderr, "The work_scope_end lexgion codeptr is the same as enclosing parallel or task codeptr, "
-                "something wrong. %p", codeptr_ra);
+        lexgion_post_trace_update(lgp);
       }
       break;
-  }
+    }
 }
 
 static void
@@ -622,10 +621,10 @@ on_ompt_callback_masked(
   switch(endpoint)
   {
     case ompt_scope_begin:
-      ;lexgion_record_t * record = lexgion_begin(OPENMP_LEXGION, ompt_callback_masked, codeptr_ra);
+      ;lexgion_record_t * record = lexgion_begin(OPENMP_LEXGION, ompt_callback_masked, codeptr_ra, NULL);
       lexgion_t *lgp = record->lgp;
       lexgion_set_trace_bit(lgp);
-      if (trace_bit) {
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -644,7 +643,7 @@ on_ompt_callback_masked(
       lgp = lexgion_end(&record_id);
       lgp->end_codeptr_ra = codeptr_ra;
 
-      if (trace_bit) {
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -676,18 +675,19 @@ on_ompt_callback_sync_region(
         ompt_data_t *parallel_data,
         ompt_data_t *task_data,
         const void *codeptr_ra) {
-  unsigned int record_id = 0;
+  lexgion_record_t * record = (lexgion_record_t *)task_data->ptr;
+  lexgion_t *lgp = record->lgp;
   switch(endpoint) {
     case ompt_scope_begin: {
         switch (kind) {
 #if COMPLETE_OPENMPRUNTIME_IMPLEMENTATION_4_BARRIER //until we have a runtime that fully support this as defined in the standard
             case ompt_sync_region_barrier_implicit_parallel:
             case ompt_sync_region_barrier_teams:
-            	printf("sync_region: codeptr: %p, parallel_code_ptr: %p, thread num: %d, trace_bit: %d\n", codeptr_ra, parallel_codeptr, global_thread_num, trace_bit);
+            	  printf("sync_region: codeptr: %p, parallel_code_ptr: %p, thread num: %d, trace_bit: %d\n", codeptr_ra, parallel_codeptr, global_thread_num, trace_bit);
                 if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
                     /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
                      * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-                    if (trace_bit) {
+                    if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -699,28 +699,22 @@ on_ompt_callback_sync_region(
                 }
                 break;
             case ompt_sync_region_barrier_explicit: //barrier (explicit)
-            	printf("sync_region: codeptr: %p, parallel_code_ptr: %p, thread num: %d, trace_bit: %d\n", codeptr_ra, parallel_codeptr, global_thread_num, trace_bit);
-                ;lexgion_record_t * barrier_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_sync_region, codeptr_ra);
-                record_id = barrier_record->record_id;
-                lexgion_t *lgp = barrier_record->lgp;
-                lexgion_set_trace_bit(lgp);
-                if (trace_bit) {
+                if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                     if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
 #ifdef PINSIGHT_BACKTRACE
                     retrieve_backtrace();
 #endif
-                    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_begin, (unsigned short) kind, codeptr_ra, record_id
+                    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_begin, (unsigned short) kind, codeptr_ra
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                 }
                 break;
             case ompt_sync_region_barrier_implementation:
             case ompt_sync_region_barrier_implicit_workshare:
-            	printf("sync_region: codeptr: %p, parallel_code_ptr: %p, thread num: %d, trace_bit: %d\n", codeptr_ra, parallel_codeptr, global_thread_num, trace_bit);
                 /* implicit barrier in worksharing, single, sections, and explicit barrier */
                 /* each thread will have a lexgion object for the same lexgion */
-                if (trace_bit) {
+                if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                     if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -742,23 +736,19 @@ on_ompt_callback_sync_region(
                 if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
                       /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
                        * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-                      if (trace_bit) {
+                      if (lgp->trace_bit) {
   #ifdef PINSIGHT_ENERGY
-                          if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
   #endif
 #ifdef PINSIGHT_BACKTRACE
-                          retrieve_backtrace();
+                         retrieve_backtrace();
 #endif
-                          lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_begin, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_begin, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                       }
                   } else {
                       /* implicit barrier in worksharing, single, sections, and explicit barrier */
                       /* each thread will have a lexgion object for the same lexgion */
-                      ;lexgion_record_t * barrier_record = lexgion_begin(OPENMP_LEXGION, ompt_callback_sync_region, codeptr_ra);
-                      record_id = barrier_record->record_id;
-                      lexgion_t *lgp = barrier_record->lgp;
-                      lexgion_set_trace_bit(lgp);
-                      if (trace_bit) {
+                      if (lgp->trace_bit) {
   #ifdef PINSIGHT_ENERGY
                           if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
   #endif
@@ -789,7 +779,7 @@ on_ompt_callback_sync_region(
                     /* this is NOT the actual join_end since by the time sycn region terminates, a thread may already
                      * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
                      * when a thread is about to enter into a new parallel region and start an implicit task */
-                    if (trace_bit) {
+                    if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -801,31 +791,24 @@ on_ompt_callback_sync_region(
                 }
                 break;
             case ompt_sync_region_barrier_explicit: //barrier (explicit)
-                ;lexgion_t *lgp = lexgion_end(&record_id);
-                lgp->end_codeptr_ra = codeptr_ra;
-                if (trace_bit) {
+                if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
-                    if (global_thread_num == 0) {
-                        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-                    }
+                    if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
 #ifdef PINSIGHT_BACKTRACE
                     retrieve_backtrace();
 #endif
-                    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_end, (unsigned short) kind, codeptr_ra, record_id
+                    lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_end, (unsigned short) kind, codeptr_ra
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-                    lexgion_post_trace_update(lgp);
                 }
                 break;
             case ompt_sync_region_barrier_implementation:
             case ompt_sync_region_barrier_implicit_workshare:
                 /* implicit barrier in worksharing, single, sections, and explicit barrier */
                 /* each thread will have a lexgion object for the same lexgion */
-                if (trace_bit) {
+                if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
-                    if (global_thread_num == 0) {
-                        rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-                    }
+                    if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
 #ifdef PINSIGHT_BACKTRACE
                     retrieve_backtrace();
@@ -843,40 +826,35 @@ on_ompt_callback_sync_region(
             case ompt_sync_region_barrier_implicit_parallel:
             case ompt_sync_region_barrier_teams:
             	   if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
-            	                    /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
-            	                     * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-            	                    /* this is NOT the actual join_end since by the time sycn region terminates, a thread may already
-            	                     * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
-            	                     * when a thread is about to enter into a new parallel region and start an implicit task */
-            	                    if (trace_bit) {
-            	#ifdef PINSIGHT_ENERGY
-            	                        if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-            	#endif
-#ifdef PINSIGHT_BACKTRACE
-                                        retrieve_backtrace();
+            	       /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
+            	        * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
+            	       /* this is NOT the actual join_end since by the time sycn region terminates, a thread may already
+            	        * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
+            	        * when a thread is about to enter into a new parallel region and start an implicit task */
+            	       if (lgp->trace_bit) {
+#ifdef PINSIGHT_ENERGY
+                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
-            	                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-            	                    }
-            	                } else {
-            	                    /* implicit barrier in worksharing, single, sections, and explicit barrier */
-            	                    /* each thread will have a lexgion object for the same lexgion */
-            	                    ;lexgion_t *lgp = lexgion_end(&record_id);
-            	                    lgp->end_codeptr_ra = codeptr_ra;
-            	                    if (trace_bit) {
-            	    #ifdef PINSIGHT_ENERGY
-            	                        if (global_thread_num == 0) {
-            	                            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-            	                        }
-            	    #endif
 #ifdef PINSIGHT_BACKTRACE
-                                        retrieve_backtrace();
+                         retrieve_backtrace();
 #endif
-            	                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_end, (unsigned short) kind, codeptr_ra
-            	                                       ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-            	                        lexgion_post_trace_update(lgp);
-            	                    }
-            	                }
-            	                break;
+                         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+            	       }
+            	   } else {
+            	       /* implicit barrier in worksharing, single, sections, and explicit barrier */
+            	       /* each thread will have a lexgion object for the same lexgion */
+            	       if (lgp->trace_bit) {
+#ifdef PINSIGHT_ENERGY
+                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+#endif
+#ifdef PINSIGHT_BACKTRACE
+                         retrieve_backtrace();
+#endif
+                         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_end, (unsigned short) kind, codeptr_ra
+                                   ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+            	       }
+            	   }
+            	   break;
 #endif
             case ompt_sync_region_taskwait:
             case ompt_sync_region_taskgroup:
@@ -895,8 +873,8 @@ on_ompt_callback_sync_region_wait(
         ompt_data_t *parallel_data,
         ompt_data_t *task_data,
         const void *codeptr_ra) {
-	lexgion_record_t * record = top_lexgion(); //this could be either the region that contains the implicit barrier or the explicit barrier
-	unsigned int record_id = record->record_id;
+  lexgion_record_t * record = (lexgion_record_t *)task_data->ptr;
+  lexgion_t *lgp = record->lgp;
     switch(endpoint) {
         case ompt_scope_begin: {
             switch (kind) {
@@ -906,7 +884,7 @@ on_ompt_callback_sync_region_wait(
                     if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) { //safety check
                         /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
                          * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-                        if (trace_bit) {
+                        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                             if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -915,11 +893,11 @@ on_ompt_callback_sync_region_wait(
                     }
                     break;
                 case ompt_sync_region_barrier_explicit: //barrier (explicit)
-                    if (trace_bit) {
+                    if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
-                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_wait_begin, (unsigned short) kind, codeptr_ra, record_id
+                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_wait_begin, (unsigned short) kind, codeptr_ra
                                    ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                     }
                     break;
@@ -946,7 +924,7 @@ on_ompt_callback_sync_region_wait(
                     if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
                         /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
                          * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-                        if (trace_bit) {
+                        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                             if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -955,7 +933,7 @@ on_ompt_callback_sync_region_wait(
                     } else {
                         /* implicit barrier in worksharing, single, sections, and explicit barrier */
                         /* each thread will have a lexgion object for the same lexgion in the sync_wait callback */
-                        if (trace_bit) {
+                        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                             if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -983,7 +961,7 @@ on_ompt_callback_sync_region_wait(
                         /* this is NOT the actual join_end since by the time sync region terminates, a thread may already
                          * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
                          * when a thread is about to enter into a new parallel region and start an implicit task */
-                        if (trace_bit) {
+                        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                             if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
 #endif
@@ -992,13 +970,13 @@ on_ompt_callback_sync_region_wait(
                     }
                     break;
                 case ompt_sync_region_barrier_explicit: //barrier (explicit)
-                    if (trace_bit) {
+                    if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) {
                             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
                         }
 #endif
-                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_wait_end, (unsigned short) kind, codeptr_ra, record_id
+                        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_wait_end, (unsigned short) kind, codeptr_ra
                                        ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
                     }
                     break;
@@ -1006,7 +984,7 @@ on_ompt_callback_sync_region_wait(
                 case ompt_sync_region_barrier_implicit_workshare:
                     /* implicit barrier in worksharing, single, sections, and explicit barrier */
                     /* each thread will have a lexgion object for the same lexgion */
-                    if (trace_bit) {
+                    if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
                         if (global_thread_num == 0) {
                             rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -1025,31 +1003,31 @@ on_ompt_callback_sync_region_wait(
             case ompt_sync_region_barrier_implicit_parallel:
             case ompt_sync_region_barrier_teams:
             	if (codeptr_ra == NULL || parallel_codeptr == codeptr_ra) {
-            	                        /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
-            	                         * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
-            	                        /* this is NOT the actual join_end since by the time sycn region terminates, a thread may already
-            	                         * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
-            	                         * when a thread is about to enter into a new parallel region and start an implicit task */
-            	                        if (trace_bit) {
-            	#ifdef PINSIGHT_ENERGY
-            	                            if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-            	#endif
-            	                            lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_wait_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-            	                        }
-            	                    } else {
-            	                        /* implicit barrier in worksharing, single, sections, and explicit barrier */
-            	                        /* each thread will have a lexgion object for the same lexgion */
-            	                        if (trace_bit) {
-            	#ifdef PINSIGHT_ENERGY
-            	                            if (global_thread_num == 0) {
-            	                                rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-            	                            }
-            	#endif
-            	                            lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_wait_end, (unsigned short) kind, codeptr_ra
-            	                                       ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-            	                        }
-            	                    }
-            	                    break;
+            	    /* this is the join barrier for the parallel region: if codeptr_ra == NULL: non-master thread;
+            	     * if parallel_lgp->codeptr_ra == codeptr_ra: master thread */
+            	    /* this is NOT the actual join_end since by the time sycn region terminates, a thread may already
+            	     * finish join_end, waiting in the pool and then resummoned for doing the work, so this is actually
+            	     * when a thread is about to enter into a new parallel region and start an implicit task */
+            	    if (lgp->trace_bit) {
+#ifdef PINSIGHT_ENERGY
+            	        if (global_thread_num == 0) rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+#endif
+            	        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_wait_end, 0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+            	    }
+            	} else {
+            	    /* implicit barrier in worksharing, single, sections, and explicit barrier */
+            	    /* each thread will have a lexgion object for the same lexgion */
+            	    if (lgp->trace_bit) {
+#ifdef PINSIGHT_ENERGY
+            	        if (global_thread_num == 0) {
+            	            rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+            	        }
+#endif
+            	        lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_wait_end, (unsigned short) kind, codeptr_ra
+            	                               ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+            	    }
+              }
+            	break;
 #endif
                 case ompt_sync_region_taskwait:
                 case ompt_sync_region_taskgroup:

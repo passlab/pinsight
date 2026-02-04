@@ -10,8 +10,8 @@ set(PINSIGHT_VERSION_MAJOR 0)
 set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
-option(PINSIGHT_OPENMP       "Build with OpenMP support"       FALSE)
-option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
+option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
+option(PINSIGHT_MPI          "Build with MPI support"          TRUE)
 option(PINSIGHT_CUDA         "Build with CUDA support"         FALSE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
@@ -27,6 +27,7 @@ set(SOURCE_FILES
         src/bitset.c
         src/bitset.h
         src/trace_config.c
+    src/trace_config_parse.c
         src/trace_config.h
         src/trace_domain_dsl.h
         src/trace_domain_loader.h
@@ -56,7 +57,7 @@ endif()
 
 ## MPI implementation supporting PMPI
 if (PINSIGHT_MPI)
-#    find_package(MPI REQUIRED)
+    find_package(MPI REQUIRED)
     include_directories(${MPI_C_INCLUDE_PATH} ${MPI_CXX_INCLUDE_PATH})
     #list(APPEND PINSIGHT_EXTERNAL_LIBS ${MPI_C_LIBRARIES} ${MPI_CXX_LIBRARIES})
     list(APPEND SOURCE_FILES
@@ -150,3 +151,11 @@ else()
     message("Build with GNU BACKTRACE SUPPORT:  FALSE")
 endif()
 message("============================================================")
+add_executable(test_config_parser 
+    src/test_config_parser.c
+    src/trace_config_parse.c
+    src/trace_config.c
+    src/bitset.c
+    src/trace_domain_loader.c
+)
+target_link_libraries(test_config_parser ${CMAKE_DL_LIBS})

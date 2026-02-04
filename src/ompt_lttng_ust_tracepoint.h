@@ -34,9 +34,6 @@ extern __thread const void * task_codeptr;
 extern __thread unsigned int task_record_id;
 #endif
 
-extern const char OPENMP_DOMAIN_NAME[];
-extern const char* OPENMP_DOMAIN_PUNIT[];
-
 /** Macros used to simplify the definition of LTTNG_UST_TRACEPOINT_EVENT */
 //COMMON_LTTNG_UST_TP_FIELDS_OMPT are those fields in the thread-local storage. These fields will be added to all the trace records
 #if defined(PINSIGHT_MPI)
@@ -220,15 +217,13 @@ LTTNG_UST_TRACEPOINT_EVENT_OMPT_MASKED(masked_end)
         ompt_pinsight_lttng_ust, event_name,                                            \
         LTTNG_UST_TP_ARGS(                                                               \
             unsigned short,    kind,                                     \
-            const void *,  sync_codeptr,                                          \
-            unsigned int,  record_id            \
+            const void *,  sync_codeptr                                          \
             ENERGY_LTTNG_UST_TP_ARGS                                                      \
         ),                                                                     \
         LTTNG_UST_TP_FIELDS(                                                             \
             COMMON_LTTNG_UST_TP_FIELDS_OMPT                                                    \
             lttng_ust_field_integer(unsigned short, kind, kind)      \
             lttng_ust_field_integer_hex(unsigned long int, sync_codeptr, sync_codeptr)                  \
-            lttng_ust_field_integer(unsigned int, record_id, record_id)                 \
             ENERGY_LTTNG_UST_TP_FIELDS                                                \
         )                                                                      \
     )

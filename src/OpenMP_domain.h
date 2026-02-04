@@ -11,7 +11,7 @@
 
 extern int OpenMP_domain_index;
 extern domain_info_t *OpenMP_domain_info;
-extern trace_config_t *OpenMP_trace_config;
+extern domain_trace_config_t *OpenMP_trace_config;
 
 /* --- 1. DSL BLOCK: OpenMP domain definition (data only) --- */
 
@@ -39,70 +39,57 @@ extern trace_config_t *OpenMP_trace_config;
                                                           \
         /* [OpenMP(task)] */                              \
         TRACE_SUBDOMAIN_BEGIN("task")                     \
-            TRACE_EVENT(ompt_callback_task_create, "omp_task_create",    0)      \
-            TRACE_EVENT(ompt_callback_task_schedule, "omp_task_schedule",  0)      \
+            TRACE_EVENT(ompt_callback_task_create, "omp_task_create",    1)      \
+            TRACE_EVENT(ompt_callback_task_schedule, "omp_task_schedule",  1)      \
             TRACE_EVENT(ompt_callback_implicit_task, "omp_implicit_task",   0)      \
+            TRACE_EVENT(ompt_callback_dependences, "omp_dependences",   0)      \
+            TRACE_EVENT(ompt_callback_task_dependence, "omp_task_dependence",   0)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(workshare)] */                         \
         TRACE_SUBDOMAIN_BEGIN("workshare")                \
-            TRACE_EVENT( 8, "omp_loop_begin",     0)      \
-            TRACE_EVENT( 9, "omp_loop_end",       0)      \
-                                                          \
-            TRACE_EVENT(10, "omp_section_begin",  0)      \
-            TRACE_EVENT(11, "omp_section_end",    0)      \
-                                                          \
-            TRACE_EVENT(12, "omp_master_begin",   1)      \
-            TRACE_EVENT(13, "omp_master_end",     1)      \
-                                                          \
-            TRACE_EVENT(14, "omp_single_begin",   0)      \
-            TRACE_EVENT(15, "omp_single_end",     0)      \
+            TRACE_EVENT(ompt_callback_work, "omp_work",     1)      \
+            TRACE_EVENT(ompt_callback_dispatch, "omp_dispatch",     0)      \
+            TRACE_EVENT(ompt_callback_reduction, "omp_reduction",     0)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
-        /* [OpenMP(barrier)] */                           \
-        TRACE_SUBDOMAIN_BEGIN("barrier")                  \
-            TRACE_EVENT(16, "omp_barrier_begin",  0)      \
-            TRACE_EVENT(17, "omp_barrier_end",    0)      \
+        /* [OpenMP(sync)] */                           \
+        TRACE_SUBDOMAIN_BEGIN("sync")                  \
+            TRACE_EVENT(ompt_callback_sync_region_wait, "omp_sync_region_wait",  1)      \
+            TRACE_EVENT(ompt_callback_sync_region, "omp_sync_region",    1)      \
+            TRACE_EVENT(ompt_callback_masked, "omp_masked",    1)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(critical)] */                          \
         TRACE_SUBDOMAIN_BEGIN("critical")                 \
-            TRACE_EVENT(18, "omp_critical_begin", 0)      \
-            TRACE_EVENT(19, "omp_critical_end",   0)      \
-            TRACE_EVENT(20, "omp_lock_init",      0)      \
-            TRACE_EVENT(21, "omp_lock_destroy",   0)      \
-            TRACE_EVENT(22, "omp_lock_acquire",   0)      \
-            TRACE_EVENT(23, "omp_lock_release",   0)      \
-        TRACE_SUBDOMAIN_END()                             \
-                                                          \
-        /* [OpenMP(atomic)] */                            \
-        TRACE_SUBDOMAIN_BEGIN("atomic")                   \
-            TRACE_EVENT(24, "omp_atomic_begin",   0)      \
-            TRACE_EVENT(25, "omp_atomic_end",     0)      \
+            TRACE_EVENT(ompt_callback_mutex_acquire, "omp_mutex_acquire", 0)      \
+            TRACE_EVENT(ompt_callback_mutex_acquired, "omp_mutex_acquired",   0)      \
+            TRACE_EVENT(ompt_callback_mutex_released, "omp_mutex_released",      0)      \
+            TRACE_EVENT(ompt_callback_lock_init, "omp_lock_init",   0)      \
+            TRACE_EVENT(ompt_callback_lock_destroy, "omp_lock_destroy",   0)      \
+            TRACE_EVENT(ompt_callback_nest_lock, "omp_nest_lock",   0)      \
+            TRACE_EVENT(ompt_callback_flush, "omp_flush",   0)      \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(target)] */                            \
         TRACE_SUBDOMAIN_BEGIN("target")                   \
-            TRACE_EVENT(26, "omp_target_begin",        0) \
-            TRACE_EVENT(27, "omp_target_end",          0) \
-            TRACE_EVENT(28, "omp_target_data_begin",   0) \
-            TRACE_EVENT(29, "omp_target_data_end",     0) \
-            TRACE_EVENT(30, "omp_target_update_begin", 0) \
-            TRACE_EVENT(31, "omp_target_update_end",   0) \
-            TRACE_EVENT(32, "omp_taskgroup_begin",     0) \
-            TRACE_EVENT(33, "omp_taskgroup_end",       0) \
-        TRACE_SUBDOMAIN_END()                             \
-                                                          \
-        /* [OpenMP(reduction)] */                         \
-        TRACE_SUBDOMAIN_BEGIN("reduction")                \
-            TRACE_EVENT(34, "omp_reduction_begin", 0)     \
-            TRACE_EVENT(35, "omp_reduction_end",   0)     \
+            TRACE_EVENT(ompt_callback_target, "omp_target",        0) \
+            TRACE_EVENT(ompt_callback_target_data_op, "omp_target_data_op",          0) \
+            TRACE_EVENT(ompt_callback_device_initialize, "omp_device_initialize",   0) \
+            TRACE_EVENT(ompt_callback_device_finalize, "omp_device_finalize",     0) \
+            TRACE_EVENT(ompt_callback_device_load, "omp_device_load", 0) \
+            TRACE_EVENT(ompt_callback_device_unload, "omp_device_unload",   0) \
+            TRACE_EVENT(ompt_callback_target_emi, "omp_target_emi",     0) \
+            TRACE_EVENT(ompt_callback_target_data_op_emi, "omp_target_data_op_emi",       0) \
+            TRACE_EVENT(ompt_callback_target_submit_emi, "omp_target_submit_emi",       0) \
+            TRACE_EVENT(ompt_callback_target_map_emi, "omp_target_map_emi",       0) \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
         /* [OpenMP(others)] */                            \
         TRACE_SUBDOMAIN_BEGIN("others")                   \
-            TRACE_EVENT(36, "omp_flush",           0)     \
-            TRACE_EVENT(37, "omp_cancel",          0)     \
+            TRACE_EVENT(ompt_callback_cancel, "omp_cancel",          0)     \
+            TRACE_EVENT(ompt_callback_error, "omp_error",          0)     \
+            TRACE_EVENT(ompt_callback_control_tool, "omp_control_tool",          0)     \
         TRACE_SUBDOMAIN_END()                             \
                                                           \
     TRACE_DOMAIN_END()
@@ -145,7 +132,7 @@ static inline struct domain_info *register_OpenMP_trace_domain(void)
 
     /* Return pointer to this domain */
     OpenMP_domain_info = &domain_info_table[OpenMP_domain_index];
-    OpenMP_trace_config = &trace_config[OpenMP_domain_index];
+    OpenMP_trace_config = &domain_trace_config[OpenMP_domain_index];
     return OpenMP_domain_info;
 }
 

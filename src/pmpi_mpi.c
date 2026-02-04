@@ -27,7 +27,7 @@ int mpirank = 0;
 __thread void * mpi_codeptr = NULL;
 int MPI_domain_index;
 domain_info_t *MPI_domain_info;
-trace_config_t *MPI_trace_config;
+domain_trace_config_t *MPI_trace_config;
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
@@ -99,12 +99,12 @@ typedef enum MPI_LEXGION_type {
  */
 #define PMPI_CALL_PROLOGUE(MPI_FUNC, ...)                                 \
     mpi_codeptr = __builtin_return_address(0);                          \
-    lexgion_record_t * record = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);          \
+    lexgion_record_t * record = lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr, NULL);          \
     lexgion_t * lgp = record->lgp;                                              \
     lgp->num_exes_after_last_trace ++;                                              \
                                                                                         \
     lexgion_set_trace_bit(lgp);                                                     \
-    if (trace_bit) {                                                                \
+    if (lgp->trace_bit) {                                                                \
         lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_begin,  __VA_ARGS__);   \
     }
 
@@ -112,7 +112,7 @@ typedef enum MPI_LEXGION_type {
     lexgion_end(NULL);                                                              \
     lgp->end_codeptr_ra = mpi_codeptr;                                               \
                                                                                         \
-    if (trace_bit) {                                                                \
+    if (lgp->trace_bit) {                                                                \
         lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_end, __VA_ARGS__);   \
         lexgion_post_trace_update(lgp);                                             \
     }
