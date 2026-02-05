@@ -1,15 +1,15 @@
 [OpenMP.default]
     OpenMP.team = (0-4)
-    OpenMP.thread = (0-15)
+    OpenMP.thread = (0, 15)
 	OpenMP.device = (0-3)
 	omp_task_create = off
 	omp_task_schedule = off
 
 [MPI.default]
-	MPI.rank(0-3)
+	MPI.rank = (0-3)
 
 [CUDA.default]
-	CUDA.device(0-3)
+	CUDA.device = (0-3)
 	CUDA_kernel_launch  = on
 	CUDA_memcpy = on
 

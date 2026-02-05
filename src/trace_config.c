@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include "pinsight_config.h"
@@ -131,22 +132,41 @@ __attribute__ ((constructor)) void initial_lexgion_trace_config() {
     //print_lexgion_trace_config();
 }
 
-void setup_trace_config() {
-	int i;
-	for (i = 0; i < num_domain; i++) {
-		domain_trace_config[i].events = domain_info_table[i].eventInstallStatus;
-		domain_trace_config[i].punit_trace_config = NULL;
-		if (domain_trace_config[i].events) {
-			domain_trace_config[i].set = 1;
-		} else {
-			domain_trace_config[i].set = 0;
-		}
-	}
+void setup_trace_config_file() {
     char *env_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
     if (env_file) {
         parse_trace_config_file(env_file);
-    } else {
-        parse_trace_config_file("pinsight_trace_config.txt");
+    } 
+}
+
+void setup_trace_config_env() {
+    // 1. Override Domain Defaults
+    for (int i = 0; i < num_domain; i++) {
+        char env_var[256];
+        struct domain_info *d = &domain_info_table[i];
+        
+        // Construct PINSIGHT_TRACE_<DOMAIN>
+        snprintf(env_var, sizeof(env_var), "PINSIGHT_TRACE_%s", d->name);
+        // Convert to uppercase
+        for(int j=0; env_var[j]; j++) env_var[j] = toupper((unsigned char)env_var[j]);
+
+        char *val = getenv(env_var);
+        if (val) {
+            int enable = (strcasecmp(val, "TRUE") == 0 || strcmp(val, "1") == 0);
+            domain_trace_config[i].set = enable;
+            domain_trace_config[i].set = enable;
+        }
+    }
+
+    // 2. Override Lexgion Rate
+    // PINSIGHT_TRACE_RATE=trace_starts_at:max_num_traces:tracing_rate
+    char *rate_env = getenv("PINSIGHT_TRACE_RATE");
+    if (rate_env) {
+        int start = 0, max = 0, rate = 0;
+        int count = sscanf(rate_env, "%d:%d:%d", &start, &max, &rate);
+        if (count >= 1) lexgion_trace_config[0].trace_starts_at = start;
+        if (count >= 2) lexgion_trace_config[0].max_num_traces = max;
+        if (count >= 3) lexgion_trace_config[0].tracing_rate = rate;
     }
 }
 
@@ -161,8 +181,27 @@ __attribute__ ((constructor)) void initial_setup_trace_config() {
 #ifdef PINSIGHT_CUDA
     //TODO: Also need runtime check
     register_CUDA_trace_domain();
-#endif	
-	setup_trace_config();
+#endif
+	// Initialize the default domain trace configs by copying from domain_info_table that has the installed events
+	int i;
+	for (i = 0; i < num_domain; i++) {
+		domain_trace_config[i].events = domain_info_table[i].eventInstallStatus;
+		domain_trace_config[i].punit_trace_config = NULL;
+		if (domain_trace_config[i].events) {
+			domain_trace_config[i].set = 1;
+		} else {
+			domain_trace_config[i].set = 0;
+		}
+	}
+
+	// Initialize the default lexgion trace config
+	lexgion_trace_config[0].codeptr = NULL;
+	lexgion_trace_config[0].tracing_rate = 1; //trace every execution
+	lexgion_trace_config[0].trace_starts_at = 0; //start tracing from the first execution	
+	lexgion_trace_config[0].max_num_traces = -1; //unlimited traces
+
+	setup_trace_config_file();
+    setup_trace_config_env();
 }
 
 

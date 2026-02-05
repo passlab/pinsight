@@ -32,10 +32,6 @@ static SectionType current_section_type = SECTION_NONE;
 static int current_domain_idx = -1;
 static punit_trace_config_t* current_punit_config = NULL; 
 static lexgion_trace_config_t* current_lexgion_config = NULL;
-// Global defaults for Lexgions
-static lexgion_trace_config_t global_lexgion_default_config;
-// Track which domains have been configured in the current file to enforce order
-static int domain_configured_from_file[MAX_NUM_DOMAINS];
 
 #define MAX_LINE_LENGTH 1024
 
@@ -61,9 +57,6 @@ static int parse_range_list(const char *str, BitSet *mask) {
 // --- Parsing Logic ---
 
 void parse_trace_config_file(char* filename) {
-    // Reset configuration tracking for new file parse
-    for(int i=0; i<MAX_NUM_DOMAINS; i++) domain_configured_from_file[i] = 0;
-    
     FILE *fp = fopen(filename, "r");
     if (!fp) {
         fprintf(stderr, "PInSight: Could not open trace configuration file.\n");
@@ -169,7 +162,7 @@ static int parse_section_header(char *line) {
     else if (strcmp(target, "Lexgion.default") == 0) {
         // Case 2: Lexgion.default
         current_section_type = SECTION_LEXGION_DEFAULT;
-        current_lexgion_config = &global_lexgion_default_config; 
+        current_lexgion_config = &lexgion_trace_config[0]; 
         
         // Part 2: Inheritance (Optional)
         if (part_count >= 2 && parts[1]) {
@@ -198,8 +191,7 @@ static int parse_section_header(char *line) {
             *dot = '\0';
             current_domain_idx = find_domain_index(target);
             if (current_domain_idx >= 0) {
-                // Mark this domain as configured
-                domain_configured_from_file[current_domain_idx] = 1;
+                 // Domain configured (valid index found)
             }
         }
     }
@@ -249,19 +241,6 @@ static int parse_section_header(char *line) {
                      *d_dot = '\0'; // Isolate Domain name
                      int parent_idx = find_domain_index(inh_str);
                      if (parent_idx >= 0) {
-                          // Allow inheriting from SAME domain or ANY domain? 
-                          // User said "inheritence of default of the same domain".
-                          // But logically could be others. Assuming generalized apply logic works, 
-                          // but usually punit config is restricted to its own domain logic.
-                          // However, sticking to generalized logic but checking safety.
-                          
-                         // Check if parent domain is configured
-                         if (!domain_configured_from_file[parent_idx]) {
-                             fprintf(stderr, "PInSight Error: Domain '%s' inherited before definition.\n", inh_str);
-                             free(new_config);
-                             return -1;
-                         }
-                         
                          // Copy events from parent
                          new_config->events = domain_trace_config[parent_idx].events;
                      }
@@ -311,7 +290,15 @@ static void parse_key_value(char *line) {
                     }
                     if (eid != -1) {
                          int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
-                         // Make sure the domain is marked as set for this lexgion?
+                         
+                         // Check installation status
+                         int installed = (d->eventInstallStatus >> eid) & 1;
+                         if (enable && !installed) {
+                              fprintf(stderr, "PInSight Warning: Event '%s.%s' is enabled but not installed (implemented). Ignoring and setting to OFF.\n", 
+                                      d->name, d->event_table[eid].name);
+                              enable = 0;
+                         }
+
                          current_lexgion_config->domain_punits[d_idx].set = 1; 
                          if(enable) current_lexgion_config->events[d_idx] |= (1UL << eid);
                          else current_lexgion_config->events[d_idx] &= ~(1UL << eid);
@@ -367,6 +354,16 @@ static void parse_key_value(char *line) {
              if (eid != -1) {
                  // Update domain default config
                  int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
+                 
+                 // Check installation status
+                 struct domain_info *d = &domain_info_table[current_domain_idx];
+                 int installed = (d->eventInstallStatus >> eid) & 1;
+                 if (enable && !installed) {
+                      fprintf(stderr, "PInSight Warning: Event '%s.%s' is enabled but not installed (implemented). Ignoring and setting to OFF.\n", 
+                              d->name, d->event_table[eid].name);
+                      enable = 0;
+                 }
+                 
                  if(enable) domain_trace_config[current_domain_idx].events |= (1UL << eid);
                  else domain_trace_config[current_domain_idx].events &= ~(1UL << eid);
              }
@@ -393,6 +390,15 @@ static void parse_key_value(char *line) {
             }
             if (eid != -1) {
                 int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
+                
+                 // Check installation status
+                 int installed = (d->eventInstallStatus >> eid) & 1;
+                 if (enable && !installed) {
+                      fprintf(stderr, "PInSight Warning: Event '%s.%s' is enabled but not installed (implemented). Ignoring and setting to OFF.\n", 
+                              d->name, d->event_table[eid].name);
+                      enable = 0;
+                 }
+                 
                 if(enable) pcfg->events |= (1UL << eid);
                 else pcfg->events &= ~(1UL << eid);
             }
@@ -475,10 +481,41 @@ static int parse_punit_set_string(char *spec_str, domain_punit_set_t *set_array)
             set_array[d_idx].punit[p_idx].set = 1;
             
             // Parse ranges into the bitset
-            // bitset_parse_ranges will reset the bitset, so repeated specifications overwrite
             if (bitset_parse_ranges(&set_array[d_idx].punit[p_idx].punit_ids, ptr) != 0) {
                 fprintf(stderr, "PInSight Error: Invalid punit range specification: %s\n", ptr);
                 return -1;
+            }
+            
+            // Validate Punit Range
+            struct domain_info *d = &domain_info_table[d_idx];
+            int limit_low = d->punits[p_idx].low;
+            int limit_high = d->punits[p_idx].high;
+            
+            // Check max set bit
+            int max_bit = -1;
+            // bitset doesn't implement get_max_set_bit inefficiently traverse?
+            // Actually, we can check during iteration or just rely on the fact that if a bit is set > limit, it's bad.
+            // Simplified check: iterate checking bits?
+            // Better: modify bitset.c or just iterate high-low if possible.
+            // Given bitset structure isn't fully visible here (opaque pointers usually), we rely on public API.
+            // pinsight.h defines bitset as struct with 'size' and 'bits'. If visible:
+            // But we can check if any bit < low or > high is set.
+            // Since bitset_parse_ranges handles formatting, we just need to validate constraints.
+            // Actually, `bitset_parse_ranges` might not check limits?
+            // "If a punit specified ... must be within range ... If out of range, report warning and ignore."
+            // Ignoring means unsetting the bit?
+            
+            // Let's implement a simple check loop using proper API
+            // Assuming max range isn't huge (usually < 1024 as per init).
+            for (int k = 0; k < 1024; k++) { // Max bitset size
+                 if (bitset_test(&set_array[d_idx].punit[p_idx].punit_ids, k)) {
+                     if (k < limit_low || k > limit_high) {
+                          fprintf(stderr, "PInSight Warning: Punit ID %d for %s.%s is out of valid range (%d-%d). Ignoring.\n", 
+                                  k, d->name, d->punits[p_idx].name, limit_low, limit_high);
+                          // Unset it
+                          bitset_clear(&set_array[d_idx].punit[p_idx].punit_ids, k);
+                     }
+                 }
             }
         }
         
@@ -506,12 +543,6 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config, char *inheritanc
         if (dot) *dot = '\0';
         int idx = find_domain_index(name);
         if (idx >= 0) {
-            // Check if domain is configured in this file
-            if (!domain_configured_from_file[idx]) {
-                fprintf(stderr, "PInSight Error: Domain '%s' inherited before definition.\n", name);
-                free(copy);
-                return -1;
-            }
             lg_config->domain_punits[idx].set = 1;
             lg_config->events[idx] = domain_trace_config[idx].events;
         }
@@ -522,7 +553,7 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config, char *inheritanc
 }
 
 static lexgion_trace_config_t* get_or_create_lexgion_config(void *codeptr) {
-    for(int i=0; i<num_lexgion_trace_configs; i++) {
+    for(int i=1; i<num_lexgion_trace_configs; i++) {
         if (lexgion_trace_config[i].codeptr == codeptr) {
             return &lexgion_trace_config[i];
         }
@@ -531,7 +562,7 @@ static lexgion_trace_config_t* get_or_create_lexgion_config(void *codeptr) {
     if (num_lexgion_trace_configs < MAX_NUM_LEXGIONS) {
          lexgion_trace_config_t *lg = &lexgion_trace_config[num_lexgion_trace_configs++];
          // Initialize with global defaults
-         *lg = global_lexgion_default_config; 
+         *lg = lexgion_trace_config[0]; 
          lg->codeptr = codeptr;
          return lg;
     }

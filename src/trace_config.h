@@ -139,12 +139,10 @@ typedef struct lexgion_trace_config {
 	unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
     unsigned int max_num_traces;       //integer: total number of traces to be collected
     unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
-
-    void * codeptr;
-
-	struct lexgion_trace_config * next;  //The link list pointer to the next punit_trace_config of the same domain
+	void * codeptr;
 } lexgion_trace_config_t;
-extern lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
+
+extern lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS]; //lexgion_trace_config[0] is reserved for the default lexgion trace config
 extern int num_lexgion_trace_configs;
 
 //Data structure for storing domain info, event info, punit info
