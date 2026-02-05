@@ -343,49 +343,38 @@ void test_parsing() {
          }
     }
 
-    // 6. Verify Definition Before Inheritance Enforcement
-    // Create a bad config file
-    FILE *bad_fp = fopen("bad_order_config.txt", "w");
+    // --- Positive Test: Implicit Inheritance ---
+    // Create a config file where Lexgion inherits from OpenMP.default without OpenMP.default being defined in file
+    FILE *bad_fp = fopen("implicit_inh_config.txt", "w");
     if (bad_fp) {
-        // Lexgion uses OpenMP.default BEFORE OpenMP.default is defined
         fprintf(bad_fp, "[Lexgion(0x999999): OpenMP.default]\n");
-        fprintf(bad_fp, "[OpenMP.default]\n");
+        // No [OpenMP.default] section
         fclose(bad_fp);
     }
     
-    // We expect lexgion_trace_config_read_file to print error and maybe not add the lexgion fully or correctly?
-    // The implementation just stops parsing on error.
-    // So let's redirect stderr to silence it or capture it?
-    // For simplicity, just run it and check if the lexgion 0x999999 is NOT added or is in a weird state?
-    // Actually, the read_file function hardcodes filename list. We need to trick it or use a separate test?
-    // `lexgion_trace_config_read_file` loops over hardcoded names.
-    // We can just overwrite "trace_config.txt" with bad content, test, then restore?
-    
-    printf("\n--- Negative Test: Invalid Order ---\n");
-    // Reset global configured state? `lexgion_trace_config_read_file` resets `domain_configured_from_file`.
-    // But it doesn't reset `lexgion_trace_config` array.
-    
-    parse_trace_config_file("bad_order_config.txt");
+    printf("\n--- Positive Test: Implicit Inheritance ---\n");
+    parse_trace_config_file("implicit_inh_config.txt");
     
     // Check if 0x999999 is in list.
     int found_bad = 0;
     for(int i=0; i<num_lexgion_trace_configs; i++) {
         if (lexgion_trace_config[i].codeptr == (void*)(uintptr_t)0x999999) {
              found_bad = 1;
-             // Check events. If inheritance failed, they should be OFF (from Lexgion.default)
-             if (((lexgion_trace_config[i].events[omp_idx] >> 0) & 1)) {
-                 printf("[FAIL] Invalid Order allowed or events present unexpectedly. Events=%lx\n", lexgion_trace_config[i].events[omp_idx]);
+             // Check events. If implicit inheritance inheritance worked, they should be ON
+             // We know OpenMP default events are usually non-zero.
+             if (lexgion_trace_config[i].events[omp_idx] != 0) { 
+                 printf("[PASS] Implicit Inheritance Succeeded (used system defaults). Events=%lx\n", lexgion_trace_config[i].events[omp_idx]);
              } else {
-                 printf("[PASS] Invalid Order Rejected (Inheritance did not occur). Events=%lx\n", lexgion_trace_config[i].events[omp_idx]);
+                 printf("[FAIL] Implicit Inheritance Failed (Events are 0). Events=%lx\n", lexgion_trace_config[i].events[omp_idx]);
              }
         }
     }
     
     if(!found_bad) {
-         printf("[PASS] Invalid Order: Config might not even be fully registered (acceptable).\n"); 
+         printf("[FAIL] Lexgion 0x999999 not found after parsing.\n"); 
     }
     
-    unlink("bad_order_config.txt");
+    unlink("implicit_inh_config.txt");
 }
 
 int main() {
@@ -420,15 +409,7 @@ int main() {
     
     // Refresh trace_config.txt for tests
     system("cp src/trace_config_example.txt trace_config.txt 2>/dev/null || cp ../src/trace_config_example.txt trace_config.txt");
-    
-    // Copy file first because initial_domain_trace_config reads it immediately.
-    int ret = system("cp src/trace_config_example.txt pinsight_trace_config.txt 2>/dev/null");
-    if (ret != 0) {
-        ret = system("cp ../src/trace_config_example.txt pinsight_trace_config.txt");
-    }
-    if (ret != 0) printf("[WARN] Copy failed\n");
-
-    	int i;
+	int i;
 	for (i = 0; i < num_domain; i++) {
 		domain_trace_config[i].events = domain_info_table[i].eventInstallStatus;
 		domain_trace_config[i].punit_trace_config = NULL;
@@ -438,11 +419,57 @@ int main() {
 			domain_trace_config[i].set = 0;
 		}
 	}
+
+	// Initialize the default lexgion trace config
+	lexgion_trace_config[0].codeptr = NULL;
+	lexgion_trace_config[0].tracing_rate = 1; //trace every execution
+	lexgion_trace_config[0].trace_starts_at = 0; //start tracing from the first execution	
+	lexgion_trace_config[0].max_num_traces = -1; //unlimited traces
     char *env_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
     if (env_file) {
         parse_trace_config_file(env_file);
     } else {
         parse_trace_config_file("pinsight_trace_config.txt");
+    }
+
+    // Call env override manually for testing since initial_setup_trace_config (constructor) ran before we set env vars
+    // In real usage, env vars are set before program start.
+    // Here we simulate it.
+    
+    printf("\n--- Test: Env Var Overrides ---\n");
+    // 1. Force Disable MPI (assume it was enabled by default or file)
+    setenv("PINSIGHT_TRACE_MPI", "FALSE", 1);
+    // 2. Set Rate
+    setenv("PINSIGHT_TRACE_RATE", "10:100:5", 1);
+    
+    // Call the function we just implemented (it's in another file, need declaration or extern)
+    extern void setup_trace_config_env();
+    setup_trace_config_env();
+    
+    // Verify MPI disabled
+    // Find MPI domain index
+    int mpi_idx = -1;
+    for(int k=0; k<num_domain; k++) {
+        if(strcmp(domain_info_table[k].name, "MPI")==0) mpi_idx = k;
+    }
+    
+    if (mpi_idx >=0) {
+        if (domain_trace_config[mpi_idx].set == 0) printf("[PASS] Env Var Disabled MPI\n");
+        else printf("[FAIL] Env Var Failed to Disable MPI (Set=%d)\n", domain_trace_config[mpi_idx].set);
+    } else {
+        printf("[SKIP] MPI Domain not found for Env Test\n");
+    }
+    
+    // Verify Rate
+    if (lexgion_trace_config[0].trace_starts_at == 10 &&
+        lexgion_trace_config[0].max_num_traces == 100 &&
+        lexgion_trace_config[0].tracing_rate == 5) {
+        printf("[PASS] Env Var Rate Override Successful\n");
+    } else {
+        printf("[FAIL] Env Var Rate Override Failed: %d:%d:%d\n", 
+               lexgion_trace_config[0].trace_starts_at,
+               lexgion_trace_config[0].max_num_traces,
+               lexgion_trace_config[0].tracing_rate);
     }
 
     test_parsing();

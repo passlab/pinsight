@@ -278,31 +278,30 @@ If both env and config file are used to provide the default tracing config, the 
 will overwrite the options provided in the env variable.
 
 #### Using env variable to specify the default tracing configuration:
-Below are the env variables and their optional values that one can use to set the runtime tracing options. Env settings 
-are applied to the runtime default configuration for all lexgions. If you want lexgion-specific configuration, you have to 
-use a config file to do that.
+Below are the env variables and their optional values that one can use to set the runtime tracing options. 
+Env settings are applied to the runtime global default configuration only. 
+If you want domain-specific or lexgion-specific configuration, you have to use a config file to do that. Check 
+src/trace_config_example.txt file for details. 
 
           PINSIGHT_TRACE_OPENMP=TRUE|FALSE
           PINSIGHT_TRACE_MPI=TRUE|FALSE
           PINSIGHT_TRACE_CUDA=TRUE|FALSEk
           PINSIGHT_TRACE_ENERGY=TRUE|FALSE
           PINSIGHT_TRACE_BACKTRACE=TRUE|FALSE
-          PINSIGHT_TRACE_RATE=<trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>
+          PINSIGHT_TRACE_RATE=<trace_starts_at>:<max_num_traces>:<tracing_rate>
  
-The `PINSIGHT_TRACE_RATE` env can be used to specifying the tracing and sampling rate with four integers. The format is
-`<trace_starts_at>:<initial_trace_count>:<max_num_traces>:<tracing_rate>`, e.g. `PINSIGHT_TRACE_RATE=10:20:100:10`.
-The meaning of each of the four number can be found from the lexgion_trace_config_keys[] declaration. E.g.:
+The `PINSIGHT_TRACE_RATE` env can be used to specifying rate tracing parameters of lexgions. 
+The three parameters are `<trace_starts_at>:<max_num_traces>:<tracing_rate>`, e.g. `PINSIGHT_TRACE_RATE=10:20:100`.
 
-     PINSIGHT_TRACE_RATE=0:0:10:1, This is the system default (in `lexgion_trace_config_sysdefault` function).
-                It indicates to start recording from the first execution, then record the first 0 traces,
-                then after that, record one trace per 1 execution and in total max 10 traces should be recorded.
-     PINSIGHT_TRACE_RATE=0:0:-1:1, record all the traces.
-     PINSIGHT_TRACE_RATE=0:0:-1:10, record 1 trace per 10 executions for all the executions.
-     PINSIGHT_TRACE_RATE=0:20:20:1, record the first 20 iterations
-     PINSIGHT_TRACE_RATE=x:0:0:x,  do not record any iterations
+     PINSIGHT_TRACE_RATE=10:20:100: Record 20 traces starting from the 10th iteration, with tracing
+                                    rate of 100 (record 1 trace per 100 iterations).
+     PINSIGHT_TRACE_RATE=0:-1:1: This is the system default. It indicates to record all the traces 
+     PINSIGHT_TRACE_RATE=0:-1:10: Record 1 trace per 10 executions for all the executions.
+     PINSIGHT_TRACE_RATE=0:20:1: Record the first 20 iterations
+     PINSIGHT_TRACE_RATE=0:0:0: Do not record any iterations
  
 #### Using a config file to specify runtime tracing options
-The file name can be specified using the `PINSIGHT_TRACE_CONFIG` env. Please check the sample file in the src folder.
+The file name can be specified using the `PINSIGHT_TRACE_CONFIG_FILE` env. Please check the sample file in the src folder.
 
 Further improvement: to completely turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
 1. One approach is to use an env varabile and a global flag for setting and checking upon entry to each PInsight/OMPT/PMPI/CUPTI call, though this still introduces the overhead of making those calls and one step of checking. 
