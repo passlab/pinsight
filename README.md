@@ -318,7 +318,7 @@ After tracing complete, you can use babeltrace tool to dump the trace data to te
 
      babeltrace <tracefolder>
 
-### Analysis using Python script and Trace Compasss, please check [Performance and Execution Monitoring, Analysis and View](https://github.com/passlab/pemav)
+### Analysis using Python script and Trace Compasss, please check [Performance and Execution Analysis and Monitoring (PEAM)](https://github.com/passlab/peam)
 
 
 
