@@ -15,6 +15,7 @@
 #endif
 
 #ifdef PINSIGHT_CUDA
+#include <dlfcn.h>
 #include "CUDA_domain.h"
 #endif
 
@@ -24,6 +25,10 @@ int num_domain = 0;
 
 lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
 int num_lexgion_trace_configs = 0;
+
+#ifdef PINSIGHT_CUDA
+static inline int pinsight_cuda_runtime_available(void);
+#endif
 
 /**
  * Check the trace config to see whether an event is set or not for tracing
@@ -179,8 +184,9 @@ __attribute__ ((constructor)) void initial_setup_trace_config() {
     register_MPI_trace_domain();
 #endif
 #ifdef PINSIGHT_CUDA
-    //TODO: Also need runtime check
-    register_CUDA_trace_domain();
+    if (pinsight_cuda_runtime_available()) {
+        register_CUDA_trace_domain();
+    }
 #endif
 	// Initialize the default domain trace configs by copying from domain_info_table that has the installed events
 	int i;
@@ -202,7 +208,30 @@ __attribute__ ((constructor)) void initial_setup_trace_config() {
 
 	setup_trace_config_file();
     setup_trace_config_env();
+    print_domain_trace_config(stdout);
+    print_lexgion_trace_config(stdout);
 }
+
+#ifdef PINSIGHT_CUDA
+static inline int pinsight_cuda_runtime_available(void) {
+    static int cached = -1;
+    if (cached != -1) {
+        return cached;
+    }
+    void *handle = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_LOCAL);
+    if (!handle) {
+        handle = dlopen("libcuda.so", RTLD_LAZY | RTLD_LOCAL);
+    }
+    if (!handle) {
+        fprintf(stderr, "[PInsight WARNING] CUDA support was compiled in, but libcuda.so is not available on this system. CUDA tracing will be disabled.\n");
+        cached = 0;
+        return 0;
+    }
+    dlclose(handle);
+    cached = 1;
+    return 1;
+}
+#endif
 
 
 long env_get_long(const char* varname, long default_value) {

@@ -3,6 +3,7 @@
 //
 
 #include <stdio.h>
+#include <cuda_runtime.h>
 #include <cuda.h>
 #include <cupti.h>
 #include "pinsight.h"
@@ -15,6 +16,12 @@ domain_trace_config_t *CUDA_trace_config;
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "cupti_lttng_ust_tracepoint.h"
+
+int CUDA_get_device_id(void* arg) {
+    int currentDevice;
+    cudaGetDevice(&currentDevice);
+    return currentDevice;
+}
 
 void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              CUpti_CallbackId cbid, const CUpti_CallbackData *cbInfo) {
