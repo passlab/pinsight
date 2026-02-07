@@ -12,7 +12,7 @@ set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 
 option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
 option(PINSIGHT_MPI          "Build with MPI support"          TRUE)
-option(PINSIGHT_CUDA         "Build with CUDA support"         FALSE)
+option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
 
@@ -69,15 +69,9 @@ endif()
 
 ## CUDA support, which requires cupti
 if (PINSIGHT_CUDA)
-    # CUPTI install location needs to be provided, which could be part of CUDA SDK install or a standaline install
-    set(CUDA_INSTALL "/usr/local/cuda" CACHE PATH "CUDA SDK install path " )
-    set(CUPTI_INSTALL ${CUDA_INSTALL})
-    # Older version of CUDA has CUPTI installed under extras/CUPTI folder
-    #set(CUPTI_INSTALL ${CUDA_INSTALL}/extras/CUPTI)
-
-    include_directories(${CUPTI_INSTALL}/include ${CUDA_INSTALL}/include)
-    #list(APPEND PINSIGHT_EXTERNAL_LIBS cupti)
-
+    find_package(CUDAToolkit REQUIRED)
+    
+    include_directories(${CUDAToolkit_INCLUDE_DIRS})
     list(APPEND SOURCE_FILES
             src/cupti_lttng_ust_tracepoint.h
             src/cupti_callback.c
@@ -111,7 +105,7 @@ if (PINSIGHT_MPI)
 endif()
 
 if (PINSIGHT_CUDA)
-    target_link_libraries(pinsight ${CUPTI_INSTALL}/lib64/libcupti.so)
+    target_link_libraries(pinsight CUDA::cudart CUDA::cupti)
 endif()
 
 install(FILES
@@ -140,8 +134,7 @@ endif()
 
 if (PINSIGHT_CUDA)
     message("Build with CUDA Support:       TRUE")
-    message("    CUDA_INSTALL: ${CUDA_INSTALL}")
-    message("    CUPTI_INSTALL: ${CUPTI_INSTALL}")
+    message("    CUDA_TOOLKIT_ROOT_DIR: ${CUDAToolkit_BIN_DIR}/..")
 else()
     message("Build with CUDA Support:       FALSE")
 endif()
