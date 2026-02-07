@@ -86,6 +86,12 @@ typedef enum MPI_LEXGION_type {
     MPI_Allreduce_LEXGION,
 } MPI_LEXGION_type_t;
 
+int MPI_get_rank(void) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    return rank;
+}
+
 /**
  * This two macros are complicatedly refactored so we can have the code for MPI_* implemented cleanly.
  * The two macros must be used together for each MPI function.
