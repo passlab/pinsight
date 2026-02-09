@@ -162,7 +162,8 @@ static int parse_section_header(char *line) {
     else if (strcmp(target, "Lexgion.default") == 0) {
         // Case 2: Lexgion.default
         current_section_type = SECTION_LEXGION_DEFAULT;
-        current_lexgion_config = &lexgion_trace_config[0]; 
+        current_lexgion_config = &lexgion_trace_config[0];
+        num_lexgion_trace_configs++; 
         
         // Part 2: Inheritance (Optional)
         if (part_count >= 2 && parts[1]) {
@@ -299,9 +300,10 @@ static void parse_key_value(char *line) {
                               enable = 0;
                          }
 
-                         current_lexgion_config->domain_punits[d_idx].set = 1; 
-                         if(enable) current_lexgion_config->events[d_idx] |= (1UL << eid);
-                         else current_lexgion_config->events[d_idx] &= ~(1UL << eid);
+                         current_lexgion_config->domain_punits[d_idx].set = 1;
+                         current_lexgion_config->domain_events[d_idx].set = 1;
+                         if(enable) current_lexgion_config->domain_events[d_idx].events |= (1UL << eid);
+                         else current_lexgion_config->domain_events[d_idx].events &= ~(1UL << eid);
                     }
                 }
                 *dot = '.'; // restore
@@ -544,7 +546,8 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config, char *inheritanc
         int idx = find_domain_index(name);
         if (idx >= 0) {
             lg_config->domain_punits[idx].set = 1;
-            lg_config->events[idx] = domain_trace_config[idx].events;
+            lg_config->domain_events[idx].set = 1;
+            lg_config->domain_events[idx].events = domain_trace_config[idx].events;
         }
         token = strtok(NULL, ",");
     }
@@ -643,18 +646,15 @@ void print_lexgion_trace_config(FILE *out) {
 
     for (int i = 0; i < num_lexgion_trace_configs; i++) {
         lexgion_trace_config_t *lg = &lexgion_trace_config[i];
-        fprintf(out, "[Lexgion(%p)", lg->codeptr);
-        
+        if (i == 0) {
+            /* Print the default lexgion section */
+            fprintf(out, "[Lexgion.default");
+        } else {
+            fprintf(out, "[Lexgion(%p)", lg->codeptr);
+        }
+
         int first_inh = 1;
         for (int di = 0; di < num_domain; di++) {
-            // Check if this domain's events are inherited (i.e., domain_punits[di].set is true, but no specific punits are set)
-            // This is a heuristic. If domain_punits[di].set is true, it means either inheritance or a specific punit constraint.
-            // For printing inheritance, we assume if domain_punits[di].set is true AND events[di] is not 0, it's inherited.
-            // A more robust way would be to store inheritance explicitly.
-            // For now, let's assume if domain_punits[di].set is true, it implies inheritance for printing purposes.
-            // The actual inheritance logic in apply_inheritance sets domain_punits[idx].set = 1 and copies events.
-            // So, if domain_punits[di].set is true, it means this domain is "active" for this lexgion, either by inheritance or direct punit constraint.
-            // We print it as inheritance if it's active.
             if (lg->domain_punits[di].set) {
                 if (first_inh) { fprintf(out, ": "); first_inh = 0; }
                 else { fprintf(out, ", "); }
@@ -663,28 +663,13 @@ void print_lexgion_trace_config(FILE *out) {
         }
         
         // Print Punit Set (Part 3)
-        // Check if there are any punit constraints to print
-        // For lexgion, we store them in domain_punits as well.
-        // We need to differentiate inheritance (Part 2) vs Punit constraints (Part 3).
-        // The inheritance logic sets lg->domain_punits[idx].set = 1.
-        // And specific punits set lg->domain_punits[idx].punit[pi].set = 1.
-        // print_punit_set expects to print things with punit[pi].set = 1.
-        // If only domain_punits[di].set = 1 but no punit[pi].set, it means just domain enabled (inheritance).
-        // print_punit_set only loops over punit kinds. So it will only print if a punit range is set.
-        // So we can safely append it here prefaced with ":" if we want to reconstruct perfectly,
-        // but user spec said part 3.
-        
-        int dummy_first = 0;
-        // Check if we will output anything
-        // Simplified: just call it.
-        // Need delimiter? If we had inheritance, we need ":" before punit set?
-        // Header: [Target : Inheritance : PunitSet]
-        // My previous print code combined Part 2 and 3?
-        // Actually `print_punit_set` prints "Dom.Kind(Range)".
-        
-        // Let's assume we print ": " then PunitSet.
-        fprintf(out, " : ");
-        print_punit_set(out, lg->domain_punits, &dummy_first);
+        /* For the default lexgion entry we do not print a punit-set (part 3).
+         * For non-default lexgions, print the punit set after a colon. */
+        if (i != 0) {
+            int dummy_first = 0;
+            fprintf(out, " : ");
+            print_punit_set(out, lg->domain_punits, &dummy_first);
+        }
         
         fprintf(out, "]\n");
         
@@ -693,9 +678,9 @@ void print_lexgion_trace_config(FILE *out) {
         fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
         
         for (int di = 0; di < num_domain; di++) {
-            if (lg->domain_punits[di].set) {
+            if (lg->domain_events[di].set) {
                 struct domain_info *d = &domain_info_table[di];
-                unsigned long evt = lg->events[di];
+                unsigned long evt = lg->domain_events[di].events;
                 for (int k = 0; k < d->num_events; k++) {
                     if (strlen(d->event_table[k].name) == 0) continue;
                     if (k >= 64) break;
