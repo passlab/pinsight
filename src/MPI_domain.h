@@ -25,15 +25,15 @@ extern domain_trace_config_t *MPI_trace_config;
                                                                 \
         /* [MPI(init)] */                                       \
         TRACE_SUBDOMAIN_BEGIN("init")                           \
-            TRACE_EVENT( 0, "MPI_Init",        0)               \
-            TRACE_EVENT( 1, "MPI_Init_thread", 0)               \
-            TRACE_EVENT( 2, "MPI_Finalize",    0)               \
+            TRACE_EVENT( 0, "MPI_Init",        1)               \
+            TRACE_EVENT( 1, "MPI_Init_thread", 1)               \
+            TRACE_EVENT( 2, "MPI_Finalize",    1)               \
         TRACE_SUBDOMAIN_END()                                   \
                                                                 \
         /* [MPI(p2p)] */                                        \
         TRACE_SUBDOMAIN_BEGIN("p2p")                            \
-            TRACE_EVENT( 3, "MPI_Send",      0)                 \
-            TRACE_EVENT( 4, "MPI_Recv",      0)                 \
+            TRACE_EVENT( 3, "MPI_Send",      1)                 \
+            TRACE_EVENT( 4, "MPI_Recv",      1)                 \
             TRACE_EVENT( 5, "MPI_Sendrecv",  0)                 \
         TRACE_SUBDOMAIN_END()                                   \
                                                                 \
@@ -49,7 +49,7 @@ extern domain_trace_config_t *MPI_trace_config;
         /* [MPI(collective)] */                                 \
         TRACE_SUBDOMAIN_BEGIN("collective")                     \
             TRACE_EVENT(11, "MPI_Bcast",     0)                 \
-            TRACE_EVENT(12, "MPI_Barrier",   0)                 \
+            TRACE_EVENT(12, "MPI_Barrier",   1)                 \
             TRACE_EVENT(13, "MPI_Reduce",    0)                 \
             TRACE_EVENT(14, "MPI_Allreduce", 0)                 \
             TRACE_EVENT(15, "MPI_Scatter",   0)                 \

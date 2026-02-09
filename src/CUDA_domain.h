@@ -45,11 +45,11 @@ extern domain_trace_config_t *CUDA_trace_config;
                                                                     \
         /* [CUDA(memcpy)] */                                        \
         TRACE_SUBDOMAIN_BEGIN("memcpy")                             \
-            TRACE_EVENT(12, "CUDA_memcpy_HtoD",         0)          \
-            TRACE_EVENT(13, "CUDA_memcpy_DtoH",         0)          \
-            TRACE_EVENT(14, "CUDA_memcpy_DtoD",         0)          \
-            TRACE_EVENT(15, "CUDA_memcpy_HtoH",         0)          \
-            TRACE_EVENT(16, "CUDA_memcpy_async",        0)          \
+            TRACE_EVENT(12, "CUDA_memcpy_HtoD",         1)          \
+            TRACE_EVENT(13, "CUDA_memcpy_DtoH",         1)          \
+            TRACE_EVENT(14, "CUDA_memcpy_DtoD",         1)          \
+            TRACE_EVENT(15, "CUDA_memcpy_HtoH",         1)          \
+            TRACE_EVENT(16, "CUDA_memcpy_async",        1)          \
         TRACE_SUBDOMAIN_END()                                      \
                                                                     \
         /* [CUDA(malloc)] */                                        \
@@ -64,7 +64,7 @@ extern domain_trace_config_t *CUDA_trace_config;
                                                                     \
         /* [CUDA(kernel)] */                                        \
         TRACE_SUBDOMAIN_BEGIN("kernel")                             \
-            TRACE_EVENT(23, "CUDA_kernel_launch",      0)           \
+            TRACE_EVENT(23, "CUDA_kernel_launch",      1)           \
             TRACE_EVENT(24, "CUDA_kernel_complete",    0)           \
             TRACE_EVENT(25, "CUDA_kernel_enqueue",     0)           \
         TRACE_SUBDOMAIN_END()                                      \

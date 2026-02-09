@@ -134,7 +134,11 @@ extern domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
 typedef struct lexgion_trace_config {
 	domain_punit_set_t domain_punits[MAX_NUM_DOMAINS]; //The punit set for this trace config
 	unsigned long int events[MAX_NUM_DOMAINS]; //The event settings for this trace config for each domain
-   
+    struct { //The event setting for each domain of this lexgion
+		int set;
+		unsigned long int events;
+	} domain_events[MAX_NUM_DOMAINS];
+
 	//rate trace config
 	unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
     unsigned int max_num_traces;       //integer: total number of traces to be collected
