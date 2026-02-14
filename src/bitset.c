@@ -251,6 +251,33 @@ void bitset_and(BitSet *dst, const BitSet *a, const BitSet *b)
     }
 }
 
+int bitset_equal(const BitSet *a, const BitSet *b) {
+    if (a->nbits != b->nbits) return 0;
+    // Both empty?
+    if (a->nwords == 0 && b->nwords == 0) return 1;
+    
+    // Check words
+    size_t words_to_check = (a->nbits + 63) / 64;
+    // Note: implementation details of BitSet usually handle inline vs pointer
+    // But here struct is exposed. 
+    // If nbits < 64, words is value. If >= 64, words is pointer.
+    
+    if (a->nbits < 64) {
+        // Correct inline check handling:
+        // bitset_get_word abstracts it, but comparing `words` casted pointer value directly works if aligned
+        // We use bitset_get_word abstraction in this file, but to match user provided snippet exactly 
+        // implies direct struct access.
+        // User snippet: return (unsigned long)a->words == (unsigned long)b->words;
+        return (unsigned long)a->words == (unsigned long)b->words;
+    } else {
+        if (!a->words || !b->words) return 0;
+        for (size_t i = 0; i < words_to_check; i++) {
+            if (a->words[i] != b->words[i]) return 0;
+        }
+    }
+    return 1;
+}
+
 char *bitset_to_string(const BitSet *bs)
 {
     if (!bs) return NULL;

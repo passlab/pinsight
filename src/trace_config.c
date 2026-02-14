@@ -24,7 +24,7 @@ domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
 int num_domain = 0;
 
 lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
-int num_lexgion_trace_configs = 0;
+int num_lexgion_trace_configs = 1; //default lexgion trace config at index 0
 
 #ifdef PINSIGHT_CUDA
 static inline int pinsight_cuda_runtime_available(void);
@@ -32,7 +32,6 @@ static inline int pinsight_cuda_runtime_available(void);
 
 /**
  * Check the trace config to see whether an event is set or not for tracing
- */
 int trace_config_event_set(domain_trace_config_t* dtcf, int event_id) {
 	//check whether the domain is enabled
 	if (!dtcf->set) {
@@ -127,23 +126,6 @@ lexgion_trace_config_t * retrieve_lexgion_trace_config(const void * codeptr) {
 	#endif
 }
 
-/**
- * This function is not thread safe, but it might not hurt called by multiple threads
- */
-__attribute__ ((constructor)) void initial_lexgion_trace_config() {
-    //lexgion_trace_config_sysdefault();
-    //lexgion_trace_config_read_env_rtdefault();
-    //lexgion_trace_config_read_file();
-    //print_lexgion_trace_config();
-}
-
-void setup_trace_config_file() {
-    char *env_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
-    if (env_file) {
-        parse_trace_config_file(env_file);
-    } 
-}
-
 void setup_trace_config_env() {
     // 1. Override Domain Defaults
     for (int i = 0; i < num_domain; i++) {
@@ -173,6 +155,17 @@ void setup_trace_config_env() {
         if (count >= 2) lexgion_trace_config[0].max_num_traces = max;
         if (count >= 3) lexgion_trace_config[0].tracing_rate = rate;
     }
+}
+
+void pinsight_load_trace_config(char * filepath) {
+    if (!filepath) {
+        filepath = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+    }
+
+    if (filepath) {
+        parse_trace_config_file(filepath);
+    } 
+    setup_trace_config_env(); // Re-apply env overrides
 }
 
 __attribute__ ((constructor)) void initial_setup_trace_config() {
@@ -206,8 +199,7 @@ __attribute__ ((constructor)) void initial_setup_trace_config() {
 	lexgion_trace_config[0].trace_starts_at = 0; //start tracing from the first execution	
 	lexgion_trace_config[0].max_num_traces = -1; //unlimited traces
 
-	setup_trace_config_file();
-    setup_trace_config_env();
+    pinsight_load_trace_config(NULL);
     print_domain_trace_config(stdout);
     print_lexgion_trace_config(stdout);
 }

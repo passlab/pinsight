@@ -54,6 +54,8 @@
  *    6. Tracing configuration takes effects on per process/thread-basis such that every thread process
  *       tracing control by itself. But configuration setting are applied globally.
  */
+void pinsight_load_trace_config(char * filepath);
+
 #include "bitset.h"
 
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
@@ -133,7 +135,6 @@ extern domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
 
 typedef struct lexgion_trace_config {
 	domain_punit_set_t domain_punits[MAX_NUM_DOMAINS]; //The punit set for this trace config
-	unsigned long int events[MAX_NUM_DOMAINS]; //The event settings for this trace config for each domain
     struct { //The event setting for each domain of this lexgion
 		int set;
 		unsigned long int events;
