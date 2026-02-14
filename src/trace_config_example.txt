@@ -13,24 +13,24 @@
 	CUDA_kernel_launch  = on
 	CUDA_memcpy = on
 
-[Lexgion.default: OpenMP.default, MPI.default]
+[Lexgion.default]: OpenMP.default, MPI.default
 	trace_starts_at = 0
 	max_num_traces = 2000
 	tracing_rate = 1 
 
-[OpenMP.thread(0-3): OpenMP.default: MPI.rank(0), CUDA.device(0)]
+[OpenMP.thread(0-3)]: OpenMP.default: MPI.rank(0), CUDA.device(0)
 
-[OpenMP.thread(4, 6, 8-12, 14-16, 20-22): OpenMP.default: MPI.rank(0), CUDA.device(0)]
+[OpenMP.thread(4, 6, 8-12, 14-16, 20-22)]: OpenMP.default: MPI.rank(0), CUDA.device(0)
 
-[OpenMP.team(0-4), OpenMP.thread(0-15): OpenMP.default: MPI.rank(0), CUDA.device(0)]
+[OpenMP.team(0-4), OpenMP.thread(0-15)]: OpenMP.default: MPI.rank(0), CUDA.device(0)
     
-[OpenMP.device(0): OpenMP.default]
+[OpenMP.device(0)]: OpenMP.default
 
-[MPI.rank(0): MPI.default]
+[MPI.rank(0)]: MPI.default
 
-[CUDA.device(0): CUDA.default]
+[CUDA.device(0)]: CUDA.default
 
-[Lexgion(0x4010bd): Lexgion.default, OpenMP.default, MPI.default: MPI.rank(0), CUDA.device(0)]
+[Lexgion(0x4010bd)]: Lexgion.default, OpenMP.default, MPI.default: MPI.rank(0), CUDA.device(0)
 	trace_starts_at = 20
 	max_num_traces = 200
 	tracing_rate = 10
@@ -42,28 +42,28 @@
 	CUDA.CUDA_memcpy = on
 
 # ================================= Configuration file Specification ================================================
-# A trace config file is in an enhanced INIT file format. In this format, 
-# # is for a line of comments. [section] is for specifying a section, which is a 
-# configuration of a domain.punit or lexgion. The name of the section can be either 
-# the name of a domain.punit or lexgion. The format of the section name includes three parts separated by colons (:),
-# e.g. OpenMP.thread(0-3): OpenMP.default: MPI.rank(0), CUDA.device(0). The first part is the domain.punit specification
-# which is in the format of <domain_name>[.<punit_name>(<punit_range>)]+ or <domain_name>.default, or lexgion(<code_ptr>).
-# The second part is the domain configuration inheritence, which is in the format of [<domain_name>.default]*. For 
-# lexgion, it could inherit from multiple domains' default configuration, separated by commas (,). punit_range can 
-# be a single number, a range of numbers, or a list of numbers, separated by commas (,) e.g. 4, 6, 8-12, 14-16, 20-24
-# The third part is the punit configuration for other domains, which is in the format of 
-# <domain_name>.<punit_kind>(<punit_range>) and multiple <domain_name>.<punit_kind>(<punit_range>), one per domain, can be specified, separated by commas (,)
-# The content/data of each section is the key-value pairs. For the <domain_name>.default section, it allows to have 
-# <domain_name>.punit(low-high) format to specify the punit range for the domain. The key-value data content for each 
-# domain section are used to specifying whether the events of the domain are enabled or disabled (on and off). For the 
-# lexgion section, the key-value pairs are used to specifying the lexgion configuration, which includes the tracing rate, 
-# max number of traces, and the tracing start point.
-
-# Parsing this file needs to fill in the domain_trace_config_table and lexgion_trace_config_table. The <domain_name>.default
-# section is used to specify the default configuration for the domain, which will fill in each object of the domain_trace_config_table
-# The <domain_name>.punit(low-high) sections will then need to be parsed to fill in the punit_trace_config objects established as a link list via 
-# the next pointer. Filling in those table/link list needs to refer to the domain_info_table to make sure the domain name, 
-# punit name are already initialized in the domain_info table. The <domain_name>.punit(low-high) section in domain.default section needs to be parsed
-# and to replace the low-high field of the cooresponding domain_info_table entry for the punit. lexgion secitons 
-# should be parsed to fill in the lexgion_trace_config_table according to the mapping between the section specification and 
-# the data structure of lexgion_trace_config_t object. 
+# A trace config file is in an enhanced INIT file format. 
+# 
+# Sections can be defined with an optional ACTION prefix:
+# [ACTION Target]: Inheritance : PunitSet
+#
+# ACTION:
+#   ADD     - If exists, merges settings. If not, adds configuration. (Default)
+#   REPLACE - If exists, resets to defaults before applying settings. If not, adds configuration.
+#   REMOVE  - Disable/Remove the target configuration.
+#
+# Target:
+#   Domain.default          - Global domain settings.
+#   Domain.Punit(Range)     - Specific Punit settings.
+#   Lexgion.default         - Default code region settings.
+#   Lexgion(Address)        - Specific code region settings.
+#
+# Examples:
+#   [REPLACE OpenMP.default]
+#   [ADD OpenMP.thread(0-3)]: OpenMP.default
+# 
+# The format of the section name includes three parts separated by colons (:),
+# e.g. [ADD OpenMP.thread(0-3)]: OpenMP.default: MPI.rank(0), CUDA.device(0). 
+# The first part is the [ACTION Target].
+# The second part is the domain configuration inheritence.
+# The third part is the punit configuration for other domains.

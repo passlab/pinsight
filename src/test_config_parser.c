@@ -111,7 +111,7 @@ void test_parsing() {
             for(int i=0; i<num_lexgion_trace_configs; i++) {
                 if (lexgion_trace_config[i].codeptr == (void*)(uintptr_t)0x500000) {
                     found_override_lexgion = 1;
-                    unsigned long lg_events = lexgion_trace_config[i].events[omp_idx];
+                    unsigned long lg_events = lexgion_trace_config[i].domain_events[omp_idx].events;
                     int lg_create_on = (lg_events >> id_task_create) & 1;
                     int lg_schedule_on = (lg_events >> id_task_schedule) & 1;
                     
@@ -253,7 +253,7 @@ void test_parsing() {
     // Let's inject a new test config
     FILE *fp2 = fopen("trace_config.txt", "a");
     if (fp2) {
-        fprintf(fp2, "\n[OpenMP.thread(0, 2-3, 5): OpenMP.default]\n");
+        fprintf(fp2, "\n[OpenMP.thread(0, 2-3, 5)]: OpenMP.default\n");
         fclose(fp2);
     }
     
@@ -347,7 +347,7 @@ void test_parsing() {
     // Create a config file where Lexgion inherits from OpenMP.default without OpenMP.default being defined in file
     FILE *bad_fp = fopen("implicit_inh_config.txt", "w");
     if (bad_fp) {
-        fprintf(bad_fp, "[Lexgion(0x999999): OpenMP.default]\n");
+        fprintf(bad_fp, "[Lexgion(0x999999)]: OpenMP.default\n");
         // No [OpenMP.default] section
         fclose(bad_fp);
     }
@@ -362,13 +362,14 @@ void test_parsing() {
              found_bad = 1;
              // Check events. If implicit inheritance inheritance worked, they should be ON
              // We know OpenMP default events are usually non-zero.
-             if (lexgion_trace_config[i].events[omp_idx] != 0) { 
-                 printf("[PASS] Implicit Inheritance Succeeded (used system defaults). Events=%lx\n", lexgion_trace_config[i].events[omp_idx]);
-             } else {
-                 printf("[FAIL] Implicit Inheritance Failed (Events are 0). Events=%lx\n", lexgion_trace_config[i].events[omp_idx]);
-             }
+             if (lexgion_trace_config[i].domain_events[omp_idx].events != 0) {
+            printf("[PASS] Implicit Inheritance Succeeded (used system/current defaults). Events=%lx\n", 
+                   lexgion_trace_config[i].domain_events[omp_idx].events);
+        } else {
+             printf("[FAIL] Implicit Inheritance Failed (Events are 0). Expected inheritance.\n");
         }
-    }
+            }
+        }
     
     if(!found_bad) {
          printf("[FAIL] Lexgion 0x999999 not found after parsing.\n"); 
@@ -377,13 +378,13 @@ void test_parsing() {
     unlink("implicit_inh_config.txt");
 }
 
-int main() {
+void setup_and_test_env() {
     // 1. Register Domains.
     // NOTE: Domains are registered by library constructor `initial_setup_trace_config` in trace_config.c
     // calling them again creates duplicates and messes up indices.
-    // register_OpenMP_trace_domain();
-    // register_MPI_trace_domain();
-    // register_CUDA_trace_domain();
+    register_OpenMP_trace_domain();
+    register_MPI_trace_domain();
+    register_CUDA_trace_domain();
     
     // register_CUDA_trace_domain();
 
@@ -471,8 +472,239 @@ int main() {
                lexgion_trace_config[0].max_num_traces,
                lexgion_trace_config[0].tracing_rate);
     }
+    
+    // Test Multiple Punit Target parsing
+    printf("\n--- Test: Multiple Punit Target ---\n");
+    FILE *fp_multi = fopen("multi_punit.txt", "w");
+    // [ADD OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.default
+    fprintf(fp_multi, "[ADD OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.default\n");
+    fclose(fp_multi);
+    
+    parse_trace_config_file("multi_punit.txt");
+    unlink("multi_punit.txt");
+    
+    // Verify
+    int found_multi = 0;
+    int omp_idx = -1;
+    for(int i=0; i<num_domain; i++) {
+        if(strcmp(domain_info_table[i].name, "OpenMP") == 0) omp_idx = i;
+    }
+    if (omp_idx >= 0) {
+        punit_trace_config_t *curr = domain_trace_config[omp_idx].punit_trace_config;
+        while(curr) {
+            // Check if THIS config has BOTH team(0-1) and thread(2-3)
+             struct domain_info *d = &domain_info_table[omp_idx];
+             int idx_team = -1, idx_thread = -1;
+             for(int k=0; k<d->num_punits; k++) {
+                 if(strcmp(d->punits[k].name, "team")==0) idx_team = k;
+                 if(strcmp(d->punits[k].name, "thread")==0) idx_thread = k;
+             }
+             
+             if (curr->domain_punits[omp_idx].punit[idx_team].set && 
+                 curr->domain_punits[omp_idx].punit[idx_thread].set) {
+                     // Check ranges
+                     BitSet *bs_team = &curr->domain_punits[omp_idx].punit[idx_team].punit_ids;
+                     BitSet *bs_thread = &curr->domain_punits[omp_idx].punit[idx_thread].punit_ids;
+                     if (bitset_test(bs_team, 0) && bitset_test(bs_team, 1) && !bitset_test(bs_team, 2) &&
+                         !bitset_test(bs_thread, 0) && bitset_test(bs_thread, 2) && bitset_test(bs_thread, 3)) {
+                             found_multi = 1;
+                             printf("[PASS] Found Config with BOTH OpenMP.team(0-1) and OpenMP.thread(2-3)\n");
+                     }
+             }
+             curr = curr->next;
+        }
+    }
+    if (!found_multi) printf("[FAIL] Did not find config with multiple punits in target.\n");
+    
+    // Test REPLACE on Multiple Punit Target
+    printf("\n--- Test: REPLACE on Multiple Punit Target ---\n");
+    FILE *fp_multi_repl = fopen("multi_punit_replace.txt", "w");
+    // Change thread_begin to OFF (it was ON by default/ADD)
+    fprintf(fp_multi_repl, "[REPLACE OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.default\n");
+    fprintf(fp_multi_repl, "    omp_thread_begin = off\n");
+    fclose(fp_multi_repl);
+    
+    // Parse REPLACE
+    parse_trace_config_file("multi_punit_replace.txt");
+    unlink("multi_punit_replace.txt");
+    
+    // Verify Update
+    int found_repl = 0;
+    if (omp_idx >= 0) {
+        punit_trace_config_t *curr = domain_trace_config[omp_idx].punit_trace_config;
+        while(curr) {
+             struct domain_info *d = &domain_info_table[omp_idx];
+             int idx_team = -1, idx_thread = -1;
+             for(int k=0; k<d->num_punits; k++) {
+                 if(strcmp(d->punits[k].name, "team")==0) idx_team = k;
+                 if(strcmp(d->punits[k].name, "thread")==0) idx_thread = k;
+             }
+             
+             if (curr->domain_punits[omp_idx].punit[idx_team].set && 
+                 curr->domain_punits[omp_idx].punit[idx_thread].set) {
+                     // Check ranges again to be sure it's the right one
+                     BitSet *bs_team = &curr->domain_punits[omp_idx].punit[idx_team].punit_ids;
+                     if (bitset_test(bs_team, 0)) {
+                         // Check event override
+                         int evt_idx = -1;
+                         for(int k=0; k<d->num_events; k++) 
+                            if(strcmp(d->event_table[k].name, "omp_thread_begin")==0) evt_idx = k;
+                         
+                         if (evt_idx >= 0) {
+                             if (!((curr->events >> evt_idx) & 1)) {
+                                 found_repl = 1;
+                                 printf("[PASS] REPLACE successfully updated multi-punit config (omp_thread_begin=OFF)\n");
+                             } else {
+                                 printf("[FAIL] REPLACE found config but event was NOT updated (remains ON)\n");
+                             }
+                         }
+                     }
+             }
+             curr = curr->next;
+        }
+    }
+    if (!found_repl) printf("[FAIL] Did not find/update config for multi-punit REPLACE.\n");
 
+
+}
+
+void test_reload() {
+    printf("\n--- Test: Reload & Actions ---\n");
+    
+    // 1. Initial State: Assume OpenMP is enabled (default)
+    // Create config to ensure specific state
+    FILE *fp = fopen("reload_config_1.txt", "w");
+    fprintf(fp, "[REPLACE OpenMP.default]\n");
+    fprintf(fp, "    OpenMP.team = (0-4)\n");
+    // Explicitly enable an event to test
+    // Need to know valid event name. checking implementation...
+    // In test setup, we might stick to what we know works or generic check.
+    // Let's rely on domain_trace_config[i].set and .events bitmask changes.
+    fclose(fp);
+    
+    pinsight_load_trace_config("reload_config_1.txt");
+    
+    int omp_idx = -1;
+    for(int i=0; i<num_domain; i++) if(strcmp(domain_info_table[i].name, "OpenMP") == 0) omp_idx = i;
+    
+    if (omp_idx >= 0) {
+        // REPLACE should have reset it. If 1.txt was empty body, it would be default events?
+        // Wait, reset_domain_config sets events to defaults.
+        printf("[INFO] Post-Replace OpenMP Events: %lx\n", domain_trace_config[omp_idx].events);
+    }
+    
+    // 2. ADD: Add a punit config
+    fp = fopen("reload_config_add.txt", "w");
+    fprintf(fp, "[ADD OpenMP.thread(0-1)] : OpenMP.default\n");
+    fprintf(fp, "    OpenMP.omp_task_create = on\n"); 
+    fclose(fp);
+    
+    pinsight_load_trace_config("reload_config_add.txt");
+    
+    if (omp_idx >= 0) {
+        domain_trace_config_t *dtc = &domain_trace_config[omp_idx];
+        punit_trace_config_t *curr = dtc->punit_trace_config;
+        int found = 0;
+        while(curr) {
+             // Just verify we have some punit config added
+             if (curr->domain_punits[omp_idx].set) found = 1;
+             curr = curr->next;
+        }
+        if (found) printf("[PASS] ADD Action added punit config.\n");
+        else printf("[FAIL] ADD Action failed to add punit config.\n");
+    }
+    
+    // 3. REMOVE: Remove a Lexgion
+    // Setup a lexgion manually since get_or_create is static
+    // We can use index 1 (0 is default)
+    if (num_lexgion_trace_configs < 2) num_lexgion_trace_configs = 2;
+    lexgion_trace_config_t *lg = &lexgion_trace_config[1];
+    lg->codeptr = (void*)0x999;
+    lg->tracing_rate = 100;
+    lg->max_num_traces = 50;
+    
+    fp = fopen("reload_config_remove.txt", "w");
+    fprintf(fp, "[REMOVE Lexgion(0x999)]\n"); // 0x999 = 2457 in decimal, parser handles hex 0x
+    fclose(fp);
+    
+    pinsight_load_trace_config("reload_config_remove.txt");
+    
+    // Check if max_num_traces became 0
+    if (lg->max_num_traces == 0) {
+        printf("[PASS] REMOVE Action disabled Lexgion 0x999.\n");
+    } else {
+        printf("[FAIL] REMOVE Action failed. MaxTraces=%d\n", lg->max_num_traces);
+    }
+    
+    // Verify manual setup matches expected failures if not updated
+    // ...
+    
+    // Cleanup
+    unlink("reload_config_1.txt");
+    unlink("reload_config_add.txt");
+    unlink("reload_config_remove.txt");
+}
+
+void test_implicit_add() {
+    printf("\n--- Test: Implicit ADD Default ---\n");
+    int omp_idx = -1;
+    for(int i=0; i<num_domain; i++) if(strcmp(domain_info_table[i].name, "OpenMP") == 0) omp_idx = i;
+    
+    if (omp_idx < 0) return;
+
+    // 1. Set specific event State explicitly (turn OFF everything)
+    domain_trace_config[omp_idx].events = 0;
+    
+    // 2. Create config with IMPLICIT action (should be ADD)
+    // Turn ON one event.
+    // If it was REPLACE (and REPLACE resets to defaults), it might turn ON defaults + this one? 
+    // Wait, REPLACE resets to installed defaults (usually all ON).
+    // So if REPLACE: Result = Defaults + Change.
+    // If ADD: Result = Current (0) + Change.
+    // So if Result only has the one event ON, it was ADD (merged with 0).
+    // If Result has defaults ON, it was REPLACE (reset to defaults).
+    
+    FILE *fp = fopen("implicit_add.txt", "w");
+    fprintf(fp, "[OpenMP.default]\n");
+    // Find an event name.. "omp_thread_begin"
+    fprintf(fp, "    omp_thread_begin = on\n");
+    fclose(fp);
+    
+    pinsight_load_trace_config("implicit_add.txt");
+    unlink("implicit_add.txt");
+    
+    // Verify
+    unsigned long events = domain_trace_config[omp_idx].events;
+    
+    // Find index of thread_begin
+    int evt_idx = -1;
+    struct domain_info *d = &domain_info_table[omp_idx];
+    for(int k=0; k<d->num_events; k++) 
+        if(strcmp(d->event_table[k].name, "omp_thread_begin")==0) evt_idx = k;
+    
+    if (evt_idx >= 0) {
+        unsigned long expected = (1UL << evt_idx);
+        if (events == expected) {
+            printf("[PASS] Implicit Action behaved as ADD (Merged with previous state).\n");
+        } else {
+            // Note: If REPLACE was used, it would have reset to defaults (all ON usually) then applied change.
+            printf("[FAIL] Implicit Action NOT ADD. Events=%lx (Expected=%lx)\n", events, expected);
+        }
+    }
+}
+
+int main() {
+    // Setup mock domain info
+    // ... (This part was in original file, assuming it's still there)
+    
+    // Call env override manually to ensure consistent state if needed
+    // setenv("PINSIGHT_TRACE_CONFIG_FILE", "param.conf", 1);
+    
+    setup_and_test_env();
     test_parsing();
+    test_reload();
+    test_implicit_add();
     
     return 0;
 }
+

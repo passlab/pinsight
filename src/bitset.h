@@ -39,6 +39,7 @@ int bitset_next_set(const BitSet *bs, int prev);
    All bitsets must have compatible layout (same nwords, nbits). */
 void bitset_or(BitSet *dst, const BitSet *a, const BitSet *b);
 void bitset_and(BitSet *dst, const BitSet *a, const BitSet *b);
+int bitset_equal(const BitSet *a, const BitSet *b);
 
 /* Convert to a binary string "111000..." (bits from highest to lowest).
  * Caller must free() the returned string.
