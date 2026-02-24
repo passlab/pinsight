@@ -382,9 +382,7 @@ on_ompt_callback_parallel_begin(
   parallel_codeptr = codeptr_ra;
   parallel_record_id = enclosing_parallel_lexgion_record->record_id;
   omp_thread_num = 0;
-  lexgion_t * lgp = enclosing_parallel_lexgion_record->lgp;
-  lexgion_set_trace_bit(lgp);
-  if (lgp->trace_bit) {
+  if (lexgion_set_top_trace_bit()) {
 #ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
       rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -477,9 +475,7 @@ on_ompt_callback_implicit_task(
       task_data->ptr = (void*)enclosing_task_lexgion_record;
       task_codeptr = parallel_codeptr;
       task_record_id = enclosing_task_lexgion_record->record_id;
-      lexgion_t * lgp = enclosing_task_lexgion_record->lgp;
-      lexgion_set_trace_bit(lgp);
-      if (lgp->trace_bit) {
+      if (lexgion_set_top_trace_bit()) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -537,7 +533,7 @@ on_ompt_callback_work(
         /* safety check for combined construct, such as parallel_for */
         record = lexgion_begin(OPENMP_LEXGION, ompt_callback_work, codeptr_ra, NULL);
         lgp = record->lgp;
-        lexgion_set_trace_bit(lgp);
+        lexgion_set_top_trace_bit();
       } else { //combined construct with the parallel/task/team
         fprintf(stderr, "The work_scope_begin lexgion codeptr is the same as enclosing parallel or task codeptr combined construct? %p", codeptr_ra);
         record = (lexgion_record_t *)task_data->ptr;
@@ -622,9 +618,7 @@ on_ompt_callback_masked(
   {
     case ompt_scope_begin:
       ;lexgion_record_t * record = lexgion_begin(OPENMP_LEXGION, ompt_callback_masked, codeptr_ra, NULL);
-      lexgion_t *lgp = record->lgp;
-      lexgion_set_trace_bit(lgp);
-      if (lgp->trace_bit) {
+      if (lexgion_set_top_trace_bit()) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(package_energy); // Read package energy counters.
@@ -640,7 +634,7 @@ on_ompt_callback_masked(
     case ompt_scope_end:
       ;
       unsigned int record_id;
-      lgp = lexgion_end(&record_id);
+      lexgion_t * lgp = lexgion_end(&record_id);
       lgp->end_codeptr_ra = codeptr_ra;
 
       if (lgp->trace_bit) {

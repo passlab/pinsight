@@ -23,8 +23,11 @@ struct domain_info domain_info_table[MAX_NUM_DOMAINS];
 domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
 int num_domain = 0;
 
-lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS];
-int num_lexgion_trace_configs = 1; //default lexgion trace config at index 0
+lexgion_trace_config_t all_lexgion_trace_config[MAX_NUM_DOMAINS + MAX_NUM_LEXGIONS + 1];
+lexgion_trace_config_t *lexgion_trace_config_default = &all_lexgion_trace_config[0];
+lexgion_trace_config_t *domain_lexgion_trace_config_default = &all_lexgion_trace_config[1];
+lexgion_trace_config_t *lexgion_trace_config = &all_lexgion_trace_config[1+MAX_NUM_DOMAINS];
+int num_lexgion_trace_configs = 0; 
 
 #ifdef PINSIGHT_CUDA
 static inline int pinsight_cuda_runtime_available(void);
@@ -90,40 +93,15 @@ int trace_config_event_set(domain_trace_config_t* dtcf, int event_id) {
  * 
  */
 lexgion_trace_config_t * retrieve_lexgion_trace_config(const void * codeptr) {
-	#if 0
     int i;
-    int done = 0;
     lexgion_trace_config_t  * config = NULL;
-    while (!done) {
-        int unused_entry = -1;
-        for (i = 0; i < MAX_NUM_LEXGIONS; i++) {
-            config = &lexgion_trace_config[i];
-            if (config->codeptr == codeptr) {/* one already exists, and we donot check class and type */
-                /* trace_config already set before or by others, we just need to link */
-                done = 1; /* to break the outer while loop */
-                //printf("Found the config for lexgion %p: %p, %d by thread %d\n", codeptr, config, i, global_thread_num);
-                break;
-            } else if (config->codeptr == NULL && unused_entry == -1) {
-                unused_entry = i; //find the first unused entry
-            }
-        }
-        if (i == MAX_NUM_LEXGIONS) { //not find the one for the codeptr, allocate one
-            config = &lexgion_trace_config[unused_entry]; /* we must have an unused entry */
-            /* data race here, we must protect updating codeptr by multiple threads, use cas to do it */
-            if (config->codeptr == NULL && __sync_bool_compare_and_swap((uint64_t*)&config->codeptr, NULL, codeptr)) {
-                i = unused_entry;
-                //printf("Allocate a config for lexgion %p: %p, %d by thread %d\n", config->codeptr, config, i, global_thread_num);
-                break;
-            } /* else, go back to the loop and check again */
-        }
-        if (unused_entry == MAX_NUM_LEXGIONS) {//assertation check
-            //we have enough entries (MAX_NUM_LEXGIONS) for the max possible number of lexgions in the app.
-            //otherwise, this is fault.
-
+    for (i = 1; i < MAX_NUM_LEXGIONS; i++) {
+        config = &lexgion_trace_config[i];
+        if (config->codeptr == codeptr) {
+            return config;
         }
     }
-    return config;
-	#endif
+    return NULL;
 }
 
 void setup_trace_config_env() {
@@ -151,9 +129,9 @@ void setup_trace_config_env() {
     if (rate_env) {
         int start = 0, max = 0, rate = 0;
         int count = sscanf(rate_env, "%d:%d:%d", &start, &max, &rate);
-        if (count >= 1) lexgion_trace_config[0].trace_starts_at = start;
-        if (count >= 2) lexgion_trace_config[0].max_num_traces = max;
-        if (count >= 3) lexgion_trace_config[0].tracing_rate = rate;
+        if (count >= 1) lexgion_trace_config_default->trace_starts_at = start;
+        if (count >= 2) lexgion_trace_config_default->max_num_traces = max;
+        if (count >= 3) lexgion_trace_config_default->tracing_rate = rate;
     }
 }
 
@@ -194,10 +172,10 @@ __attribute__ ((constructor)) void initial_setup_trace_config() {
 	}
 
 	// Initialize the default lexgion trace config
-	lexgion_trace_config[0].codeptr = NULL;
-	lexgion_trace_config[0].tracing_rate = 1; //trace every execution
-	lexgion_trace_config[0].trace_starts_at = 0; //start tracing from the first execution	
-	lexgion_trace_config[0].max_num_traces = -1; //unlimited traces
+	lexgion_trace_config_default->codeptr = NULL;
+	lexgion_trace_config_default->tracing_rate = 1; //trace every execution
+	lexgion_trace_config_default->trace_starts_at = 0; //start tracing from the first execution	
+	lexgion_trace_config_default->max_num_traces = -1; //unlimited traces
 
     pinsight_load_trace_config(NULL);
     print_domain_trace_config(stdout);

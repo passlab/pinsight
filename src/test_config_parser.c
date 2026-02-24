@@ -182,7 +182,6 @@ void test_parsing() {
     // 3. Verify Lexgion
     int found_lexgion = 0;
     // Need to loop to find the one with matching codeptr
-    extern lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS]; 
     extern int num_lexgion_trace_configs;
     
     for(int i=0; i<num_lexgion_trace_configs; i++) {
@@ -199,6 +198,35 @@ void test_parsing() {
     }
     if (!found_lexgion) {
         printf("[FAIL] Lexgion(0x4010bd) not found in config table.\n");
+    }
+
+    // Verify [Lexgion(OpenMP).default] from trace_config_example.txt
+    if (omp_idx >= 0) {
+        lexgion_trace_config_t *dlg = &domain_lexgion_trace_config_default[omp_idx];
+        if (dlg->codeptr != NULL) { // Non-NULL means it was configured
+            int pass = 1;
+            if (dlg->trace_starts_at != 0) { pass = 0; printf("[FAIL] Lexgion(OpenMP).default: trace_starts_at=%d (expected 0)\n", dlg->trace_starts_at); }
+            if (dlg->max_num_traces != 2000) { pass = 0; printf("[FAIL] Lexgion(OpenMP).default: max_num_traces=%d (expected 2000)\n", dlg->max_num_traces); }
+            if (dlg->tracing_rate != 1) { pass = 0; printf("[FAIL] Lexgion(OpenMP).default: tracing_rate=%d (expected 1)\n", dlg->tracing_rate); }
+            if (pass) printf("[PASS] Lexgion(OpenMP).default: rate tracing config correct\n");
+
+            // Check event on/off
+            int id_task_create_lg = -1, id_task_schedule_lg = -1;
+            domain_info_t *d = &domain_info_table[omp_idx];
+            for(int k=0; k<d->num_events; k++) {
+                if (strcmp(d->event_table[k].name, "omp_task_create") == 0) id_task_create_lg = k;
+                if (strcmp(d->event_table[k].name, "omp_task_schedule") == 0) id_task_schedule_lg = k;
+            }
+            if (id_task_create_lg != -1 && dlg->domain_events[omp_idx].set) {
+                unsigned long lg_events = dlg->domain_events[omp_idx].events;
+                int create_on = (lg_events >> id_task_create_lg) & 1;
+                int schedule_on = (id_task_schedule_lg != -1) ? ((lg_events >> id_task_schedule_lg) & 1) : -1;
+                printf("[INFO] Lexgion(OpenMP).default: omp_task_create=%s, omp_task_schedule=%s\n",
+                       create_on ? "on" : "off", schedule_on ? "on" : "off");
+            }
+        } else {
+            printf("[FAIL] Lexgion(OpenMP).default not configured (codeptr is NULL).\n");
+        }
     }
 
     // 4. Verify Complex Header: [OpenMP.thread(0-3): OpenMP.default: MPI.rank(0), CUDA.device(0)]
@@ -422,10 +450,10 @@ void setup_and_test_env() {
 	}
 
 	// Initialize the default lexgion trace config
-	lexgion_trace_config[0].codeptr = NULL;
-	lexgion_trace_config[0].tracing_rate = 1; //trace every execution
-	lexgion_trace_config[0].trace_starts_at = 0; //start tracing from the first execution	
-	lexgion_trace_config[0].max_num_traces = -1; //unlimited traces
+	lexgion_trace_config_default->codeptr = NULL;
+	lexgion_trace_config_default->tracing_rate = 1; //trace every execution
+	lexgion_trace_config_default->trace_starts_at = 0; //start tracing from the first execution	
+	lexgion_trace_config_default->max_num_traces = -1; //unlimited traces
     char *env_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
     if (env_file) {
         parse_trace_config_file(env_file);
@@ -462,15 +490,15 @@ void setup_and_test_env() {
     }
     
     // Verify Rate
-    if (lexgion_trace_config[0].trace_starts_at == 10 &&
-        lexgion_trace_config[0].max_num_traces == 100 &&
-        lexgion_trace_config[0].tracing_rate == 5) {
+    if (lexgion_trace_config_default->trace_starts_at == 10 &&
+        lexgion_trace_config_default->max_num_traces == 100 &&
+        lexgion_trace_config_default->tracing_rate == 5) {
         printf("[PASS] Env Var Rate Override Successful\n");
     } else {
         printf("[FAIL] Env Var Rate Override Failed: %d:%d:%d\n", 
-               lexgion_trace_config[0].trace_starts_at,
-               lexgion_trace_config[0].max_num_traces,
-               lexgion_trace_config[0].tracing_rate);
+               lexgion_trace_config_default->trace_starts_at,
+               lexgion_trace_config_default->max_num_traces,
+               lexgion_trace_config_default->tracing_rate);
     }
     
     // Test Multiple Punit Target parsing

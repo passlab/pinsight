@@ -147,7 +147,10 @@ typedef struct lexgion_trace_config {
 	void * codeptr;
 } lexgion_trace_config_t;
 
-extern lexgion_trace_config_t lexgion_trace_config[MAX_NUM_LEXGIONS]; //lexgion_trace_config[0] is reserved for the default lexgion trace config
+extern lexgion_trace_config_t all_lexgion_trace_config[]; 
+extern lexgion_trace_config_t *lexgion_trace_config_default; 
+extern lexgion_trace_config_t *domain_lexgion_trace_config_default;
+extern lexgion_trace_config_t *lexgion_trace_config;
 extern int num_lexgion_trace_configs;
 
 //Data structure for storing domain info, event info, punit info

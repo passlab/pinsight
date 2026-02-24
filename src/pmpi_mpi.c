@@ -109,7 +109,7 @@ int MPI_get_rank(void) {
     lexgion_t * lgp = record->lgp;                                              \
     lgp->num_exes_after_last_trace ++;                                              \
                                                                                         \
-    lexgion_set_trace_bit(lgp);                                                     \
+    lexgion_set_top_trace_bit();                                                     \
     if (lgp->trace_bit) {                                                                \
         lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_begin,  __VA_ARGS__);   \
     }

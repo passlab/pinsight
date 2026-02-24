@@ -30,6 +30,17 @@
 
 [CUDA.device(0)]: CUDA.default
 
+# defining OpenMP lexgion default trace config
+[Lexgion(OpenMP).default]
+	omp_thread_begin = on
+	omp_thread_end = on
+	omp_task_create = on
+	omp_task_schedule = on
+	trace_starts_at = 0
+	max_num_traces = 2000
+	tracing_rate = 1
+
+# defining a specific lexgion trace config
 [Lexgion(0x4010bd)]: Lexgion.default, OpenMP.default, MPI.default: MPI.rank(0), CUDA.device(0)
 	trace_starts_at = 20
 	max_num_traces = 200

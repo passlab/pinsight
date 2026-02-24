@@ -25,7 +25,8 @@ typedef enum {
     SECTION_DOMAIN_DEFAULT,
     SECTION_DOMAIN_PUNIT,
     SECTION_LEXGION,
-    SECTION_LEXGION_DEFAULT
+    SECTION_LEXGION_DEFAULT,
+    SECTION_LEXGION_DOMAIN_DEFAULT
 } SectionType;
 
 typedef enum {
@@ -157,23 +158,41 @@ static int parse_section_header(char *line) {
     current_lexgion_config = NULL;
     current_punit_config = NULL; 
 
-    // Case 1: Lexgion(0x...) or Lexgion.default
+    // Case 1: Lexgion.default, Lexgion(Domain).default, or Lexgion(0x...)
     if (strncmp(target, "Lexgion", 7) == 0) {
         lexgion_trace_config_t *lg = NULL;
         if (strcmp(target, "Lexgion.default") == 0) {
             current_section_type = SECTION_LEXGION_DEFAULT;
-            lg = &lexgion_trace_config[0];
-            // Usually Lexgion.default shouldn't utilize num_lexgion... increment?
-            // Actually it is index 0.
+            lg = lexgion_trace_config_default;
         } else if (strncmp(target, "Lexgion(", 8) == 0) {
-            current_section_type = SECTION_LEXGION;
+            // Check for Lexgion(Domain).default pattern, e.g. Lexgion(OpenMP).default
             char *ptr_start = strchr(target, '(');
             char *ptr_end = strchr(target, ')');
             if (ptr_start && ptr_end) {
-                *ptr_end = '\0';
-                uint64_t addr = strtoull(ptr_start + 1, NULL, 0);
-                void *codeptr = (void*)(uintptr_t)addr;
-                lg = get_or_create_lexgion_config(codeptr);
+                // Check if ".default" follows the closing paren
+                if (strcmp(ptr_end + 1, ".default") == 0) {
+                    // Extract domain name
+                    *ptr_end = '\0';
+                    char *domain_name = ptr_start + 1;
+                    int d_idx = find_domain_index(domain_name);
+                    if (d_idx >= 0) {
+                        current_section_type = SECTION_LEXGION_DOMAIN_DEFAULT;
+                        current_domain_idx = d_idx;
+                        lg = &domain_lexgion_trace_config_default[d_idx];
+                        // Initialize from global default if not yet configured
+                        if (lg->codeptr == NULL) {
+                            *lg = *lexgion_trace_config_default;
+                            lg->codeptr = (void*)(uintptr_t)(d_idx + 1); // non-NULL marker
+                        }
+                    }
+                } else {
+                    // Lexgion(0x...) - address-specific
+                    current_section_type = SECTION_LEXGION;
+                    *ptr_end = '\0';
+                    uint64_t addr = strtoull(ptr_start + 1, NULL, 0);
+                    void *codeptr = (void*)(uintptr_t)addr;
+                    lg = get_or_create_lexgion_config(codeptr);
+                }
             }
         }
         
@@ -190,16 +209,14 @@ static int parse_section_header(char *line) {
                 current_section_type = SECTION_NONE; // Stop parsing body
                 return 0;
             }
-            
-         
 
-            // Apply Inheritance
-            if (parts[0]) {
+            // Apply Inheritance (not for domain defaults)
+            if (parts[0] && current_section_type != SECTION_LEXGION_DOMAIN_DEFAULT) {
                  apply_inheritance(lg, parts[0]);
             }
             
-            // Apply PunitSet
-            if (parts[1]) {
+            // Apply PunitSet (not for domain defaults)
+            if (parts[1] && current_section_type != SECTION_LEXGION_DOMAIN_DEFAULT) {
                 parse_punit_set_string(parts[1], lg->domain_punits);
             }
         }
@@ -335,7 +352,7 @@ static void parse_key_value(char *line) {
     char *key = trim_whitespace(line);
     char *val = trim_whitespace(eq + 1);
 
-    if ((current_section_type == SECTION_LEXGION || current_section_type == SECTION_LEXGION_DEFAULT) && current_lexgion_config) {
+    if ((current_section_type == SECTION_LEXGION || current_section_type == SECTION_LEXGION_DEFAULT || current_section_type == SECTION_LEXGION_DOMAIN_DEFAULT) && current_lexgion_config) {
         if (strcmp(key, "trace_starts_at") == 0) current_lexgion_config->trace_starts_at = atoi(val);
         else if (strcmp(key, "max_num_traces") == 0) current_lexgion_config->max_num_traces = atoi(val);
         else if (strcmp(key, "tracing_rate") == 0) current_lexgion_config->tracing_rate = atoi(val);
@@ -508,8 +525,8 @@ static void reset_domain_config(int domain_idx) {
 static void reset_lexgion_config(lexgion_trace_config_t *lg) {
     if (!lg) return;
     void *saved_ptr = lg->codeptr;
-    // Copy defaults from lexgion_trace_config[0]
-    *lg = lexgion_trace_config[0];
+    // Copy defaults from global lexgion default
+    *lg = *lexgion_trace_config_default;
     lg->codeptr = saved_ptr; // Restore codeptr
 }
 
@@ -696,7 +713,7 @@ static lexgion_trace_config_t* get_or_create_lexgion_config(void *codeptr) {
     if (num_lexgion_trace_configs < MAX_NUM_LEXGIONS) {
          lexgion_trace_config_t *lg = &lexgion_trace_config[num_lexgion_trace_configs++];
          // Initialize with global defaults
-         *lg = lexgion_trace_config[0]; 
+         *lg = *lexgion_trace_config_default; 
          lg->codeptr = codeptr;
          return lg;
     }
@@ -807,22 +824,56 @@ void print_domain_trace_config(FILE *out) {
     }
 }
 
+// Helper to print a single lexgion config entry with the given header
+static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg, const char *header) {
+    fprintf(out, "%s\n", header);
+    
+    fprintf(out, "    trace_starts_at = %d\n", lg->trace_starts_at);
+    fprintf(out, "    max_num_traces = %d\n", lg->max_num_traces);
+    fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
+    
+    for (int di = 0; di < num_domain; di++) {
+        if (lg->domain_events[di].set) {
+            struct domain_info *d = &domain_info_table[di];
+            unsigned long evt = lg->domain_events[di].events;
+            for (int k = 0; k < d->num_events; k++) {
+                if (strlen(d->event_table[k].name) == 0) continue;
+                if (k >= 64) break;
+                int on = (evt >> k) & 1;
+                fprintf(out, "    %s.%s = %s\n", d->name, d->event_table[k].name, on ? "on" : "off");
+            }
+        }
+    }
+    fprintf(out, "\n");
+}
+
 void print_lexgion_trace_config(FILE *out) {
     if (!out) return;
 
+    // 1. Print global Lexgion.default
+    print_single_lexgion_config(out, lexgion_trace_config_default, "[Lexgion.default]");
+
+    // 2. Print domain-specific Lexgion(Domain).default for each configured domain
+    for (int di = 0; di < num_domain; di++) {
+        lexgion_trace_config_t *dlg = &domain_lexgion_trace_config_default[di];
+        if (dlg->codeptr != NULL) { // Non-NULL marker means it was configured
+            char header[128];
+            snprintf(header, sizeof(header), "[Lexgion(%s).default]", domain_info_table[di].name);
+            print_single_lexgion_config(out, dlg, header);
+        }
+    }
+
+    // 3. Print address-specific lexgion configs
     for (int i = 0; i < num_lexgion_trace_configs; i++) {
         lexgion_trace_config_t *lg = &lexgion_trace_config[i];
-        if (i == 0) {
-            fprintf(out, "[Lexgion.default]");
-        } else {
-            fprintf(out, "[Lexgion(%p)]", lg->codeptr);
-        }
+        
+        // Build header with inheritance and punit set
+        fprintf(out, "[Lexgion(%p)]", lg->codeptr);
 
         // Part 2: Inheritance
         int first_inh = 1;
         int printed_inh = 0;
         
-        // Check for inheritance (Enabled but NO specific punits)
         for (int di = 0; di < num_domain; di++) {
             if (lg->domain_punits[di].set) {
                  int has_punits = 0;
@@ -840,35 +891,7 @@ void print_lexgion_trace_config(FILE *out) {
             }
         }
         
-        // Part 3: Punit Set (Enabled AND HAS specific punits)
-        // Note: If NO inheritance was printed, but Punits exist, we still need separation.
-        // Format: [Target]: Inheritance : PunitSet
-        // If Inheritance is empty but PunitSet exists: [Target]: : PunitSet ? Or [Target] : PunitSet?
-        // Parser expects [Target] : Part2 : Part3.
-        // If Part2 is empty? `[Target] : : PunitSet` or `[Target] : PunitSet`?
-        // `parse_section_header` logic:
-        // `strtok` (colon).
-        // If one colon -> Part 2 only (Inheritance).
-        // If two colons -> Part 2 and Part 3.
-        // If separate inheritance loop found nothing, we might skip colon?
-        // But if we have PunitSet, we need it.
-        // Actually `parse_punit_set_string` is Part 3. `apply_inheritance` is Part 2.
-        // If we print `[Target] : PunitSet`, it treats PunitSet string as inheritance?
-        // `apply_inheritance` (line 701) checks for `Domain.default`.
-        // `parse_punit_set_string` checks for `Domain.Punit(...)`.
-        // If `apply_inheritance` sees `Domain.Punit(...)`? `strtok` splits by comma.
-        // `find_domain_index` ("Domain.Punit(...)") -> "Domain".
-        // It sets `domain_punits[idx].set = 1`. But ignores Punit part?
-        // Yes, `apply_inheritance` extracts domain name by stripping dot.
-        // So `Domain.Punit(...)` passed to `apply_inheritance` enables the domain but ignores the Punit constraint (it doesn't parse inner part).
-        // Then Part 3 `parse_punit_set` parses it again? No.
-        // `parse_section_header` splits by `:`.
-        // If output is `[T] : PunitSet`, then `parts[0]` = PunitSet. `apply_inheritance` runs on it.
-        // It enables domain. But `parse_punit_set` is NOT called on `parts[0]`.
-        // So Punit constraints would be LOST if printed in Part 2 slot.
-        // Therefore, if we have PunitSet, we MUST have two colons if Inheritance is empty? `[T] : : PunitSet`.
-        
-        // Let's check if we have Punits.
+        // Part 3: Punit Set
         int has_any_punits = 0;
         for (int di = 0; di < num_domain; di++) {
             if (lg->domain_punits[di].set) {
@@ -881,12 +904,9 @@ void print_lexgion_trace_config(FILE *out) {
         
         if (has_any_punits) {
             if (!printed_inh) {
-                 fprintf(out, ": "); // Empty Inheritance
+                 fprintf(out, ": ");
             }
-            fprintf(out, " : "); // Separator for PunitSet
-            int first = 0;
-            // Print ALL Punits (filtered by who has them)
-            // Using existing basic loop or custom
+            fprintf(out, " : ");
             int printed_p = 0;
             for (int di = 0; di < num_domain; di++) {
                 if (lg->domain_punits[di].set) {
@@ -907,12 +927,6 @@ void print_lexgion_trace_config(FILE *out) {
                         }
                     }
                 }
-            }
-        } else {
-            // No Punits.
-            if (!printed_inh && i != 0) {
-                 // Even if nothing to print, maybe default inheritance implicitly?
-                 // If nothing inherited and no punits, just [Lexgion].
             }
         }
         

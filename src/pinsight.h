@@ -90,24 +90,6 @@ typedef struct lexgion {
     unsigned int trace_bit; //bit to indicate whether to trace or not
 } lexgion_t;
 
-static inline int lexgion_set_trace_bit(lexgion_t *lgp) {
-    lgp->trace_bit = lgp->trace_config && 
-                     lgp->trace_config->trace_starts_at <= (lgp->counter - 1) &&
-                     ((lgp->trace_config->max_num_traces == -1) || 
-                      (lgp->trace_counter < lgp->trace_config->max_num_traces)) &&
-                     (lgp->num_exes_after_last_trace >= lgp->trace_config->tracing_rate);
-    return lgp->trace_bit;
-}
-
-static inline void lexgion_post_trace_update(lexgion_t *lgp) {
-    lgp->trace_counter++;
-    if (lgp->trace_counter == 1) {
-        lgp->first_trace_num = lgp->counter - 1;
-    }
-    lgp->num_exes_after_last_trace = 0;
-    lgp->last_trace_num = lgp->counter - 1;
-}
-
 /**
  * The runtime instance/frame/record of a lexgion of a thread
  */
@@ -115,7 +97,6 @@ typedef struct lexgion_record_t {
     lexgion_t *lgp;
     unsigned int record_id; /* the record_id is the counter of lgp when an lexgion instance is created and
                            * pushed to the stack */
-   int tracing; /* a flag to indicate whether to trace this instance or not */
 } lexgion_record_t;
 
 extern domain_trace_config_t domain_trace_config[];
@@ -164,6 +145,19 @@ extern __thread pinsight_thread_data_t pinsight_thread_data;
 
 #define recent_lexgion() (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 
+static inline int get_trace_bit() {
+    return pinsight_thread_data.lexgion_stack[pinsight_thread_data.stack_top].lgp->trace_bit;
+}
+
+static inline void lexgion_post_trace_update(lexgion_t *lgp) {
+    lgp->trace_counter++;
+    if (lgp->trace_counter == 1) {
+        lgp->first_trace_num = lgp->counter - 1;
+    }
+    lgp->num_exes_after_last_trace = 0;
+    lgp->last_trace_num = lgp->counter - 1;
+}
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -175,6 +169,7 @@ extern lexgion_record_t * top_lexgion() ;
 extern lexgion_record_t * top_lexgion_type(int class, int type);
 extern lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra, lexgion_trace_config_t * trace_config);
 extern lexgion_t *lexgion_end(unsigned int * record_id);
+extern int lexgion_set_top_trace_bit();
 
 //implemented in lexgion_trace_cnofig.c
 extern lexgion_trace_config_t * retrieve_lexgion_trace_config(const void * codeptr);
