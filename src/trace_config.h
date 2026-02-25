@@ -126,6 +126,11 @@ typedef struct punit_trace_config {
 	struct punit_trace_config * next;  //The link list pointer to the next punit_trace_config of the same domain
 } punit_trace_config_t;
 
+/**
+ * A domain trace config includes a default trace config for the domain and 
+ * a link list of punit-specific trace configs. punit-specific trace config specify
+ * the events on/off applied to a specific punit set of the domain, constrained by the given punit sets of other domains if supplied.
+*/
 typedef struct domain_trace_config { //The trace config for a domain
 	int set; //The global flag to indicate whether tracing is enabled for this domain
 	unsigned long int events; //The default event config for the domain
@@ -133,14 +138,19 @@ typedef struct domain_trace_config { //The trace config for a domain
 } domain_trace_config_t;
 extern domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
 
+/**
+ * A lexgion trace config includes the triple (trace_starts_at, max_num_traces, tracing_rate) for rate tracing, 
+ * and the event on/off config for each domain constrained by the given punit sets of one or multiple domains. 
+*/
 typedef struct lexgion_trace_config {
+	int domain_punit_set_set; //The flag to indicate whether the domain_punits is set
 	domain_punit_set_t domain_punits[MAX_NUM_DOMAINS]; //The punit set for this trace config
     struct { //The event setting for each domain of this lexgion
 		int set;
 		unsigned long int events;
 	} domain_events[MAX_NUM_DOMAINS];
 
-	//rate trace config
+	//rate trace config triple: trace_starts_at, max_num_traces, tracing_rate
 	unsigned int trace_starts_at;      //integer: the number of execution of the region before tracing starts.
     unsigned int max_num_traces;       //integer: total number of traces to be collected
     unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.

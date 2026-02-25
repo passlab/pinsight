@@ -188,3 +188,35 @@ int lexgion_set_top_trace_bit() {
                      (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
     return lgp->trace_bit;
 }
+
+int lexgion_set_top_trace_bit_domain_event(int domain, int event) {
+    int top = pinsight_thread_data.stack_top;
+    lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+    lexgion_trace_config_t *trace_config = lgp->trace_config;
+    if (trace_config == NULL) {
+        //Search the lexgion stack to find the next level lexgion that has a trace config
+        for (int i = top - 1; i >= 0; i--) {
+            lgp = pinsight_thread_data.lexgion_stack[i].lgp;
+            trace_config = lgp->trace_config;
+            if (trace_config != NULL) {
+                break;
+            }
+        }
+    }
+
+    //Check whether the current domain event is enabled for tracing
+    if (trace_config->domain_events[domain].set && !((trace_config->domain_events[domain].events >> event) & 1)) {
+        return 0;
+    }
+
+    //Check whether the punit set is enabled for tracing
+    if (trace_config->domain_punit_set_set) {
+    }
+
+
+    lgp->trace_bit = (trace_config->trace_starts_at <= (lgp->counter - 1) &&
+                     ((trace_config->max_num_traces == -1) || 
+                      (lgp->trace_counter < trace_config->max_num_traces)) &&
+                     (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
+    return lgp->trace_bit;
+}

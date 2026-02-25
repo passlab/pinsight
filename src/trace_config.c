@@ -87,6 +87,39 @@ int trace_config_event_set(domain_trace_config_t* dtcf, int event_id) {
 	}
 	return 0;
 }
+    */
+
+int domain_punit_set_match(domain_punit_set_t* domain_punit_set) {
+	if (!domain_punit_set->set) {
+		return 1; //no punit set specified, return true
+	}
+
+    int i;
+    for (i=0; i<num_domain; i++) {
+        if (!domain_punit_set->set) {continue}
+	    //check whether the current execution punit id is in the punit id set
+	    struct domain_info* d = &domain_info_table[i];
+        domain_punit_set_t * dpst = &domain_punit_set[i];
+	    int k;
+	    for (k=0; k<d->num_punits; k++) {
+		if (!domain_punit_set->domain_punits[i].punit[k].set) {
+			continue; //this punit kind is not constrained in this trace config
+		}
+		struct punit* p = &d->punits[k];
+		int punit_id;
+		if (p->num_arg == 0) {
+			punit_id = p->punit_id_func.func0();
+		} else {
+			punit_id = p->punit_id_func.func1(p->arg);
+		}
+		if (punit_id < p->low || punit_id > p->high ||
+			!bitset_test(&domain_punit_set->domain_punits[i].punit[k].punit_ids, (size_t)punit_id)) {
+			return 0;
+		}
+	}
+    }
+	return 1;
+}
 
 /**
  * Given a codeptr, lookup or reserve a config struct object
