@@ -51,7 +51,7 @@ if (PINSIGHT_OPENMP)
     list(APPEND SOURCE_FILES
             src/ompt_lttng_ust_tracepoint.h
             src/ompt_callback.c
-            src/OpenMP_domain.h
+            src/trace_domain_OpenMP.h
             )
 endif()
 
@@ -63,7 +63,7 @@ if (PINSIGHT_MPI)
     list(APPEND SOURCE_FILES
             src/pmpi_lttng_ust_tracepoint.h
             src/pmpi_mpi.c
-            src/MPI_domain.h
+            src/trace_domain_MPI.h
             )
 endif()
 
@@ -75,7 +75,7 @@ if (PINSIGHT_CUDA)
     list(APPEND SOURCE_FILES
             src/cupti_lttng_ust_tracepoint.h
             src/cupti_callback.c
-            src/CUDA_domain.h
+            src/trace_domain_CUDA.h
             )
 endif()
 
@@ -145,10 +145,12 @@ else()
 endif()
 message("============================================================")
 add_executable(test_config_parser 
-    src/test_config_parser.c
+    test/trace_config_parse/test_config_parser.c
     src/trace_config_parse.c
     src/trace_config.c
     src/bitset.c
     src/trace_domain_loader.c
 )
-target_link_libraries(test_config_parser ${CMAKE_DL_LIBS})
+target_compile_definitions(test_config_parser PRIVATE PINSIGHT_OPENMP PINSIGHT_MPI PINSIGHT_CUDA)
+target_include_directories(test_config_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/src)
+target_link_libraries(test_config_parser m ${CMAKE_DL_LIBS})
