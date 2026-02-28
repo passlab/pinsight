@@ -7,7 +7,7 @@
 #include <cuda.h>
 #include <cupti.h>
 #include "pinsight.h"
-#include "CUDA_domain.h"
+#include "trace_domain_CUDA.h"
 
 int CUDA_domain_index;
 domain_info_t *CUDA_domain_info;

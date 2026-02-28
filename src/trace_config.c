@@ -7,16 +7,16 @@
 #include "trace_config.h"
 #include "trace_config_parse.h"
 #ifdef PINSIGHT_MPI
-#include "MPI_domain.h"
+#include "trace_domain_MPI.h"
 #endif
 
 #ifdef PINSIGHT_OPENMP
-#include "OpenMP_domain.h"
+#include "trace_domain_OpenMP.h"
 #endif
 
 #ifdef PINSIGHT_CUDA
 #include <dlfcn.h>
-#include "CUDA_domain.h"
+#include "trace_domain_CUDA.h"
 #endif
 
 struct domain_info domain_info_table[MAX_NUM_DOMAINS];

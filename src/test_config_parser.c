@@ -32,9 +32,9 @@ domain_trace_config_t *CUDA_trace_config;
 
 // --- Include Domain Headers to get Registration Functions ---
 // These headers define static inline register functions
-#include "OpenMP_domain.h"
-#include "MPI_domain.h"
-#include "CUDA_domain.h"
+#include "trace_domain_OpenMP.h"
+#include "trace_domain_MPI.h"
+#include "trace_domain_CUDA.h"
 
 void test_parsing() {
     // Copy the example file to trace_config.txt (expected by parser)

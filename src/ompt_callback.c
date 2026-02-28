@@ -23,7 +23,7 @@ static int debug_on;
 static long long package_energy[MAX_PACKAGES];
 #endif
 
-#include "OpenMP_domain.h"
+#include "trace_domain_OpenMP.h"
 //const char OPENMP_DOMAIN_NAME[] = "OpenMP";
 //const char* OPENMP_DOMAIN_PUNIT[] = { "team", "thread", "device" };
 

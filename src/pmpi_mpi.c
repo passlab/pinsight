@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "pinsight.h"
-#include "MPI_domain.h"
+#include "trace_domain_MPI.h"
 
 #ifndef _EXTERN_C_
 #ifdef __cplusplus
