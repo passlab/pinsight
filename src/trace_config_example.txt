@@ -52,29 +52,3 @@
 	CUDA.CUDA_kernel_launch = on
 	CUDA.CUDA_memcpy = on
 
-# ================================= Configuration file Specification ================================================
-# A trace config file is in an enhanced INIT file format. 
-# 
-# Sections can be defined with an optional ACTION prefix:
-# [ACTION Target]: Inheritance : PunitSet
-#
-# ACTION:
-#   ADD     - If exists, merges settings. If not, adds configuration. (Default)
-#   REPLACE - If exists, resets to defaults before applying settings. If not, adds configuration.
-#   REMOVE  - Disable/Remove the target configuration.
-#
-# Target:
-#   Domain.default          - Global domain settings.
-#   Domain.Punit(Range)     - Specific Punit settings.
-#   Lexgion.default         - Default code region settings.
-#   Lexgion(Address)        - Specific code region settings.
-#
-# Examples:
-#   [REPLACE OpenMP.default]
-#   [ADD OpenMP.thread(0-3)]: OpenMP.default
-# 
-# The format of the section name includes three parts separated by colons (:),
-# e.g. [ADD OpenMP.thread(0-3)]: OpenMP.default: MPI.rank(0), CUDA.device(0). 
-# The first part is the [ACTION Target].
-# The second part is the domain configuration inheritence.
-# The third part is the punit configuration for other domains.

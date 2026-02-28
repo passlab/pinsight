@@ -30,15 +30,20 @@ typedef enum {
 } SectionType;
 
 typedef enum {
-    ACTION_ADD,
-    ACTION_REPLACE,
-    ACTION_REMOVE
+    ACTION_SET,    // Default: merge new settings with existing (or create new)
+    ACTION_RESET,  // Revert to computed/system defaults (*.default sections only, no body)
+    ACTION_REMOVE  // Delete/disable config (Domain.punit and Lexgion(address) only, no body)
 } ConfigAction;
 
 static SectionType current_section_type = SECTION_NONE;
 static int current_domain_idx = -1;
 static punit_trace_config_t* current_punit_config = NULL; 
 static lexgion_trace_config_t* current_lexgion_config = NULL;
+
+// Multi-address Lexgion support: Lexgion(addr1, addr2, ...)
+#define MAX_MULTI_LEXGION 64
+static lexgion_trace_config_t* current_lexgion_configs[MAX_MULTI_LEXGION];
+static int num_current_lexgion_configs = 0;
 
 #define MAX_LINE_LENGTH 1024
 
@@ -104,12 +109,12 @@ static int find_domain_index(const char *name);
 static int find_punit_kind_index(int domain_idx, const char *punit_name);
 static int apply_inheritance(lexgion_trace_config_t *lg_config, char *inheritance_str);
 static int parse_punit_set_string(char *spec_str, domain_punit_set_t *set_array);
-static void reset_domain_config(int domain_idx);
+static void reset_domain_default_config(int domain_idx);
 static void reset_lexgion_config(lexgion_trace_config_t *lg);
 static punit_trace_config_t* find_exact_punit_config(int domain_idx, domain_punit_set_t *target_set);
 
 // Example section: [ACTION Target] : Inheritance : PunitSet
-// Target: Lexgion(...) or Domain.Kind(Range)
+// Target: Lexgion(...) or Domain.PunitKind(Set)
 static int parse_section_header(char *line) {
     // 1. Locate closing bracket ']'
     char *close_bracket = strchr(line, ']');
@@ -120,16 +125,16 @@ static int parse_section_header(char *line) {
     char *outside_brackets = close_bracket + 1;
     
     // 2. Parse Action and Target from inside brackets
-    ConfigAction action = ACTION_ADD; // Default
+    ConfigAction action = ACTION_SET; // Default
     char *target = inside_brackets;
     
     // Check for prefixes
-    if (strncasecmp(inside_brackets, "ADD ", 4) == 0) {
-        action = ACTION_ADD;
+    if (strncasecmp(inside_brackets, "SET ", 4) == 0) {
+        action = ACTION_SET;
         target = inside_brackets + 4;
-    } else if (strncasecmp(inside_brackets, "REPLACE ", 8) == 0) {
-        action = ACTION_REPLACE;
-        target = inside_brackets + 8;
+    } else if (strncasecmp(inside_brackets, "RESET ", 6) == 0) {
+        action = ACTION_RESET;
+        target = inside_brackets + 6;
     } else if (strncasecmp(inside_brackets, "REMOVE ", 7) == 0) {
         action = ACTION_REMOVE;
         target = inside_brackets + 7;
@@ -158,12 +163,16 @@ static int parse_section_header(char *line) {
     current_lexgion_config = NULL;
     current_punit_config = NULL; 
 
+    // --- Determine if this is a default-kind section (for action validation) ---
+    int is_default_section = 0;
+
     // Case 1: Lexgion.default, Lexgion(Domain).default, or Lexgion(0x...)
     if (strncmp(target, "Lexgion", 7) == 0) {
         lexgion_trace_config_t *lg = NULL;
         if (strcmp(target, "Lexgion.default") == 0) {
             current_section_type = SECTION_LEXGION_DEFAULT;
-            lg = lexgion_trace_config_default;
+            is_default_section = 1;
+            lg = lexgion_default_trace_config;
         } else if (strncmp(target, "Lexgion(", 8) == 0) {
             // Check for Lexgion(Domain).default pattern, e.g. Lexgion(OpenMP).default
             char *ptr_start = strchr(target, '(');
@@ -178,77 +187,220 @@ static int parse_section_header(char *line) {
                     if (d_idx >= 0) {
                         current_section_type = SECTION_LEXGION_DOMAIN_DEFAULT;
                         current_domain_idx = d_idx;
-                        lg = &domain_lexgion_trace_config_default[d_idx];
-                        // Initialize from global default if not yet configured
+                        is_default_section = 1;
+                        lg = &lexgion_domain_default_trace_config[d_idx];
+                        // Eagerly initialize: Lexgion(Domain).default = Lexgion.default + Domain.default
                         if (lg->codeptr == NULL) {
-                            *lg = *lexgion_trace_config_default;
+                            *lg = *lexgion_default_trace_config;
                             lg->codeptr = (void*)(uintptr_t)(d_idx + 1); // non-NULL marker
+                            // Merge domain default events
+                            lg->domain_events[d_idx].set = 1;
+                            lg->domain_events[d_idx].events = domain_default_trace_config[d_idx].events;
                         }
                     }
                 } else {
-                    // Lexgion(0x...) - address-specific
+                    // Lexgion(0x...) or Lexgion(0x..., 0x..., ...) - address-specific
                     current_section_type = SECTION_LEXGION;
                     *ptr_end = '\0';
-                    uint64_t addr = strtoull(ptr_start + 1, NULL, 0);
-                    void *codeptr = (void*)(uintptr_t)addr;
-                    lg = get_or_create_lexgion_config(codeptr);
+                    char *addr_list = ptr_start + 1;
+                    
+                    // Parse comma-separated addresses
+                    num_current_lexgion_configs = 0;
+                    char *saveptr = NULL;
+                    char *token = strtok_r(addr_list, ",", &saveptr);
+                    while (token && num_current_lexgion_configs < MAX_MULTI_LEXGION) {
+                        char *trimmed = trim_whitespace(token);
+                        if (*trimmed) {
+                            uint64_t addr = strtoull(trimmed, NULL, 0);
+                            void *codeptr = (void*)(uintptr_t)addr;
+                            lexgion_trace_config_t *lc = get_or_create_lexgion_config(codeptr);
+                            lc->removed = 0;
+                            current_lexgion_configs[num_current_lexgion_configs++] = lc;
+                        }
+                        token = strtok_r(NULL, ",", &saveptr);
+                    }
+                    // Set lg to first config for default-section validation path
+                    if (num_current_lexgion_configs > 0) {
+                        lg = current_lexgion_configs[0];
+                    }
                 }
             }
         }
         
         if (lg) {
             current_lexgion_config = lg;
-            
-            if (action == ACTION_REPLACE || action == ACTION_REMOVE) {
-                reset_lexgion_config(lg);
+
+            // Validate action-target combinations
+            if (action == ACTION_REMOVE && is_default_section) {
+                fprintf(stderr, "PInsight Warning: REMOVE is not valid for default sections. Use RESET instead. Ignoring [REMOVE %s].\n", target);
+                current_section_type = SECTION_NONE;
+                return 0;
             }
-            
+            if (action == ACTION_RESET && !is_default_section) {
+                fprintf(stderr, "PInsight Warning: RESET is only valid for *.default sections. Use REMOVE instead. Ignoring [RESET %s].\n", target);
+                current_section_type = SECTION_NONE;
+                return 0;
+            }
+
+            // RESET: revert to computed defaults (no body expected)
+            if (action == ACTION_RESET) {
+                if (current_section_type == SECTION_LEXGION_DEFAULT) {
+                    // Reset to system defaults
+                    lg->tracing_rate = 1;
+                    lg->trace_starts_at = 0;
+                    lg->max_num_traces = -1;
+                    memset(lg->domain_events, 0, sizeof(lg->domain_events));
+                    memset(lg->domain_punits, 0, sizeof(lg->domain_punits));
+                } else if (current_section_type == SECTION_LEXGION_DOMAIN_DEFAULT) {
+                    // Reset to Lexgion.default + Domain.default (computed default)
+                    int d_idx = current_domain_idx;
+                    void *saved_codeptr = lg->codeptr;
+                    *lg = *lexgion_default_trace_config;
+                    lg->codeptr = saved_codeptr;
+                    lg->domain_events[d_idx].set = 1;
+                    lg->domain_events[d_idx].events = domain_default_trace_config[d_idx].events;
+                }
+                current_section_type = SECTION_NONE; // No body for RESET
+                return 0;
+            }
+
+            // REMOVE: only for Lexgion(address)
             if (action == ACTION_REMOVE) {
-                // Keep it reset (tracing_rate=0 implies disabled effectively or we can set max_traces=0)
-                lg->max_num_traces = 0;
+                for (int i = 0; i < num_current_lexgion_configs; i++) {
+                    current_lexgion_configs[i]->removed = 1;
+                }
                 current_section_type = SECTION_NONE; // Stop parsing body
                 return 0;
             }
 
-            // Apply Inheritance (not for domain defaults)
-            if (parts[0] && current_section_type != SECTION_LEXGION_DOMAIN_DEFAULT) {
-                 apply_inheritance(lg, parts[0]);
+            // SET: Apply Inheritance (all Lexgion section types)
+            if (parts[0]) {
+                if (current_section_type == SECTION_LEXGION) {
+                    for (int i = 0; i < num_current_lexgion_configs; i++) {
+                        apply_inheritance(current_lexgion_configs[i], parts[0]);
+                    }
+                } else {
+                    // Lexgion.default or Lexgion(Domain).default
+                    apply_inheritance(lg, parts[0]);
+                }
             }
-            
-            // Apply PunitSet (not for domain defaults)
-            if (parts[1] && current_section_type != SECTION_LEXGION_DOMAIN_DEFAULT) {
-                parse_punit_set_string(parts[1], lg->domain_punits);
+
+            // SET: Apply PunitSet (only for Lexgion(address))
+            if (parts[1] && current_section_type == SECTION_LEXGION) {
+                for (int i = 0; i < num_current_lexgion_configs; i++) {
+                    parse_punit_set_string(parts[1], current_lexgion_configs[i]->domain_punits);
+                }
             }
         }
     }
     // Case 2: Domain.default
     else if (strstr(target, ".default")) {
         current_section_type = SECTION_DOMAIN_DEFAULT;
+        is_default_section = 1;
         char *dot = strchr(target, '.');
         if (dot) {
             *dot = '\0';
             int idx = find_domain_index(target);
             if (idx >= 0) {
                 current_domain_idx = idx;
-                
-                if (action == ACTION_REPLACE || action == ACTION_REMOVE) {
-                    reset_domain_config(idx);
-                }
-                
+
+                // Validate action
                 if (action == ACTION_REMOVE) {
-                     domain_trace_config[idx].set = 0; // Disable
-                     current_section_type = SECTION_NONE;
-                     return 0;
+                    fprintf(stderr, "PInsight Warning: REMOVE is not valid for Domain.default. Use RESET instead. Ignoring.\n");
+                    current_section_type = SECTION_NONE;
+                    return 0;
+                }
+
+                // RESET: revert to system install defaults (no body)
+                if (action == ACTION_RESET) {
+                    reset_domain_default_config(idx);
+                    current_section_type = SECTION_NONE; // No body for RESET
+                    return 0;
                 }
                 
+                // SET: proceed to parse body (merge with existing)
             }
         }
     }
     // Case 3: Domain.punit specification
     else {
         current_section_type = SECTION_DOMAIN_PUNIT;
+
+        // Validate action: RESET not valid for punit sections
+        if (action == ACTION_RESET) {
+            fprintf(stderr, "PInsight Warning: RESET is only valid for *.default sections. Use REMOVE for punit sections. Ignoring.\n");
+            current_section_type = SECTION_NONE;
+            return 0;
+        }
+
+        // Check for wildcard REMOVE: [REMOVE Domain.punitKind(*)]
+        char *open_paren = strchr(target, '(');
+        char *close_paren = open_paren ? strchr(open_paren, ')') : NULL;
+        if (action == ACTION_REMOVE && open_paren && close_paren) {
+            // Check if the content between parens is "*"
+            char *inner = open_paren + 1;
+            while (isspace((unsigned char)*inner)) inner++;
+            if (*inner == '*') {
+                // Wildcard REMOVE: Domain.punitKind(*)
+                *open_paren = '\0'; // Truncate to "Domain.punitKind"
+                char *dot = strchr(target, '.');
+                int d_idx = -1;
+                int punit_kind_idx = -1;
+                
+                if (dot) {
+                    *dot = '\0';
+                    d_idx = find_domain_index(target);
+                    if (d_idx >= 0) {
+                        punit_kind_idx = find_punit_kind_index(d_idx, dot + 1);
+                    }
+                }
+                
+                if (d_idx >= 0 && punit_kind_idx >= 0) {
+                    // Free all punit configs that have this specific punit kind set
+                    punit_trace_config_t *prev = NULL;
+                    punit_trace_config_t *curr = domain_punit_trace_config[d_idx];
+                    int removed_count = 0;
+                    
+                    while (curr) {
+                        punit_trace_config_t *next = curr->next;
+                        
+                        if (curr->domain_punits[d_idx].punit[punit_kind_idx].set) {
+                            // Free bitsets
+                            for(int i=0; i<num_domain; i++) {
+                                if (curr->domain_punits[i].set) {
+                                    for(int k=0; k<MAX_NUM_PUNIT_KINDS; k++) {
+                                        if (curr->domain_punits[i].punit[k].set) {
+                                            bitset_free(&curr->domain_punits[i].punit[k].punit_ids);
+                                        }
+                                    }
+                                }
+                            }
+                            // Unlink and free
+                            if (prev) {
+                                prev->next = next;
+                            } else {
+                                domain_punit_trace_config[d_idx] = next;
+                            }
+                            free(curr);
+                            removed_count++;
+                        } else {
+                            prev = curr;
+                        }
+                        curr = next;
+                    }
+                    
+                    if (removed_count > 0) {
+                        fprintf(stderr, "PInsight: Removed %d punit config(s) for %s.%s(*).\n", 
+                                removed_count, domain_info_table[d_idx].name, 
+                                domain_info_table[d_idx].punits[punit_kind_idx].name);
+                    }
+                }
+                current_section_type = SECTION_NONE;
+                return 0;
+            }
+        }
         
-        // Target: Domain.Kind(Set)
+        // Normal punit parsing: Domain.Kind(Set)
         // We need to parse this into a temp domain_punit_set_t to use for matching/creating
         domain_punit_set_t temp_set[MAX_NUM_DOMAINS];
         memset(temp_set, 0, sizeof(temp_set)); // Important!
@@ -272,28 +424,16 @@ static int parse_section_header(char *line) {
                 
                 if (existing) {
                     config = existing;
-                    // IF ACTION matches logic for replace/reset
-                    if (action == ACTION_REPLACE || action == ACTION_REMOVE) {
-                        // Clear events and auxiliary constraints
+                    // REMOVE: clear events (effectively disable this punit config)
+                    if (action == ACTION_REMOVE) {
                         config->events = 0;
                         memset(config->domain_punits, 0, sizeof(config->domain_punits));
                         // Re-apply the target constraint (it was cleared by memset)
                         config->domain_punits[d_idx] = temp_set[d_idx];
-                        // Note: temp_set pointers are valid? `parse_punit_set_string` might allocate bitsets.
-                        // We need to ensure we don't double-free or leak.
-                        // `parse_punit_set_string` calls `bitset_init` and `bitset_parse_ranges`.
-                        // We copied struct content. If bitset uses pointers, we now have two pointers to same memory if we are not careful.
-                        // Wait, `domain_punit_set_t` bitsets. In `parse_punit_set_string`, it initializes them.
-                        // If we assign `config->domain_punits[d_idx] = temp_set[d_idx]`, we are moving ownership effectively.
-                        // But `existing` ALREADY had bitsets initialized. We triggered leak if we didn't free them first?
-                        // `bitset_free` isn't called here.
-                        // FIXME: Memory management for bitsets in punit matching.
-                        
-                        // For simplicity in this step: Assumed bitsets are small & inline or we rely on OS cleanup?
-                        // Correct way: bitset_free on old, then move new.
                     }
+                    // SET: merge — existing config stays, body will override specific fields
                 } else {
-                     // Create new if not found (and not REMOVE/RESET usually, but RESET on non-existing is no-op, ADD/REPLACE create)
+                     // Create new if not found
                      if (action != ACTION_REMOVE) {
                          config = malloc(sizeof(punit_trace_config_t));
                          memset(config, 0, sizeof(punit_trace_config_t));
@@ -301,12 +441,12 @@ static int parse_section_header(char *line) {
                          // Move temp_set to config
                          config->domain_punits[d_idx] = temp_set[d_idx];
                          
-                         // Link
+                         // Link to the linked list of punit trace configs for this domain
                          config->next = NULL;
-                         if (domain_trace_config[d_idx].punit_trace_config == NULL) {
-                             domain_trace_config[d_idx].punit_trace_config = config;
+                         if (domain_punit_trace_config[d_idx] == NULL) {
+                             domain_punit_trace_config[d_idx] = config;
                          } else {
-                             punit_trace_config_t *curr = domain_trace_config[d_idx].punit_trace_config;
+                             punit_trace_config_t *curr = domain_punit_trace_config[d_idx];
                              while(curr->next) curr = curr->next;
                              curr->next = config;
                          }
@@ -317,7 +457,7 @@ static int parse_section_header(char *line) {
                     current_punit_config = config;
                     if (action == ACTION_REMOVE) {
                          current_section_type = SECTION_NONE;
-                         // If REMOVE, we should arguably unlink and free it, but simply clearing events disables it effectively.
+                         // Events cleared above; no body to parse
                          return 0;
                     }
                     
@@ -328,7 +468,7 @@ static int parse_section_header(char *line) {
                         if (d_dot) {
                              *d_dot = '\0';
                              int parent_idx = find_domain_index(inh_str);
-                             if (parent_idx >= 0) config->events = domain_trace_config[parent_idx].events;
+                             if (parent_idx >= 0) config->events = domain_default_trace_config[parent_idx].events;
                         }
                     }
                     
@@ -353,9 +493,27 @@ static void parse_key_value(char *line) {
     char *val = trim_whitespace(eq + 1);
 
     if ((current_section_type == SECTION_LEXGION || current_section_type == SECTION_LEXGION_DEFAULT || current_section_type == SECTION_LEXGION_DOMAIN_DEFAULT) && current_lexgion_config) {
-        if (strcmp(key, "trace_starts_at") == 0) current_lexgion_config->trace_starts_at = atoi(val);
-        else if (strcmp(key, "max_num_traces") == 0) current_lexgion_config->max_num_traces = atoi(val);
-        else if (strcmp(key, "tracing_rate") == 0) current_lexgion_config->tracing_rate = atoi(val);
+        // Determine how many configs to update
+        int cfg_count = 1;
+        lexgion_trace_config_t **cfgs = &current_lexgion_config;
+        if (current_section_type == SECTION_LEXGION && num_current_lexgion_configs > 0) {
+            cfg_count = num_current_lexgion_configs;
+            cfgs = current_lexgion_configs;
+        }
+
+        // Parse the value once
+        if (strcmp(key, "trace_starts_at") == 0) {
+            int v = atoi(val);
+            for (int ci = 0; ci < cfg_count; ci++) cfgs[ci]->trace_starts_at = v;
+        }
+        else if (strcmp(key, "max_num_traces") == 0) {
+            int v = atoi(val);
+            for (int ci = 0; ci < cfg_count; ci++) cfgs[ci]->max_num_traces = v;
+        }
+        else if (strcmp(key, "tracing_rate") == 0) {
+            int v = atoi(val);
+            for (int ci = 0; ci < cfg_count; ci++) cfgs[ci]->tracing_rate = v;
+        }
         else {
             // Check for Domain.Event override
             char *dot = strchr(key, '.');
@@ -384,10 +542,12 @@ static void parse_key_value(char *line) {
                               enable = 0;
                          }
 
-                         current_lexgion_config->domain_punits[d_idx].set = 1;
-                         current_lexgion_config->domain_events[d_idx].set = 1;
-                         if(enable) current_lexgion_config->domain_events[d_idx].events |= (1UL << eid);
-                         else current_lexgion_config->domain_events[d_idx].events &= ~(1UL << eid);
+                         for (int ci = 0; ci < cfg_count; ci++) {
+                             cfgs[ci]->domain_punits[d_idx].set = 1;
+                             cfgs[ci]->domain_events[d_idx].set = 1;
+                             if(enable) cfgs[ci]->domain_events[d_idx].events |= (1UL << eid);
+                             else cfgs[ci]->domain_events[d_idx].events &= ~(1UL << eid);
+                         }
                     }
                 }
                 *dot = '.'; // restore
@@ -450,8 +610,8 @@ static void parse_key_value(char *line) {
                       enable = 0;
                  }
                  
-                 if(enable) domain_trace_config[current_domain_idx].events |= (1UL << eid);
-                 else domain_trace_config[current_domain_idx].events &= ~(1UL << eid);
+                 if(enable) domain_default_trace_config[current_domain_idx].events |= (1UL << eid);
+                 else domain_default_trace_config[current_domain_idx].events &= ~(1UL << eid);
              }
         }
     }
@@ -460,7 +620,7 @@ static void parse_key_value(char *line) {
          punit_trace_config_t *pcfg = (punit_trace_config_t*)current_punit_config;
          int dom_idx = -1; 
          // Find which domain this punit config belongs to? 
-         // We stored it in linked list of domain_trace_config[dom_idx], 
+         // We stored it in linked list of domain_default_trace_config[dom_idx], 
          // but here we just need to search for event name in ALL domains? 
          // OR usually it belongs to the domain defined in the header.
          // Let's assume current_domain_idx was set correctly in parse_section_header
@@ -494,44 +654,25 @@ static void parse_key_value(char *line) {
 
 // --- Helper Implementations ---
 
-static void reset_domain_config(int domain_idx) {
+static void reset_domain_default_config(int domain_idx) {
     if (domain_idx < 0 || domain_idx >= num_domain) return;
     
     // Reset events to installed defaults
-    domain_trace_config[domain_idx].events = domain_info_table[domain_idx].eventInstallStatus;
+    domain_default_trace_config[domain_idx].events = domain_info_table[domain_idx].eventInstallStatus;
     // Set enabled/disabled based on events availability (mimic initial setup)
-    domain_trace_config[domain_idx].set = (domain_trace_config[domain_idx].events != 0);
-    
-    // Free punit trace configs
-    punit_trace_config_t *curr = domain_trace_config[domain_idx].punit_trace_config;
-    while (curr) {
-        punit_trace_config_t *next = curr->next;
-        // Free bitsets in domain_punits array
-        for(int i=0; i<num_domain; i++) {
-            if (curr->domain_punits[i].set) {
-                for(int k=0; k<MAX_NUM_PUNIT_KINDS; k++) {
-                    if (curr->domain_punits[i].punit[k].set) {
-                        bitset_free(&curr->domain_punits[i].punit[k].punit_ids);
-                    }
-                }
-            }
-        }
-        free(curr);
-        curr = next;
-    }
-    domain_trace_config[domain_idx].punit_trace_config = NULL;
+    domain_default_trace_config[domain_idx].set = (domain_default_trace_config[domain_idx].events != 0);
 }
 
 static void reset_lexgion_config(lexgion_trace_config_t *lg) {
     if (!lg) return;
     void *saved_ptr = lg->codeptr;
     // Copy defaults from global lexgion default
-    *lg = *lexgion_trace_config_default;
+    *lg = *lexgion_default_trace_config;
     lg->codeptr = saved_ptr; // Restore codeptr
 }
 
 static punit_trace_config_t* find_exact_punit_config(int domain_idx, domain_punit_set_t *target_set) {
-    punit_trace_config_t *curr = domain_trace_config[domain_idx].punit_trace_config;
+    punit_trace_config_t *curr = domain_punit_trace_config[domain_idx];
     while (curr) {
         // Identity Match: Same Domain (implicit by list), Same Punit Kind, Exact Punit Set
         // Check ONLY the primary domain constraint (domain_idx)
@@ -695,7 +836,7 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config, char *inheritanc
         if (idx >= 0) {
             lg_config->domain_punits[idx].set = 1;
             lg_config->domain_events[idx].set = 1;
-            lg_config->domain_events[idx].events = domain_trace_config[idx].events;
+            lg_config->domain_events[idx].events = domain_default_trace_config[idx].events;
         }
         token = strtok(NULL, ",");
     }
@@ -704,16 +845,16 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config, char *inheritanc
 }
 
 static lexgion_trace_config_t* get_or_create_lexgion_config(void *codeptr) {
-    for(int i=1; i<num_lexgion_trace_configs; i++) {
-        if (lexgion_trace_config[i].codeptr == codeptr) {
-            return &lexgion_trace_config[i];
+    for(int i=0; i<num_lexgion_address_trace_configs; i++) {
+        if (lexgion_address_trace_config[i].codeptr == codeptr) {
+            return &lexgion_address_trace_config[i];
         }
     }
 
-    if (num_lexgion_trace_configs < MAX_NUM_LEXGIONS) {
-         lexgion_trace_config_t *lg = &lexgion_trace_config[num_lexgion_trace_configs++];
+    if (num_lexgion_address_trace_configs < MAX_NUM_LEXGIONS) {
+         lexgion_trace_config_t *lg = &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
          // Initialize with global defaults
-         *lg = *lexgion_trace_config_default; 
+         *lg = *lexgion_default_trace_config; 
          lg->codeptr = codeptr;
          return lg;
     }
@@ -765,7 +906,7 @@ void print_domain_trace_config(FILE *out) {
     for (int i = 0; i < num_domain; i++) {
         struct domain_info *d = &domain_info_table[i];
         fprintf(out, "[%s.default]\n", d->name);
-        unsigned long current_events = domain_trace_config[i].events;
+        unsigned long current_events = domain_default_trace_config[i].events;
         for (int k = 0; k < d->num_events; k++) {
             if (strlen(d->event_table[k].name) == 0) continue;
             if (k >= 64) break; 
@@ -774,7 +915,7 @@ void print_domain_trace_config(FILE *out) {
         }
         fprintf(out, "\n");
 
-        punit_trace_config_t *curr = domain_trace_config[i].punit_trace_config;
+        punit_trace_config_t *curr = domain_punit_trace_config[i];
         while (curr) {
             // Part 1: [Target]
             fprintf(out, "[");
@@ -851,11 +992,11 @@ void print_lexgion_trace_config(FILE *out) {
     if (!out) return;
 
     // 1. Print global Lexgion.default
-    print_single_lexgion_config(out, lexgion_trace_config_default, "[Lexgion.default]");
+    print_single_lexgion_config(out, lexgion_default_trace_config, "[Lexgion.default]");
 
     // 2. Print domain-specific Lexgion(Domain).default for each configured domain
     for (int di = 0; di < num_domain; di++) {
-        lexgion_trace_config_t *dlg = &domain_lexgion_trace_config_default[di];
+        lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[di];
         if (dlg->codeptr != NULL) { // Non-NULL marker means it was configured
             char header[128];
             snprintf(header, sizeof(header), "[Lexgion(%s).default]", domain_info_table[di].name);
@@ -864,8 +1005,8 @@ void print_lexgion_trace_config(FILE *out) {
     }
 
     // 3. Print address-specific lexgion configs
-    for (int i = 0; i < num_lexgion_trace_configs; i++) {
-        lexgion_trace_config_t *lg = &lexgion_trace_config[i];
+    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+        lexgion_trace_config_t *lg = &lexgion_address_trace_config[i];
         
         // Build header with inheritance and punit set
         fprintf(out, "[Lexgion(%p)]", lg->codeptr);

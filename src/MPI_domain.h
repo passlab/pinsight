@@ -133,7 +133,7 @@ static inline struct domain_info *register_MPI_trace_domain(void)
 
     /* Return pointer to this domain’s entry */
     MPI_domain_info = &domain_info_table[MPI_domain_index];
-    MPI_trace_config = &domain_trace_config[MPI_domain_index];
+    MPI_trace_config = &domain_default_trace_config[MPI_domain_index];
     return MPI_domain_info;
 }
 

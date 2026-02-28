@@ -117,6 +117,10 @@ typedef struct domain_punit_set {
 	} punit[MAX_NUM_PUNIT_KINDS];
 } domain_punit_set_t;
 
+/**
+ * The punit trace config that specifies the events on/off for the domain, 
+ * constrained by the given punit sets of all domains if supplied.
+ */
 typedef struct punit_trace_config {
 	domain_punit_set_t domain_punits[MAX_NUM_DOMAINS];
 	//domain/punit range for adding constrains on which punits the trace config should be applied to, e.g.
@@ -127,16 +131,14 @@ typedef struct punit_trace_config {
 } punit_trace_config_t;
 
 /**
- * A domain trace config includes a default trace config for the domain and 
- * a link list of punit-specific trace configs. punit-specific trace config specify
- * the events on/off applied to a specific punit set of the domain, constrained by the given punit sets of other domains if supplied.
+ * The default domain trace config that specifies the events on/off for the domain
 */
 typedef struct domain_trace_config { //The trace config for a domain
 	int set; //The global flag to indicate whether tracing is enabled for this domain
 	unsigned long int events; //The default event config for the domain
-	struct punit_trace_config * punit_trace_config; //The link list for punit_id-specific config of the domain.
 } domain_trace_config_t;
-extern domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
+extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
+extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
 
 /**
  * A lexgion trace config includes the triple (trace_starts_at, max_num_traces, tracing_rate) for rate tracing, 
@@ -155,13 +157,15 @@ typedef struct lexgion_trace_config {
     unsigned int max_num_traces;       //integer: total number of traces to be collected
     unsigned int tracing_rate;         //integer: the rate an execution is traced, e.g. 10 for 1 trace per 10 execution of the region.
 	void * codeptr;
+	int removed; //The flag to indicate whether this lexgion(address) trace config is removed. 
+	             // When it is removed , the object may still exist in the array but should not be used. 
 } lexgion_trace_config_t;
 
 extern lexgion_trace_config_t all_lexgion_trace_config[]; 
-extern lexgion_trace_config_t *lexgion_trace_config_default; 
-extern lexgion_trace_config_t *domain_lexgion_trace_config_default;
-extern lexgion_trace_config_t *lexgion_trace_config;
-extern int num_lexgion_trace_configs;
+extern lexgion_trace_config_t *lexgion_default_trace_config; 
+extern lexgion_trace_config_t *lexgion_domain_default_trace_config;
+extern lexgion_trace_config_t *lexgion_address_trace_config;
+extern int num_lexgion_address_trace_configs;
 
 //Data structure for storing domain info, event info, punit info
 typedef struct domain_info {
@@ -194,7 +198,7 @@ typedef struct domain_info {
 		} punit_id_func;
 		void * arg; //argument to be passed to the punit_id_func.func1
 		int num_arg; //0 or 1 argument for the punit_id_func,
-	} punits[4]; //max 4 punit kinds
+	} punits[MAX_NUM_PUNIT_KINDS]; //max 4 punit kinds
 	int num_punits;
 } domain_info_t;
 extern int num_domain;

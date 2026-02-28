@@ -99,7 +99,7 @@ typedef struct lexgion_record_t {
                            * pushed to the stack */
 } lexgion_record_t;
 
-extern domain_trace_config_t domain_trace_config[];
+extern domain_trace_config_t domain_default_trace_config[];
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have recursive such as in OpenMP tasking */
 #define MAX_LEXGION_STACK_DEPTH 16
