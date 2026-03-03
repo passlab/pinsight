@@ -16,7 +16,5 @@ void dsl_add_domain(const char *name, int event_id_mode);
 void dsl_add_punit(const char *name, unsigned low, unsigned high, int (*punit_id_func)(), void * arg, int num_arg);
 void dsl_add_subdomain(const char *name);
 void dsl_add_event(int native_id, const char *name, int initial_status);
-void dsl_print_domain(struct domain_info *d);
-void dsl_print_domain_to_file(struct domain_info *d);
 
 #endif /* TRACE_DOMAIN_LOADER_H */

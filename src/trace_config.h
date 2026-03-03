@@ -54,9 +54,9 @@
  *    6. Tracing configuration takes effects on per process/thread-basis such that every thread process
  *       tracing control by itself. But configuration setting are applied globally.
  */
-void pinsight_load_trace_config(char * filepath);
 
 #include "bitset.h"
+#include <stdio.h>
 
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
 #define PINSIGHT_DEBUG_DEFAULT 0
@@ -161,6 +161,12 @@ typedef struct lexgion_trace_config {
 	             // When it is removed , the object may still exist in the array but should not be used. 
 } lexgion_trace_config_t;
 
+// Default rate trace config: trace every execution,
+// no limit on the number of traces, start from the first execution
+#define DEFAULT_TRACE_START 0
+#define DEFAULT_TRACE_MAX   -1
+#define DEFAULT_TRACE_RATE  1
+
 extern lexgion_trace_config_t all_lexgion_trace_config[]; 
 extern lexgion_trace_config_t *lexgion_default_trace_config; 
 extern lexgion_trace_config_t *lexgion_domain_default_trace_config;
@@ -204,9 +210,16 @@ typedef struct domain_info {
 extern int num_domain;
 extern struct domain_info domain_info_table[MAX_NUM_DOMAINS];
 
+// Serialization functions
+extern void dsl_print_domain_info(struct domain_info *d);
+extern void print_domain_info(FILE *out); 
+extern void print_domain_trace_config(FILE *out);
+extern void print_lexgion_trace_config(FILE *out);
+extern void pinsight_load_trace_config(char * filepath);
+
 // --------------------------------------------------------
 // Safe environment variable query functions
-long env_get_long(const char* varname, long default_value);
+extern long env_get_long(const char* varname, long default_value);
 unsigned long env_get_ulong(const char* varname, unsigned long default_value);
 
 #endif // CONFIG_TRACE_CONFIG_H

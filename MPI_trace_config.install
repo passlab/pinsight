@@ -1,13 +1,13 @@
 [MPI.rank(0-127)]
 
 [MPI(init)]
-    MPI_Init = off
-    MPI_Init_thread = off
-    MPI_Finalize = off
+    MPI_Init = on
+    MPI_Init_thread = on
+    MPI_Finalize = on
 
 [MPI(p2p)]
-    MPI_Send = off
-    MPI_Recv = off
+    MPI_Send = on
+    MPI_Recv = on
     MPI_Sendrecv = off
 
 [MPI(asyncp2p)]
@@ -19,7 +19,7 @@
 
 [MPI(collective)]
     MPI_Bcast = off
-    MPI_Barrier = off
+    MPI_Barrier = on
     MPI_Reduce = off
     MPI_Allreduce = off
     MPI_Scatter = off
