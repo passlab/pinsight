@@ -1,21 +1,21 @@
+#include "pinsight.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "pinsight.h"
 
 __thread pinsight_thread_data_t pinsight_thread_data;
 
 /** init thread data
  */
-pinsight_thread_data_t * init_thread_data(int _thread_num) {
-    global_thread_num = _thread_num;
-//    pinsight_thread_data.thread_type = thread_type;
-    pinsight_thread_data.stack_top = -1;
-    pinsight_thread_data.num_lexgions = 0;
-    pinsight_thread_data.recent_lexgion = -1;
+pinsight_thread_data_t *init_thread_data(int _thread_num) {
+  global_thread_num = _thread_num;
+  //    pinsight_thread_data.thread_type = thread_type;
+  pinsight_thread_data.stack_top = -1;
+  pinsight_thread_data.num_lexgions = 0;
+  pinsight_thread_data.recent_lexgion = -1;
 
-    pinsight_thread_data.initialized = 1;
+  pinsight_thread_data.initialized = 1;
 
-    return &pinsight_thread_data;
+  return &pinsight_thread_data;
 }
 
 /**
@@ -23,31 +23,33 @@ pinsight_thread_data_t * init_thread_data(int _thread_num) {
  * @param lgp
  * @param record_id
  */
-lexgion_record_t * push_lexgion(lexgion_t * lgp, unsigned int record_id) {
-    int top = pinsight_thread_data.stack_top+1;
-    if (top == MAX_LEXGION_STACK_DEPTH) {
-       fprintf(stderr, "thread %d lexgion stack overflow\n", global_thread_num);
-       return NULL;
-    }
-    lexgion_record_t * record = &pinsight_thread_data.lexgion_stack[top];
-    record->lgp = lgp;
-    record->record_id = record_id;
-    pinsight_thread_data.stack_top = top;
+lexgion_record_t *push_lexgion(lexgion_t *lgp, unsigned int record_id) {
+  int top = pinsight_thread_data.stack_top + 1;
+  if (top == MAX_LEXGION_STACK_DEPTH) {
+    fprintf(stderr, "thread %d lexgion stack overflow\n", global_thread_num);
+    return NULL;
+  }
+  lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
+  record->lgp = lgp;
+  record->record_id = record_id;
+  pinsight_thread_data.stack_top = top;
 
-    return record;
+  return record;
 }
 
 /**
- * pop the lexgion out of the stack and also return the record_id if it is requested.
+ * pop the lexgion out of the stack and also return the record_id if it is
+ * requested.
  * @param record_id
  * @return
  */
-lexgion_t * pop_lexgion(unsigned int * record_id) {
-    int top = pinsight_thread_data.stack_top;
-    lexgion_t * lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-    if (record_id != NULL) *record_id = pinsight_thread_data.lexgion_stack[top].record_id;
-    pinsight_thread_data.stack_top--;
-    return lgp;
+lexgion_t *pop_lexgion(unsigned int *record_id) {
+  int top = pinsight_thread_data.stack_top;
+  lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+  if (record_id != NULL)
+    *record_id = pinsight_thread_data.lexgion_stack[top].record_id;
+  pinsight_thread_data.stack_top--;
+  return lgp;
 }
 
 /**
@@ -56,111 +58,116 @@ lexgion_t * pop_lexgion(unsigned int * record_id) {
  * @param index
  * @return
  */
-static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra, int * index) {
-    /* play it safe for dealing with data race */
-    if (pinsight_thread_data.recent_lexgion < 0 || pinsight_thread_data.num_lexgions <= 0) return NULL;
-    int i;
-    lexgion_t * lgp;
-
-    /* search forward from the most recent one */
-    for (i=pinsight_thread_data.recent_lexgion; i<pinsight_thread_data.num_lexgions; i++) {
-        if (class == pinsight_thread_data.lexgions[i].class &&
-                type == pinsight_thread_data.lexgions[i].type &&
-                pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra) {
-            *index = i;
-            lgp = &pinsight_thread_data.lexgions[i];
-            return lgp;
-        }
-    }
-    /* search from 0 to most recent one */
-    for (i=0; i<pinsight_thread_data.recent_lexgion; i++) {
-        if (class == pinsight_thread_data.lexgions[i].class &&
-                pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra &&
-                type == pinsight_thread_data.lexgions[i].type) {
-            *index = i;
-            lgp = &pinsight_thread_data.lexgions[i];
-            return lgp;
-        }
-    }
+static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra,
+                               int *index) {
+  /* play it safe for dealing with data race */
+  if (pinsight_thread_data.recent_lexgion < 0 ||
+      pinsight_thread_data.num_lexgions <= 0)
     return NULL;
+  int i;
+  lexgion_t *lgp;
+
+  /* search forward from the most recent one */
+  for (i = pinsight_thread_data.recent_lexgion;
+       i < pinsight_thread_data.num_lexgions; i++) {
+    if (class == pinsight_thread_data.lexgions[i].class &&
+        type == pinsight_thread_data.lexgions[i].type &&
+        pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra) {
+      *index = i;
+      lgp = &pinsight_thread_data.lexgions[i];
+      return lgp;
+    }
+  }
+  /* search from 0 to most recent one */
+  for (i = 0; i < pinsight_thread_data.recent_lexgion; i++) {
+    if (class == pinsight_thread_data.lexgions[i].class &&
+        pinsight_thread_data.lexgions[i].codeptr_ra == codeptr_ra &&
+        type == pinsight_thread_data.lexgions[i].type) {
+      *index = i;
+      lgp = &pinsight_thread_data.lexgions[i];
+      return lgp;
+    }
+  }
+  return NULL;
 }
 /**
  * This is a thread-specific call
  *
  */
-lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra, lexgion_trace_config_t * trace_config) {
-    if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
-        fprintf(stderr, "FATAL: Max number of lexgions (%d) allowed in the source code reached, cannot continue\n",
-                MAX_NUM_LEXGIONS);
-        return NULL;
-    }
+lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
+  if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
+    fprintf(stderr,
+            "FATAL: Max number of lexgions (%d) allowed in the source code "
+            "reached, cannot continue\n",
+            MAX_NUM_LEXGIONS);
+    return NULL;
+  }
 
-    int index;
+  int index;
 
-    lexgion_t *lgp = find_lexgion(class, type, codeptr_ra, &index);
-    if (lgp == NULL) {
-        index = pinsight_thread_data.num_lexgions;
-        lgp = &pinsight_thread_data.lexgions[index];
-        pinsight_thread_data.num_lexgions++;
-        lgp->codeptr_ra = codeptr_ra;
-        //printf("%d: lexgion_begin(%d, %X): first time encountered %X\n", thread_id, i, codeptr_ra, lgp);
-        lgp->type = type;
-        lgp->class = class;
+  lexgion_t *lgp = find_lexgion(class, type, codeptr_ra, &index);
+  if (lgp == NULL) {
+    index = pinsight_thread_data.num_lexgions;
+    lgp = &pinsight_thread_data.lexgions[index];
+    pinsight_thread_data.num_lexgions++;
+    lgp->codeptr_ra = codeptr_ra;
+    lgp->type = type;
+    lgp->class = class;
 
-        /* init counters for number of exes, traces, and sampling */
-        lgp->counter = 0;
-        lgp->trace_counter = 0;
-        lgp->num_exes_after_last_trace = 0;
-        if (trace_config != NULL) {
-            lgp->trace_config = trace_config;
-        } else {
-            lgp->trace_config = retrieve_lexgion_trace_config(codeptr_ra);
-        }
-    }
-    pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
+    /* init counters for number of exes, traces, and sampling */
+    lgp->counter = 0;
+    lgp->trace_counter = 0;
+    lgp->num_exes_after_last_trace = 0;
+    lgp->trace_config =
+        NULL; /* resolved lazily by lexgion_set_top_trace_bit_domain_event */
+  }
+  pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 
-    lgp->num_exes_after_last_trace++;
-    lgp->counter++; //counter only increment
-    if (lgp->counter >= 0xFFFF) {
-        //fprintf(stderr, "FATAL: Trace record overflow, more than 2^^16 traces (%d) would be recorded for lexgion: %p\n", lgp->counter, codeptr_ra);
-    }
+  lgp->num_exes_after_last_trace++;
+  lgp->counter++; // counter only increment
+  if (lgp->counter >= 0xFFFF) {
+    // fprintf(stderr, "FATAL: Trace record overflow, more than 2^^16 traces
+    // (%d) would be recorded for lexgion: %p\n", lgp->counter, codeptr_ra);
+  }
 
-    return push_lexgion(lgp, lgp->counter);
+  return push_lexgion(lgp, lgp->counter);
 }
 
 /**
- * mark the end of a lexgion, return the lexgion and the record_id of the instance if it is requested
+ * mark the end of a lexgion, return the lexgion and the record_id of the
+ * instance if it is requested
  * @param record_id: record_id of the lexgion instance that is just ended.
  * @return
  */
-lexgion_t *lexgion_end(unsigned int * record_id) {
-    return pop_lexgion(record_id);
+lexgion_t *lexgion_end(unsigned int *record_id) {
+  return pop_lexgion(record_id);
 }
 
 /**
- * search the lexgion stack to find the topmost lexgion record in the stack of the specified type.
+ * search the lexgion stack to find the topmost lexgion record in the stack of
+ * the specified type.
  * @param type
  * @return
  */
-lexgion_record_t * top_lexgion_type(int class, int type) {
-    int top = pinsight_thread_data.stack_top;
-    while (top >=0) {
-    	lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
-    	lexgion_t * lgp = record->lgp;
-        if (lgp->class == class && lgp->type == type) {
-            return record;
-        }
-        top--;
+lexgion_record_t *top_lexgion_type(int class, int type) {
+  int top = pinsight_thread_data.stack_top;
+  while (top >= 0) {
+    lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
+    lexgion_t *lgp = record->lgp;
+    if (lgp->class == class && lgp->type == type) {
+      return record;
     }
-    return NULL;
+    top--;
+  }
+  return NULL;
 }
 
-lexgion_record_t * top_lexgion() {
-    int top = pinsight_thread_data.stack_top;
-    if (top >=0) {
-        return &pinsight_thread_data.lexgion_stack[top];
-    }
-    return NULL;
+lexgion_record_t *top_lexgion() {
+  int top = pinsight_thread_data.stack_top;
+  if (top >= 0) {
+    return &pinsight_thread_data.lexgion_stack[top];
+  }
+  return NULL;
 }
 
 /**
@@ -168,55 +175,95 @@ lexgion_record_t * top_lexgion() {
  * @return 1 if the top lexgion should be traced, 0 otherwise
  */
 int lexgion_set_top_trace_bit() {
-    int top = pinsight_thread_data.stack_top;
-    lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-    lexgion_trace_config_t *trace_config = lgp->trace_config;
-    if (trace_config == NULL) {
-        //Search the lexgion stack to find the next level lexgion that has a trace config
-        for (int i = top - 1; i >= 0; i--) {
-            lgp = pinsight_thread_data.lexgion_stack[i].lgp;
-            trace_config = lgp->trace_config;
-            if (trace_config != NULL) {
-                break;
-            }
-        }
+  int top = pinsight_thread_data.stack_top;
+  lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+  lexgion_trace_config_t *trace_config = lgp->trace_config;
+  if (trace_config == NULL) {
+    // Search the lexgion stack to find the next level lexgion that has a trace
+    // config
+    for (int i = top - 1; i >= 0; i--) {
+      lgp = pinsight_thread_data.lexgion_stack[i].lgp;
+      trace_config = lgp->trace_config;
+      if (trace_config != NULL) {
+        break;
+      }
     }
+  }
 
-    lgp->trace_bit = (trace_config->trace_starts_at <= (lgp->counter - 1) &&
-                     ((trace_config->max_num_traces == -1) || 
-                      (lgp->trace_counter < trace_config->max_num_traces)) &&
-                     (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
-    return lgp->trace_bit;
+  lgp->trace_bit =
+      (trace_config->trace_starts_at <= (lgp->counter - 1) &&
+       ((trace_config->max_num_traces == -1) ||
+        (lgp->trace_counter < trace_config->max_num_traces)) &&
+       (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
+  return lgp->trace_bit;
 }
 
-int lexgion_set_top_trace_bit_domain_event(int domain, int event) {
-    int top = pinsight_thread_data.stack_top;
-    lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-    lexgion_trace_config_t *trace_config = lgp->trace_config;
+/**
+ * Set the trace bit for a lexgion based on domain and event, with 3-level
+ * config resolution:
+ *   1. Search lexgion_address_trace_config by lgp->codeptr_ra
+ *   2. Fall back to lexgion_domain_default_trace_config[domain]
+ *   3. Fall back to lexgion_default_trace_config
+ * @return 1 if the lexgion should be traced, 0 otherwise
+ */
+int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
+                                           int event) {
+  lexgion_trace_config_t *trace_config = lgp->trace_config;
+
+  /* Re-resolve config if not yet set or if a reconfig has occurred since last
+   * resolution */
+  if (trace_config == NULL ||
+      lgp->trace_config_change_counter != trace_config_change_counter) {
+    trace_config = NULL;
+
+    /* 1. Search the lexgion_address_trace_config table by lgp->codeptr_ra */
+    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+      if (lexgion_address_trace_config[i].codeptr == lgp->codeptr_ra &&
+          !lexgion_address_trace_config[i].removed) {
+        trace_config = &lexgion_address_trace_config[i];
+        break;
+      }
+    }
+
+    /* 2. If not found, try the domain-specific default config */
     if (trace_config == NULL) {
-        //Search the lexgion stack to find the next level lexgion that has a trace config
-        for (int i = top - 1; i >= 0; i--) {
-            lgp = pinsight_thread_data.lexgion_stack[i].lgp;
-            trace_config = lgp->trace_config;
-            if (trace_config != NULL) {
-                break;
-            }
-        }
+      lexgion_trace_config_t *domain_default =
+          &lexgion_domain_default_trace_config[domain];
+      if (domain_default->codeptr != NULL) {
+        trace_config = domain_default;
+      }
     }
 
-    //Check whether the current domain event is enabled for tracing
-    if (trace_config->domain_events[domain].set && !((trace_config->domain_events[domain].events >> event) & 1)) {
-        return 0;
+    /* 3. If still not found, fall back to the global default */
+    if (trace_config == NULL) {
+      trace_config = lexgion_default_trace_config;
     }
 
-    //Check whether the punit set is enabled for tracing
-    if (trace_config->domain_punit_set_set) {
+    /* Cache the resolved config and current generation */
+    lgp->trace_config = trace_config;
+    lgp->trace_config_change_counter = trace_config_change_counter;
+  }
+
+  /* Check whether the current domain event is enabled for tracing */
+  if (trace_config->domain_events[domain].set &&
+      !((trace_config->domain_events[domain].events >> event) & 1)) {
+    lgp->trace_bit = 0;
+    return 0;
+  }
+
+  /* Check whether the punit set is enabled for tracing */
+  if (trace_config->domain_punit_set_set) {
+    if (!domain_punit_set_match(trace_config->domain_punits)) {
+      lgp->trace_bit = 0;
+      return 0;
     }
+  }
 
-
-    lgp->trace_bit = (trace_config->trace_starts_at <= (lgp->counter - 1) &&
-                     ((trace_config->max_num_traces == -1) || 
-                      (lgp->trace_counter < trace_config->max_num_traces)) &&
-                     (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
-    return lgp->trace_bit;
+  /* Compute the rate-based trace bit */
+  lgp->trace_bit =
+      (trace_config->trace_starts_at <= (lgp->counter - 1) &&
+       ((trace_config->max_num_traces == -1) ||
+        (lgp->trace_counter < trace_config->max_num_traces)) &&
+       (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
+  return lgp->trace_bit;
 }
