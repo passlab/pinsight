@@ -120,6 +120,8 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     lgp->num_exes_after_last_trace = 0;
     lgp->trace_config =
         NULL; /* resolved lazily by lexgion_set_top_trace_bit_domain_event */
+    lgp->trace_config_change_counter =
+        -1; /* force mismatch to trigger config resolution */
   }
   pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 

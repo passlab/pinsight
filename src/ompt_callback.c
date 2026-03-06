@@ -24,12 +24,13 @@ static long long package_energy[MAX_PACKAGES];
 #endif
 
 #include "trace_domain_OpenMP.h"
-// const char OPENMP_DOMAIN_NAME[] = "OpenMP";
-// const char* OPENMP_DOMAIN_PUNIT[] = { "team", "thread", "device" };
 
 int OpenMP_domain_index;
 domain_info_t *OpenMP_domain_info;
 domain_trace_config_t *OpenMP_trace_config;
+// The following info are stored in the OpenMP_domain_info object.
+// const char OPENMP_DOMAIN_NAME[] = "OpenMP";
+// const char* OPENMP_DOMAIN_PUNIT[] = { "team", "thread", "device" };
 
 extern int __kmpc_global_thread_num(void *);
 extern int __kmpc_global_num_threads(void *);
@@ -149,41 +150,6 @@ static void get_parallel_task_info() {
            "implicit parallel region :%p\n",
            task_data, task_parallel_data);
 }
-
-/*
-#define print_frame(level)\
-do {\
-  unw_cursor_t cursor;\
-  unw_context_t uc;\
-  unw_word_t fp;\
-  unw_getcontext(&uc);\
-  unw_init_local(&cursor, &uc);\
-  int tmp_level = level;\
-  unw_get_reg(&cursor, UNW_REG_SP, &fp);\
-  if (debug_on) {\
-    printf("callback %p\n", (void*)fp);\
-  }\
-  while (tmp_level > 0 && unw_step(&cursor) > 0)\
-  {\
-    unw_get_reg(&cursor, UNW_REG_SP, &fp);\
-    if (debug_on) {\
-      printf("callback %p\n", (void*)fp);\
-    }\
-    tmp_level--;\
-  }\
-  if(tmp_level == 0)\
-    if (debug_on) {\
-      printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n",
-ompt_get_thread_data()->value, level, (void*)fp);\
-    }\
-  elsei {\
-    if (debug_on) {\
-      printf("%" PRIu64 ": __builtin_frame_address(%d)=%p\n",
-ompt_get_thread_data()->value, level, NULL);\
-    }\
-  }\
-} while(0)
-*/
 
 #define print_frame(level)                                                     \
   do {                                                                         \

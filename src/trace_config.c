@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #ifdef PINSIGHT_MPI
 #include "trace_domain_MPI.h"
 #endif
@@ -126,20 +127,30 @@ void setup_trace_config_env() {
   }
 }
 
+static time_t last_config_mtime = 0;
+
 void pinsight_load_trace_config(char *filepath) {
   if (!filepath) {
     filepath = getenv("PINSIGHT_TRACE_CONFIG_FILE");
   }
 
   if (filepath) {
-    parse_trace_config_file(filepath);
+    struct stat st;
+    if (stat(filepath, &st) != 0) {
+      fprintf(stderr, "WARNING: Cannot stat config file '%s': %s\n", filepath,
+              strerror(errno));
+    } else if (st.st_mtime != last_config_mtime) {
+      last_config_mtime = st.st_mtime;
+      parse_trace_config_file(filepath);
+      trace_config_change_counter++; // Bump counter so threads re-resolve
+                                     // cached trace_config pointers
+    }
   }
-  setup_trace_config_env();      // Re-apply env overrides
-  trace_config_change_counter++; // Bump counter so threads re-resolve cached
-                                 // trace_config
+  setup_trace_config_env(); // Re-apply env overrides (modifies defaults
+                            // in-place, no counter bump needed)
 }
 
-__attribute__((constructor)) void initial_setup_trace_config() {
+__attribute__((constructor(101))) void initial_setup_trace_config() {
 #ifdef PINSIGHT_OPENMP
   register_OpenMP_trace_domain();
   // OpenMP support is initialized by ompt_start_tool() callback that is
