@@ -215,6 +215,10 @@ extern unsigned int
     trace_config_change_counter; /* bumped on every reconfig to invalidate
                                 cached trace_config in lexgions */
 
+// Fill lexgion_domain_default_trace_config by combining domain defaults and
+// lexgion defaults for domains not explicitly configured by the user.
+extern void fill_lexgion_domain_default_trace_config(void);
+
 // Check whether the current execution punit id's match the domain_punit_set
 // constraints
 extern int domain_punit_set_match(domain_punit_set_t *domain_punit_set);

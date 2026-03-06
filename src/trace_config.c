@@ -139,6 +139,32 @@ void pinsight_load_trace_config(char *filepath) {
                                  // trace_config
 }
 
+/**
+ * Fill the lexgion_domain_default_trace_config array by combining the global
+ * lexgion default (rate triple) with each domain's default event config.
+ * Only fills entries that were not explicitly configured by the user in the
+ * config file (i.e., codeptr == NULL). This should be called once after the
+ * initial config file is loaded.
+ */
+void fill_lexgion_domain_default_trace_config(void) {
+  int i;
+  for (i = 0; i < num_domain; i++) {
+    lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[i];
+    if (dlg->codeptr != NULL) {
+      // User already provided a [Lexgion(Domain).default] for this domain;
+      // do not overwrite.
+      continue;
+    }
+    // Start from the global lexgion default
+    *dlg = *lexgion_default_trace_config;
+    // Set non-NULL marker (convention: domain index + 1)
+    dlg->codeptr = (void *)(uintptr_t)(i + 1);
+    // Merge this domain's default event config
+    dlg->domain_events[i].set = 1;
+    dlg->domain_events[i].events = domain_default_trace_config[i].events;
+  }
+}
+
 __attribute__((constructor)) void initial_setup_trace_config() {
 #ifdef PINSIGHT_OPENMP
   register_OpenMP_trace_domain();
@@ -182,7 +208,11 @@ __attribute__((constructor)) void initial_setup_trace_config() {
   lexgion_default_trace_config->max_num_traces =
       DEFAULT_TRACE_MAX; // unlimited traces
 
+  // set default lexgion domain config which is the combination of lexgion
+  // default c and the domian default config.
+
   pinsight_load_trace_config(NULL);
+  fill_lexgion_domain_default_trace_config();
   print_domain_trace_config(stdout);
   print_lexgion_trace_config(stdout);
 }
