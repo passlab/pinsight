@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug PInsight (helloomp)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/hello/helloomp",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "LD_PRELOAD": "${workspaceFolder}/build/libpinsight.so",
+                "OMP_TOOL_LIBRARIES": "${workspaceFolder}/build/libpinsight.so",
+                "LD_LIBRARY_PATH": "/usr/lib/llvm-21/lib"
+            }
+        }
+    ]
+}
