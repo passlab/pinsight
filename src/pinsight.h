@@ -200,6 +200,10 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
  */
 static inline int lexgion_check_event_enabled(lexgion_t *lgp, int domain,
                                               int event) {
+  /* Domain-level kill switch: if the entire domain is disabled via env
+   * (e.g. PINSIGHT_TRACE_OPENMP=FALSE), skip all tracing for this domain */
+  if (!domain_default_trace_config[domain].set)
+    return 0;
   if (!lgp->trace_bit)
     return 0;
   lexgion_trace_config_t *tc = lgp->trace_config;

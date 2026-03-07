@@ -761,7 +761,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* this is the join barrier for the parallel region: if codeptr_ra ==
          * NULL: non-master thread; if parallel_lgp->codeptr_ra == codeptr_ra:
          * master thread */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -777,7 +778,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -796,7 +798,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       /* implicit barrier in worksharing, single, sections, and explicit barrier
        */
       /* each thread will have a lexgion object for the same lexgion */
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -825,7 +828,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* this is the join barrier for the parallel region: if codeptr_ra ==
          * NULL: non-master thread; if parallel_lgp->codeptr_ra == codeptr_ra:
          * master thread */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -842,7 +846,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* implicit barrier in worksharing, single, sections, and explicit
          * barrier */
         /* each thread will have a lexgion object for the same lexgion */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -880,7 +885,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * and then resummoned for doing the work, so this is actually when a
          * thread is about to enter into a new parallel region and start an
          * implicit task */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -895,7 +901,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -914,7 +921,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       /* implicit barrier in worksharing, single, sections, and explicit barrier
        */
       /* each thread will have a lexgion object for the same lexgion */
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -947,7 +955,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * and then resummoned for doing the work, so this is actually when a
          * thread is about to enter into a new parallel region and start an
          * implicit task */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -963,7 +972,8 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* implicit barrier in worksharing, single, sections, and explicit
          * barrier */
         /* each thread will have a lexgion object for the same lexgion */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1008,7 +1018,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         /* this is the join barrier for the parallel region: if codeptr_ra ==
          * NULL: non-master thread; if parallel_lgp->codeptr_ra == codeptr_ra:
          * master thread */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1021,7 +1032,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -1039,7 +1051,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
        */
       /* each thread will have a lexgion object for the same lexgion in the
        * sync_wait callback */
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -1065,7 +1078,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         /* this is the join barrier for the parallel region: if codeptr_ra ==
          * NULL: non-master thread; if parallel_lgp->codeptr_ra == codeptr_ra:
          * master thread */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1080,7 +1094,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * barrier */
         /* each thread will have a lexgion object for the same lexgion in the
          * sync_wait callback */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1115,7 +1130,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * and then resummoned for doing the work, so this is actually when a
          * thread is about to enter into a new parallel region and start an
          * implicit task */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1128,7 +1144,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(
@@ -1146,7 +1163,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       /* implicit barrier in worksharing, single, sections, and explicit barrier
        */
       /* each thread will have a lexgion object for the same lexgion */
-      if (lgp->trace_bit) {
+      if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(
@@ -1178,7 +1196,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * and then resummoned for doing the work, so this is actually when a
          * thread is about to enter into a new parallel region and start an
          * implicit task */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1192,7 +1211,8 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         /* implicit barrier in worksharing, single, sections, and explicit
          * barrier */
         /* each thread will have a lexgion object for the same lexgion */
-        if (lgp->trace_bit) {
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+                                        ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0) {
             rapl_sysfs_read_packages(

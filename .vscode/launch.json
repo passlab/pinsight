@@ -13,6 +13,19 @@
                 "OMP_TOOL_LIBRARIES": "${workspaceFolder}/build/libpinsight.so",
                 "LD_LIBRARY_PATH": "/usr/lib/llvm-21/lib"
             }
+        },
+        {
+            "name": "Debug PInsight (helloomp_loop)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/hello/helloomp_loop",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "LD_PRELOAD": "${workspaceFolder}/build/libpinsight.so",
+                "OMP_TOOL_LIBRARIES": "${workspaceFolder}/build/libpinsight.so",
+                "LD_LIBRARY_PATH": "/usr/lib/llvm-21/lib"
+            }
         }
     ]
 }
