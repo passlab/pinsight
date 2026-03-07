@@ -1039,7 +1039,7 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
        */
       /* each thread will have a lexgion object for the same lexgion in the
        * sync_wait callback */
-      if (trace_bit) {
+      if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(

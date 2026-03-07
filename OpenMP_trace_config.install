@@ -15,7 +15,7 @@
 [OpenMP(task)]
     omp_task_create = on
     omp_task_schedule = on
-    omp_implicit_task = off
+    omp_implicit_task = on
     omp_dependences = off
     omp_task_dependence = off
 

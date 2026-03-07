@@ -66,6 +66,7 @@
  */
 
 #include "bitset.h"
+#include <signal.h>
 #include <stdio.h>
 
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
@@ -214,6 +215,10 @@ extern int num_lexgion_address_trace_configs;
 extern unsigned int
     trace_config_change_counter; /* bumped on every reconfig to invalidate
                                 cached trace_config in lexgions */
+extern volatile sig_atomic_t
+    config_reload_requested; /* set by SIGUSR1 handler */
+extern void pinsight_install_signal_handler(void);
+extern void pinsight_load_trace_config(char *filepath);
 
 // Fill lexgion_domain_default_trace_config by combining domain defaults and
 // lexgion defaults for domains not explicitly configured by the user.

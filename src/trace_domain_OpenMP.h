@@ -41,7 +41,7 @@ extern domain_trace_config_t *OpenMP_trace_config;
   TRACE_SUBDOMAIN_BEGIN("task")                                                \
   TRACE_EVENT(ompt_callback_task_create, "omp_task_create", 1)                 \
   TRACE_EVENT(ompt_callback_task_schedule, "omp_task_schedule", 1)             \
-  TRACE_EVENT(ompt_callback_implicit_task, "omp_implicit_task", 0)             \
+  TRACE_EVENT(ompt_callback_implicit_task, "omp_implicit_task", 1)             \
   TRACE_EVENT(ompt_callback_dependences, "omp_dependences", 0)                 \
   TRACE_EVENT(ompt_callback_task_dependence, "omp_task_dependence", 0)         \
   TRACE_SUBDOMAIN_END()                                                        \

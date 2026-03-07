@@ -3,6 +3,7 @@
 #include "trace_config_parse.h"
 #include <ctype.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -128,6 +129,29 @@ void setup_trace_config_env() {
 }
 
 static time_t last_config_mtime = 0;
+volatile sig_atomic_t config_reload_requested = 0;
+
+#ifndef PINSIGHT_RELOAD_SIGNAL
+#define PINSIGHT_RELOAD_SIGNAL SIGUSR1
+#endif
+
+static void pinsight_sigusr1_handler(int sig) {
+  (void)sig;
+  config_reload_requested = 1; // Only safe operation in a signal handler
+}
+
+void pinsight_install_signal_handler() {
+  struct sigaction sa;
+  sa.sa_handler = pinsight_sigusr1_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART; // Don't interrupt syscalls
+  if (sigaction(PINSIGHT_RELOAD_SIGNAL, &sa, NULL) != 0) {
+    fprintf(stderr,
+            "WARNING: Failed to install signal handler (signal %d) for config "
+            "reload: %s\n",
+            PINSIGHT_RELOAD_SIGNAL, strerror(errno));
+  }
+}
 
 void pinsight_load_trace_config(char *filepath) {
   if (!filepath) {
@@ -224,6 +248,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
 
   pinsight_load_trace_config(NULL);
   fill_lexgion_domain_default_trace_config();
+  pinsight_install_signal_handler();
   print_domain_trace_config(stdout);
   print_lexgion_trace_config(stdout);
 }
