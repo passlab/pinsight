@@ -52,6 +52,12 @@ __thread const void *parallel_codeptr = NULL;
 __thread unsigned int parallel_record_id = -1;
 __thread const void *task_codeptr = NULL;
 __thread unsigned int task_record_id = -1;
+/* When a work lexgion is explicitly created (address-specific config),
+ * save its lgp so that the subsequent implicit barrier (sync_region/
+ * sync_region_wait) can use the work lexgion's trace_bit instead of
+ * the implicit task's.  Cleared at sync_region end or at the next
+ * callback_work begin. */
+__thread lexgion_t *enclosing_work_lgp = NULL;
 
 __thread int global_thread_num = 0;
 __thread int omp_team_num = 0;
@@ -579,18 +585,22 @@ static void on_ompt_callback_work(ompt_work_t wstype,
         lgp = record->lgp;
         lexgion_set_top_trace_bit_domain_event(lgp, OpenMP_domain_index,
                                                ompt_callback_work);
+        enclosing_work_lgp = lgp; /* save for subsequent barrier */
       } else {
         /* No address-specific config: piggyback on enclosing task lexgion */
         record = enclosing_task_lexgion_record;
         lgp = record->lgp;
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_work);
+        enclosing_work_lgp = NULL; /* no work lexgion created */
       }
     } else { // combined construct with the parallel/task/team
       record = (lexgion_record_t *)task_data->ptr;
       lgp = record->lgp;
       /* Piggyback: check event enable against enclosing config */
       lexgion_check_event_enabled(lgp, OpenMP_domain_index, ompt_callback_work);
+      enclosing_work_lgp =
+          NULL; /* combined construct, no separate work lexgion */
     }
 
     if (lgp->trace_bit) {
@@ -798,6 +808,9 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       /* implicit barrier in worksharing, single, sections, and explicit barrier
        */
       /* each thread will have a lexgion object for the same lexgion */
+      /* Use work lexgion's lgp if one was explicitly created */
+      if (enclosing_work_lgp != NULL)
+        lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
@@ -846,6 +859,9 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* implicit barrier in worksharing, single, sections, and explicit
          * barrier */
         /* each thread will have a lexgion object for the same lexgion */
+        /* Use work lexgion's lgp if one was explicitly created */
+        if (enclosing_work_lgp != NULL)
+          lgp = enclosing_work_lgp;
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
@@ -921,6 +937,9 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       /* implicit barrier in worksharing, single, sections, and explicit barrier
        */
       /* each thread will have a lexgion object for the same lexgion */
+      /* Use work lexgion's lgp if one was explicitly created */
+      if (enclosing_work_lgp != NULL)
+        lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
@@ -935,6 +954,7 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
                              (unsigned short)kind,
                              codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
       }
+      enclosing_work_lgp = NULL; /* barrier done, clear work lgp */
       break;
 #else
     case ompt_sync_region_barrier: // barrier (implicit or explicit)
@@ -972,6 +992,9 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* implicit barrier in worksharing, single, sections, and explicit
          * barrier */
         /* each thread will have a lexgion object for the same lexgion */
+        /* Use work lexgion's lgp if one was explicitly created */
+        if (enclosing_work_lgp != NULL)
+          lgp = enclosing_work_lgp;
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
@@ -987,6 +1010,7 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
               (unsigned short)kind,
               codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
         }
+        enclosing_work_lgp = NULL; /* barrier done, clear work lgp */
       }
       break;
 #endif
@@ -1051,6 +1075,9 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
        */
       /* each thread will have a lexgion object for the same lexgion in the
        * sync_wait callback */
+      /* Use work lexgion's lgp if one was explicitly created */
+      if (enclosing_work_lgp != NULL)
+        lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
@@ -1094,6 +1121,9 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * barrier */
         /* each thread will have a lexgion object for the same lexgion in the
          * sync_wait callback */
+        /* Use work lexgion's lgp if one was explicitly created */
+        if (enclosing_work_lgp != NULL)
+          lgp = enclosing_work_lgp;
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
@@ -1163,6 +1193,9 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       /* implicit barrier in worksharing, single, sections, and explicit barrier
        */
       /* each thread will have a lexgion object for the same lexgion */
+      /* Use work lexgion's lgp if one was explicitly created */
+      if (enclosing_work_lgp != NULL)
+        lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
@@ -1211,6 +1244,9 @@ static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         /* implicit barrier in worksharing, single, sections, and explicit
          * barrier */
         /* each thread will have a lexgion object for the same lexgion */
+        /* Use work lexgion's lgp if one was explicitly created */
+        if (enclosing_work_lgp != NULL)
+          lgp = enclosing_work_lgp;
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
