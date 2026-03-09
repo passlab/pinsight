@@ -7,7 +7,6 @@
 
 #include "bitset.h"
 #include "trace_config.h"
-#include "trace_config_parse.h"
 #include "trace_domain_loader.h" // For domain_info_table access
 
 // Forward declarations
@@ -57,7 +56,7 @@ static int num_current_lexgion_configs = 0;
 
 // --- Utility Functions ---
 
-char *trim_whitespace(char *str) {
+static char *trim_whitespace(char *str) {
   char *end;
   while (isspace((unsigned char)*str))
     str++;

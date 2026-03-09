@@ -5,7 +5,6 @@
 #include <unistd.h>
 
 #include "trace_config.h"
-#include "trace_config_parse.h"
 #include "trace_domain_loader.h"
 
 // --- Stubs for Runtime Functions utilized in Domain DSL ---

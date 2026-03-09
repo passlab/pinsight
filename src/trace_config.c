@@ -1,6 +1,5 @@
 #include "trace_config.h"
 #include "pinsight_config.h"
-#include "trace_config_parse.h"
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
