@@ -341,11 +341,15 @@ PINSIGHT_DEBUG_ENABLE=0|1              # Debug printouts (default: 0)
 
 ### Config File
 
-A config file provides domain-specific and lexgion-specific configuration. Specify the file via:
+A config file provides domain-specific and lexgion-specific configuration. PInsight looks for the config file in this order:
 
-```bash
-export PINSIGHT_TRACE_CONFIG_FILE=/path/to/trace_config.txt
-```
+1. **Explicit path** via environment variable:
+   ```bash
+   export PINSIGHT_TRACE_CONFIG_FILE=/path/to/trace_config.txt
+   ```
+2. **Default fallback**: `pinsight_trace_config.txt` in the current working directory
+
+If neither exists, PInsight runs with default settings. The fallback means users can enable runtime reconfiguration at any time by simply creating a `pinsight_trace_config.txt` file — no env var needed.
 
 The config file supports two domain-level section types:
 
@@ -368,7 +372,7 @@ See [`doc/trace_config_example.txt`](doc/trace_config_example.txt) for the full 
 
 Domain modes and tracing options can be changed at runtime by editing the config file and signaling the process:
 
-1. Edit the config file (e.g., change `trace_mode = TRACING` to `trace_mode = OFF`)
+1. Create or edit the config file (e.g., `pinsight_trace_config.txt` in the working directory)
 2. Send `kill -USR1 <pid>` to the running application
 3. PInsight re-reads the config and re-registers/deregisters domain callbacks accordingly
 

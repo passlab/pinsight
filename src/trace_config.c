@@ -165,18 +165,27 @@ void pinsight_load_trace_config(char *filepath) {
     filepath = getenv("PINSIGHT_TRACE_CONFIG_FILE");
   }
 
-  if (filepath) {
-    struct stat st;
-    if (stat(filepath, &st) != 0) {
+  // Fallback: check default config file in current working directory
+  int using_fallback = 0;
+  if (!filepath) {
+    filepath = "pinsight_trace_config.txt";
+    using_fallback = 1;
+  }
+
+  struct stat st;
+  if (stat(filepath, &st) != 0) {
+    // Only warn if the user explicitly specified the file
+    if (!using_fallback) {
       fprintf(stderr, "WARNING: Cannot stat config file '%s': %s\n", filepath,
               strerror(errno));
-    } else if (st.st_mtime != last_config_mtime) {
-      last_config_mtime = st.st_mtime;
-      parse_trace_config_file(filepath);
-      trace_config_change_counter++; // Bump counter so threads re-resolve
-                                     // cached trace_config pointers
     }
+  } else if (st.st_mtime != last_config_mtime) {
+    last_config_mtime = st.st_mtime;
+    parse_trace_config_file(filepath);
+    trace_config_change_counter++; // Bump counter so threads re-resolve
+                                   // cached trace_config pointers
   }
+
   setup_trace_config_env(); // Re-apply env overrides (modifies defaults
                             // in-place, no counter bump needed)
 }
