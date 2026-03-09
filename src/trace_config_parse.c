@@ -28,6 +28,7 @@ get_or_create_punit_config(int domain_idx, BitSet *punit_mask, int punit_kind,
 typedef enum {
   SECTION_NONE,
   SECTION_DOMAIN_DEFAULT,
+  SECTION_DOMAIN_GLOBAL,
   SECTION_DOMAIN_PUNIT,
   SECTION_LEXGION,
   SECTION_LEXGION_DEFAULT,
@@ -319,7 +320,40 @@ static int parse_section_header(char *line) {
       }
     }
   }
-  // Case 2: Domain.default
+  // Case 2a: Domain.global (must match before .default)
+  else if (strstr(target, ".global")) {
+    current_section_type = SECTION_DOMAIN_GLOBAL;
+    is_default_section = 1; // RESET allowed, REMOVE not
+    char *dot = strchr(target, '.');
+    if (dot) {
+      *dot = '\0';
+      int idx = find_domain_index(target);
+      if (idx >= 0) {
+        current_domain_idx = idx;
+
+        // Validate action
+        if (action == ACTION_REMOVE) {
+          fprintf(stderr, "PInsight Warning: REMOVE is not valid for "
+                          "Domain.global. Use RESET instead. Ignoring.\n");
+          current_section_type = SECTION_NONE;
+          return 0;
+        }
+
+        // RESET: revert mode to install default (no body)
+        if (action == ACTION_RESET) {
+          domain_default_trace_config[idx].mode =
+              (domain_info_table[idx].eventInstallStatus != 0)
+                  ? PINSIGHT_DOMAIN_TRACING
+                  : PINSIGHT_DOMAIN_OFF;
+          current_section_type = SECTION_NONE;
+          return 0;
+        }
+
+        // SET: proceed to parse body
+      }
+    }
+  }
+  // Case 2b: Domain.default
   else if (strstr(target, ".default")) {
     current_section_type = SECTION_DOMAIN_DEFAULT;
     is_default_section = 1;
@@ -597,74 +631,93 @@ static void parse_key_value(char *line) {
         *dot = '.'; // restore
       }
     }
-  } else if (current_section_type == SECTION_DOMAIN_DEFAULT &&
+  } else if ((current_section_type == SECTION_DOMAIN_GLOBAL ||
+              current_section_type == SECTION_DOMAIN_DEFAULT) &&
              current_domain_idx >= 0) {
+    // trace_mode key (Domain.global only, but accept in .default too)
+    if (strcmp(key, "trace_mode") == 0) {
+      if (strcasecmp(val, "OFF") == 0 || strcasecmp(val, "FALSE") == 0 ||
+          strcmp(val, "0") == 0) {
+        domain_default_trace_config[current_domain_idx].mode =
+            PINSIGHT_DOMAIN_OFF;
+      } else if (strcasecmp(val, "MONITORING") == 0 ||
+                 strcasecmp(val, "MONITOR") == 0) {
+        domain_default_trace_config[current_domain_idx].mode =
+            PINSIGHT_DOMAIN_MONITORING;
+      } else {
+        /* ON, TRACING, TRUE, 1, or any unrecognized → full tracing */
+        domain_default_trace_config[current_domain_idx].mode =
+            PINSIGHT_DOMAIN_TRACING;
+      }
+    }
     // Check for Domain.Punit = (low, high) or (low-high)
-    char *dot = strchr(key, '.');
-    if (dot) {
-      // It might be a punit range specification
-      // e.g. OpenMP.thread = (0-64)
-      *dot = '\0';
-      char *domain_name = key;
-      char *punit_name = dot + 1;
+    else {
+      char *dot = strchr(key, '.');
+      if (dot) {
+        // It might be a punit range specification
+        // e.g. OpenMP.thread = (0-64)
+        *dot = '\0';
+        char *domain_name = key;
+        char *punit_name = dot + 1;
 
-      // Verify domain name matches current section?
-      if (strcmp(domain_info_table[current_domain_idx].name, domain_name) ==
-          0) {
-        int p_idx = find_punit_kind_index(current_domain_idx, punit_name);
-        if (p_idx >= 0) {
-          // Parse value: (0, 128) or (0-128)
-          char *p = val;
-          while (*p && (*p == '(' || isspace((unsigned char)*p)))
-            p++;
+        // Verify domain name matches current section?
+        if (strcmp(domain_info_table[current_domain_idx].name, domain_name) ==
+            0) {
+          int p_idx = find_punit_kind_index(current_domain_idx, punit_name);
+          if (p_idx >= 0) {
+            // Parse value: (0, 128) or (0-128)
+            char *p = val;
+            while (*p && (*p == '(' || isspace((unsigned char)*p)))
+              p++;
 
-          char *end_ptr;
-          long low = strtol(p, &end_ptr, 0);
-          long high = low;
+            char *end_ptr;
+            long low = strtol(p, &end_ptr, 0);
+            long high = low;
 
-          // Check separator
-          while (isspace((unsigned char)*end_ptr))
-            end_ptr++;
-          if (*end_ptr == ',' || *end_ptr == '-') {
-            high = strtol(end_ptr + 1, NULL, 0);
+            // Check separator
+            while (isspace((unsigned char)*end_ptr))
+              end_ptr++;
+            if (*end_ptr == ',' || *end_ptr == '-') {
+              high = strtol(end_ptr + 1, NULL, 0);
+            }
+
+            domain_info_table[current_domain_idx].punits[p_idx].low = (int)low;
+            domain_info_table[current_domain_idx].punits[p_idx].high =
+                (int)high;
+          }
+        }
+        *dot = '.'; // restore
+      } else if (current_section_type == SECTION_DOMAIN_DEFAULT) {
+        // Event = on/off (only in Domain.default, not Domain.global)
+        struct domain_info *d = &domain_info_table[current_domain_idx];
+        int eid = -1;
+        for (int k = 0; k < d->num_events; k++) {
+          if (strcmp(d->event_table[k].name, key) == 0) {
+            eid = k;
+            break;
+          }
+        }
+        if (eid != -1) {
+          // Update domain default config
+          int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
+
+          // Check installation status
+          int installed = (d->eventInstallStatus >> eid) & 1;
+          if (enable && !installed) {
+            fprintf(stderr,
+                    "PInSight Warning: Event '%s.%s' is enabled but not "
+                    "installed (implemented). Ignoring and setting to OFF.\n",
+                    d->name, d->event_table[eid].name);
+            enable = 0;
           }
 
-          domain_info_table[current_domain_idx].punits[p_idx].low = (int)low;
-          domain_info_table[current_domain_idx].punits[p_idx].high = (int)high;
+          if (enable)
+            domain_default_trace_config[current_domain_idx].events |=
+                (1UL << eid);
+          else
+            domain_default_trace_config[current_domain_idx].events &=
+                ~(1UL << eid);
         }
-      }
-      *dot = '.'; // restore
-    } else {
-      // Event = on/off
-      struct domain_info *d = &domain_info_table[current_domain_idx];
-      int eid = -1;
-      for (int k = 0; k < d->num_events; k++) {
-        if (strcmp(d->event_table[k].name, key) == 0) {
-          eid = k;
-          break;
-        }
-      }
-      if (eid != -1) {
-        // Update domain default config
-        int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
-
-        // Check installation status
-        struct domain_info *d = &domain_info_table[current_domain_idx];
-        int installed = (d->eventInstallStatus >> eid) & 1;
-        if (enable && !installed) {
-          fprintf(stderr,
-                  "PInSight Warning: Event '%s.%s' is enabled but not "
-                  "installed (implemented). Ignoring and setting to OFF.\n",
-                  d->name, d->event_table[eid].name);
-          enable = 0;
-        }
-
-        if (enable)
-          domain_default_trace_config[current_domain_idx].events |=
-              (1UL << eid);
-        else
-          domain_default_trace_config[current_domain_idx].events &=
-              ~(1UL << eid);
       }
     }
   } else if (current_section_type == SECTION_DOMAIN_PUNIT &&

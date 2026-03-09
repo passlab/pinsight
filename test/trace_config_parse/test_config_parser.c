@@ -1363,6 +1363,132 @@ void test_actions_and_features() {
     unlink("test_snapshot.txt");
   }
 }
+void test_domain_global() {
+  printf("\n===== Domain.global Tests =====\n");
+
+  int omp_idx = -1;
+  for (int i = 0; i < num_domain; i++) {
+    if (strcmp(domain_info_table[i].name, "OpenMP") == 0) {
+      omp_idx = i;
+      break; // Use first match, same as parser's find_domain_index
+    }
+  }
+  if (omp_idx < 0) {
+    printf("[FAIL] OpenMP domain not found\n");
+    return;
+  }
+
+  // --- TG1: trace_mode = OFF ---
+  printf("\n  -- TG1: [OpenMP.global] trace_mode = OFF --\n");
+  {
+    // Reset to TRACING first
+    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
+
+    FILE *fp = fopen("test_global.txt", "w");
+    fprintf(fp, "[OpenMP.global]\n");
+    fprintf(fp, "    trace_mode = OFF\n");
+    fclose(fp);
+    parse_trace_config_file("test_global.txt");
+
+    if (domain_default_trace_config[omp_idx].mode == PINSIGHT_DOMAIN_OFF) {
+      printf("[PASS] TG1: trace_mode=OFF correctly set mode to "
+             "PINSIGHT_DOMAIN_OFF (%d)\n",
+             domain_default_trace_config[omp_idx].mode);
+    } else {
+      printf("[FAIL] TG1: mode=%d (expected %d/OFF)\n",
+             domain_default_trace_config[omp_idx].mode, PINSIGHT_DOMAIN_OFF);
+    }
+    unlink("test_global.txt");
+  }
+
+  // --- TG2: trace_mode = MONITORING ---
+  printf("\n  -- TG2: [OpenMP.global] trace_mode = MONITORING --\n");
+  {
+    FILE *fp = fopen("test_global.txt", "w");
+    fprintf(fp, "[OpenMP.global]\n");
+    fprintf(fp, "    trace_mode = MONITORING\n");
+    fclose(fp);
+    parse_trace_config_file("test_global.txt");
+
+    if (domain_default_trace_config[omp_idx].mode ==
+        PINSIGHT_DOMAIN_MONITORING) {
+      printf("[PASS] TG2: trace_mode=MONITORING correctly set mode to "
+             "PINSIGHT_DOMAIN_MONITORING (%d)\n",
+             domain_default_trace_config[omp_idx].mode);
+    } else {
+      printf("[FAIL] TG2: mode=%d (expected %d/MONITORING)\n",
+             domain_default_trace_config[omp_idx].mode,
+             PINSIGHT_DOMAIN_MONITORING);
+    }
+    unlink("test_global.txt");
+  }
+
+  // --- TG3: punit range in .global ---
+  printf("\n  -- TG3: [OpenMP.global] punit range --\n");
+  {
+    FILE *fp = fopen("test_global.txt", "w");
+    fprintf(fp, "[OpenMP.global]\n");
+    fprintf(fp, "    trace_mode = TRACING\n");
+    fprintf(fp, "    OpenMP.thread = (0-7)\n");
+    fclose(fp);
+    parse_trace_config_file("test_global.txt");
+
+    // Find thread punit kind
+    int thread_idx = -1;
+    for (int k = 0; k < domain_info_table[omp_idx].num_punits; k++) {
+      if (strcmp(domain_info_table[omp_idx].punits[k].name, "thread") == 0)
+        thread_idx = k;
+    }
+
+    if (thread_idx >= 0 &&
+        domain_info_table[omp_idx].punits[thread_idx].low == 0 &&
+        domain_info_table[omp_idx].punits[thread_idx].high == 7) {
+      printf("[PASS] TG3: OpenMP.thread range = (0-7) in .global section\n");
+    } else if (thread_idx >= 0) {
+      printf("[FAIL] TG3: OpenMP.thread = (%d-%d), expected (0-7)\n",
+             domain_info_table[omp_idx].punits[thread_idx].low,
+             domain_info_table[omp_idx].punits[thread_idx].high);
+    } else {
+      printf("[FAIL] TG3: thread punit kind not found\n");
+    }
+
+    if (domain_default_trace_config[omp_idx].mode == PINSIGHT_DOMAIN_TRACING) {
+      printf("[PASS] TG3: trace_mode=TRACING correctly set alongside punit "
+             "range\n");
+    } else {
+      printf("[FAIL] TG3: mode=%d (expected TRACING)\n",
+             domain_default_trace_config[omp_idx].mode);
+    }
+    unlink("test_global.txt");
+  }
+
+  // --- TG4: RESET Domain.global ---
+  printf("\n  -- TG4: [RESET OpenMP.global] --\n");
+  {
+    // First set mode to OFF
+    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_OFF;
+
+    FILE *fp = fopen("test_global.txt", "w");
+    fprintf(fp, "[RESET OpenMP.global]\n");
+    fclose(fp);
+    parse_trace_config_file("test_global.txt");
+
+    // Should revert to install default (TRACING if events exist)
+    pinsight_domain_mode_t expected =
+        (domain_info_table[omp_idx].eventInstallStatus != 0)
+            ? PINSIGHT_DOMAIN_TRACING
+            : PINSIGHT_DOMAIN_OFF;
+
+    if (domain_default_trace_config[omp_idx].mode == expected) {
+      printf("[PASS] TG4: RESET restored mode to install default (%d)\n",
+             expected);
+    } else {
+      printf("[FAIL] TG4: mode=%d (expected %d)\n",
+             domain_default_trace_config[omp_idx].mode, expected);
+    }
+    unlink("test_global.txt");
+  }
+}
 
 int main() {
   // Setup mock domain info
@@ -1376,6 +1502,7 @@ int main() {
   test_reload();
   test_implicit_add();
   test_actions_and_features();
+  test_domain_global();
 
   return 0;
 }

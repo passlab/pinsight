@@ -152,11 +152,17 @@ Domain mode is the **coarsest** control level. Within MONITORING/TRACING modes, 
 
 ## Runtime Reconfiguration
 
-Modes can be changed at runtime via SIGUSR1 config reload:
+Modes can be changed at runtime via the config file and SIGUSR1 signal:
 
-1. Set `PINSIGHT_TRACE_OPENMP=OFF` (or `MONITORING`, `TRACING`)
+1. Edit the config file to set `trace_mode` in a `[Domain.global]` section:
+   ```ini
+   [OpenMP.global]
+       trace_mode = OFF
+   ```
 2. Send `kill -USR1 <pid>`
-3. PInsight re-reads the environment and calls `pinsight_register_openmp_callbacks()` to register/deregister callbacks dynamically by iterating the DSL-populated `event_table`
+3. PInsight re-reads the config and calls `pinsight_register_openmp_callbacks()` to register/deregister callbacks dynamically by iterating the DSL-populated `event_table`
+
+> **Note:** Environment variables (`PINSIGHT_TRACE_OPENMP`, etc.) are read at process launch only. For runtime reconfiguration, use the config file.
 
 ## Per-Domain Mechanisms
 
@@ -205,10 +211,9 @@ typedef struct domain_trace_config {
 |------|---------|
 | `src/trace_config.h` | Mode enum, macros |
 | `src/trace_config.c` | Env parsing (3 modes), init, print |
-| `src/pinsight.c` | Kill-switch: `.mode == PINSIGHT_DOMAIN_OFF` |
+| `src/trace_config_parse.c` | `SECTION_DOMAIN_GLOBAL`, `trace_mode` key, `[Domain.global]` section |
+| `src/pinsight.c` | Kill-switch: `.mode == PINSIGHT_DOMAIN_OFF`, SIGUSR1 callback re-registration |
 | `src/pinsight.h` | Kill-switch in `lexgion_check_event_enabled()` |
 | `src/ompt_callback.c` | `pinsight_register_openmp_callbacks()`, PINSIGHT_SHOULD_TRACE guards |
 | `src/ompt_callback.h` | Callback declarations, OpenMP domain externs, `pinsight_register_openmp_callbacks()` |
-| `src/pinsight.c` | Calls `pinsight_register_openmp_callbacks()` after SIGUSR1 config reload |
-| `src/trace_config_parse.c` | `.set` → `.mode` in reset |
 | `test/trace_config_parse/test_config_parser.c` | Three-mode test cases |

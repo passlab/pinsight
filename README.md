@@ -341,21 +341,38 @@ PINSIGHT_DEBUG_ENABLE=0|1              # Debug printouts (default: 0)
 
 ### Config File
 
-A config file can provide domain-specific and lexgion-specific configuration that overrides env defaults. Specify the file via:
+A config file provides domain-specific and lexgion-specific configuration. Specify the file via:
 
 ```bash
 export PINSIGHT_TRACE_CONFIG_FILE=/path/to/trace_config.txt
 ```
 
-See [`src/trace_config_example.txt`](src/trace_config_example.txt) for the config file format.
+The config file supports two domain-level section types:
+
+- **`[Domain.global]`** — Domain-wide structural settings: `trace_mode` and punit scope
+- **`[Domain.default]`** — Default event on/off configuration for lexgions
+
+Example:
+```ini
+[OpenMP.global]
+    trace_mode = OFF             # OFF | MONITORING | TRACING
+    OpenMP.thread = (0-7)
+
+[OpenMP.default]
+    omp_task_create = off
+```
+
+See [`src/trace_config_example.txt`](src/trace_config_example.txt) for the full format, and [`src/PINSIGHT_TRACE_CONFIG_FORMAT.md`](src/PINSIGHT_TRACE_CONFIG_FORMAT.md) for detailed documentation.
 
 ### Runtime Reconfiguration via SIGUSR1
 
-Domain modes and tracing options can be changed at runtime without restarting the application:
+Domain modes and tracing options can be changed at runtime by editing the config file and signaling the process:
 
-1. Edit the config file or change environment variables
+1. Edit the config file (e.g., change `trace_mode = TRACING` to `trace_mode = OFF`)
 2. Send `kill -USR1 <pid>` to the running application
 3. PInsight re-reads the config and re-registers/deregisters domain callbacks accordingly
+
+> **Note:** Environment variables are read at process launch and cannot be changed from outside a running process. For runtime reconfiguration, use the config file.
 
 This enables workflows such as:
 - Start with **OFF** mode for warm-up, switch to **TRACING** for the region of interest

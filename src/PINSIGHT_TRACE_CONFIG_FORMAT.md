@@ -21,7 +21,8 @@ Specifies how the new configuration interacts with the existing configuration. T
 
 #### 2. Target
 Specifies what is being configured. There are five types of targets:
-- **`Domain.default`**: Default configuration for a domain (e.g., `OpenMP.default`).
+- **`Domain.global`**: Domain-wide structural settings — trace mode and punit scope (e.g., `OpenMP.global`).
+- **`Domain.default`**: Default event configuration for a domain (e.g., `OpenMP.default`).
 - **`Domain.PunitKind(PunitSet)`**: Configuration for a subset of parallel units (e.g., `OpenMP.team(0-3, 7, 12-20)`, `MPI.rank(0-4)`).
 - **`Lexgion.default`**: Default configuration for all code regions across all domains.
 - **`Lexgion(Domain).default`**: Default lexgion configuration for a specific domain (e.g., `Lexgion(OpenMP).default`). Eagerly initialized as `Lexgion.default ⊕ Domain.default` (rate triple from global default, events from domain default).
@@ -30,9 +31,10 @@ Specifies what is being configured. There are five types of targets:
 
 | Target Type | SET | RESET | REMOVE |
 |---|---|---|---|
+| `Domain.global` | ✅ Merge settings | ✅ Revert mode to install default | ❌ Invalid (use RESET) |
+| `Domain.default` | ✅ Merge settings | ✅ Revert to system install defaults | ❌ Invalid (use RESET) |
 | `Lexgion.default` | ✅ Merge settings | ✅ Revert to system defaults | ❌ Invalid (use RESET) |
 | `Lexgion(Domain).default` | ✅ Merge settings | ✅ Revert to `Lexgion.default ⊕ Domain.default` | ❌ Invalid (use RESET) |
-| `Domain.default` | ✅ Merge settings | ✅ Revert to system install defaults | ❌ Invalid (use RESET) |
 | `Domain.PunitKind(Set)` | ✅ Merge settings | ❌ Invalid (use REMOVE) | ✅ Clear/disable this punit config |
 | `Domain.PunitKind(*)` | ❌ Invalid | ❌ Invalid | ✅ Remove ALL configs of this punit kind |
 | `Lexgion(Address)` | ✅ Merge settings | ❌ Invalid (use REMOVE) | ✅ Mark lexgion as removed (stop tracing) |
@@ -41,9 +43,10 @@ Specifies what is being configured. There are five types of targets:
 
 | Target | RESET reverts to... |
 |---|---|
+| `Domain.global` | Install defaults: mode = TRACING if domain has registered events, OFF otherwise |
+| `Domain.default` | System install defaults (events as registered by the domain) |
 | `Lexgion.default` | System defaults: `tracing_rate=1`, `trace_starts_at=0`, `max_num_traces=-1`, all event overrides cleared |
 | `Lexgion(Domain).default` | Computed default: rate triple from `Lexgion.default` + events from `Domain.default` |
-| `Domain.default` | System install defaults (events as registered by the domain) |
 
 #### 3. Inheritance (Optional)
 Specifies domain defaults to inherit events from, separated by commas. **Applies to all `Lexgion(*)` section types** (including `Lexgion.default` and `Lexgion(Domain).default`) and `Domain.PunitKind(Set)` sections. Does **not** apply to `Domain.default`.
@@ -58,9 +61,14 @@ Additional punit constraints from other domains, separated by commas. **Only app
 
 ### Section Body (Key-Value Pairs)
 
-#### Domain Configuration
+#### Domain Global Configuration (`Domain.global`)
+- **Trace Mode**: `trace_mode = OFF|MONITORING|TRACING`
+- **Punit Scope**: `Domain.PunitKind = (Range)` (e.g., `OpenMP.thread = (0-15)`)
+
+#### Domain Default Configuration (`Domain.default`)
 - **Event Control**: `EventName = on|off`
-- **Punit Range Override** (Only in `Domain.default`): `Domain.PunitKind = (Range)`
+- **Punit Range Override**: `Domain.PunitKind = (Range)` (backward compatible, prefer `Domain.global`)
+- **Trace Mode**: `trace_mode = OFF|MONITORING|TRACING` (also accepted here)
 
 #### Lexgion Configuration (applies to `Lexgion.default`, `Lexgion(Domain).default`, and `Lexgion(Address)`)
 - **Tracing Rate**: `tracing_rate = N` (Trace 1 out of N executions)
@@ -72,28 +80,49 @@ Additional punit constraints from other domains, separated by commas. **Only app
 
 ## Examples
 
-### 1. Setting Domain Configuration (default action is SET)
-Merge new settings with existing OpenMP configuration.
+### 1. Setting Domain-Wide Configuration
+Set trace mode and punit scope for the OpenMP domain.
+```ini
+[OpenMP.global]
+    trace_mode = TRACING
+    OpenMP.team = (0-4)
+    OpenMP.thread = (0, 15)
+```
+
+### 2. Disabling a Domain at Runtime
+Send `kill -USR1 <pid>` after editing the config file to disable OpenMP tracing with zero overhead.
+```ini
+[OpenMP.global]
+    trace_mode = OFF
+```
+
+### 3. Resetting Domain Mode to Install Default
+Revert mode to TRACING (if events are registered).
+```ini
+[RESET OpenMP.global]
+```
+
+### 4. Setting Domain Event Configuration
+Merge new event settings with existing OpenMP configuration.
 ```ini
 [OpenMP.default]
-    OpenMP.team = (0-4)
     omp_task_create = on
 ```
 
-### 2. Resetting a Domain to Install Defaults
-Revert OpenMP configuration back to system install defaults.
+### 5. Resetting Domain Events to Install Defaults
+Revert OpenMP event configuration back to system install defaults.
 ```ini
 [RESET OpenMP.default]
 ```
 
-### 3. Adding Specific Thread Tracing
+### 6. Adding Specific Thread Tracing
 Set tracing config for threads 0-3 without affecting other threads.
 ```ini
 [OpenMP.thread(0-3)] : OpenMP.default
     omp_task_schedule = on
 ```
 
-### 4. Setting Domain-Specific Lexgion Defaults
+### 7. Setting Domain-Specific Lexgion Defaults
 Set default tracing behavior for all OpenMP lexgions.
 ```ini
 [Lexgion(OpenMP).default]
@@ -106,19 +135,19 @@ Set default tracing behavior for all OpenMP lexgions.
     tracing_rate = 1
 ```
 
-### 5. Resetting a Domain-Specific Lexgion Default
+### 8. Resetting a Domain-Specific Lexgion Default
 Revert to computed default (`Lexgion.default ⊕ OpenMP.default`).
 ```ini
 [RESET Lexgion(OpenMP).default]
 ```
 
-### 6. Removing a Lexgion Trace
+### 9. Removing a Lexgion Trace
 Stop tracing a specific code region.
 ```ini
 [REMOVE Lexgion(0x4010bd)]
 ```
 
-### 7. Configuring Multiple Lexgions at Once
+### 10. Configuring Multiple Lexgions at Once
 Apply the same settings to multiple code regions.
 ```ini
 [Lexgion(0x400500, 0x400600, 0x400700)]
@@ -126,18 +155,18 @@ Apply the same settings to multiple code regions.
     tracing_rate = 5
 ```
 
-### 8. Removing Multiple Lexgions at Once
+### 11. Removing Multiple Lexgions at Once
 ```ini
 [REMOVE Lexgion(0x400500, 0x400600)]
 ```
 
-### 9. Removing a Punit-Specific Config
+### 12. Removing a Punit-Specific Config
 Remove the thread-specific config; those threads fall back to domain default.
 ```ini
 [REMOVE OpenMP.thread(0-3)]
 ```
 
-### 10. Removing All Thread Configs (Wildcard)
+### 13. Removing All Thread Configs (Wildcard)
 Remove all `OpenMP.thread(*)` configs without knowing individual sets.
 ```ini
 [REMOVE OpenMP.thread(*)]

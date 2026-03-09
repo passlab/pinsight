@@ -1,15 +1,26 @@
-[OpenMP.default]
+# Domain-wide settings: trace mode and punit scope
+[OpenMP.global]
+    trace_mode = TRACING
     OpenMP.team = (0-4)
     OpenMP.thread = (0, 15)
 	OpenMP.device = (0-3)
+
+[MPI.global]
+    trace_mode = TRACING
+    MPI.rank = (0-3)
+
+[CUDA.global]
+    trace_mode = TRACING
+	CUDA.device = (0-3)
+
+# Domain default event configuration
+[OpenMP.default]
 	omp_task_create = off
 	omp_task_schedule = off
 
 [MPI.default]
-	MPI.rank = (0-3)
 
 [CUDA.default]
-	CUDA.device = (0-3)
 	CUDA_kernel_launch  = on
 	CUDA_memcpy = on
 
@@ -51,4 +62,3 @@
 	MPI.MPI_rank_end = on
 	CUDA.CUDA_kernel_launch = on
 	CUDA.CUDA_memcpy = on
-
