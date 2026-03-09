@@ -362,7 +362,7 @@ Example:
     omp_task_create = off
 ```
 
-See [`src/trace_config_example.txt`](src/trace_config_example.txt) for the full format, and [`src/PINSIGHT_TRACE_CONFIG_FORMAT.md`](src/PINSIGHT_TRACE_CONFIG_FORMAT.md) for detailed documentation.
+See [`doc/trace_config_example.txt`](doc/trace_config_example.txt) for the full format, and [`doc/PINSIGHT_TRACE_CONFIG_FORMAT.md`](doc/PINSIGHT_TRACE_CONFIG_FORMAT.md) for detailed documentation.
 
 ### Runtime Reconfiguration via SIGUSR1
 

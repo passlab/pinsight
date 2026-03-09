@@ -41,9 +41,9 @@ void test_parsing() {
   // Try local 'src' dir first (if running from root), then parallel dir (if
   // running from build)
   int ret =
-      system("cp src/trace_config_example.txt trace_config.txt 2>/dev/null");
+      system("cp doc/trace_config_example.txt trace_config.txt 2>/dev/null");
   if (ret != 0) {
-    ret = system("cp ../src/trace_config_example.txt trace_config.txt");
+    ret = system("cp ../doc/trace_config_example.txt trace_config.txt");
   }
   if (ret != 0) {
     printf("[WARN] Could not copy trace_config_example.txt, trying local "
@@ -514,8 +514,8 @@ void setup_and_test_env() {
   // 2. Call initial_domain_trace_config().
 
   // Refresh trace_config.txt for tests
-  system("cp src/trace_config_example.txt trace_config.txt 2>/dev/null || cp "
-         "../src/trace_config_example.txt trace_config.txt");
+  system("cp doc/trace_config_example.txt trace_config.txt 2>/dev/null || cp "
+         "../doc/trace_config_example.txt trace_config.txt");
   int i;
   for (i = 0; i < num_domain; i++) {
     domain_default_trace_config[i].events =
