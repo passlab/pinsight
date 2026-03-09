@@ -263,51 +263,104 @@ Shell variable example:
     # Normal tracing stuff from here on...
 
 
-## Runtime configuration for optimizing dynamic tracing
-In comparison with static tracing that when tracing are started, no changes can be made to change tracing rate, position, etc. 
-Dynamic tracing enables highly optimized tracing according to the needs and behavior of the program execution. 
-This is achieved by allowing enabling and disabling tracing in multiple granularity level. 
-Currently, PInsight implements two ways for users to set the configuration options for tracing:
-1) via environment variables that can be used for setting the runtime default tracing config, and 2) via a config file which can be
-used for setting both the default tracing config and lexgion-specific tracing config.
-The tracing config is read from env variables or config file when the `pinsight` library is loaded.
-The tracing config can be re-read at the runtime, allowing runtime reconfiguration of tracing behavior. This feature has not yet
-implemented, but the function is available to use by the external interface or utilities. 
+## Runtime Configuration for Optimizing Dynamic Tracing
 
-If both env and config file are used to provide the default tracing config, the options provided in the config file 
-will overwrite the options provided in the env variable.
+PInsight supports fine-grained control of tracing overhead through three domain trace modes and flexible runtime configuration.
 
-#### Using env variable to specify the default tracing configuration:
-Below are the env variables and their optional values that one can use to set the runtime tracing options. 
-Env settings are applied to the runtime global default configuration only. 
-If you want domain-specific or lexgion-specific configuration, you have to use a config file to do that. Check 
-src/trace_config_example.txt file for details. 
+### Domain Trace Modes
 
-          PINSIGHT_TRACE_OPENMP=TRUE|FALSE
-          PINSIGHT_TRACE_MPI=TRUE|FALSE
-          PINSIGHT_TRACE_CUDA=TRUE|FALSEk
-          PINSIGHT_TRACE_ENERGY=TRUE|FALSE
-          PINSIGHT_TRACE_BACKTRACE=TRUE|FALSE
-          PINSIGHT_TRACE_RATE=<trace_starts_at>:<max_num_traces>:<tracing_rate>
- 
-The `PINSIGHT_TRACE_RATE` env can be used to specifying rate tracing parameters of lexgions. 
-The three parameters are `<trace_starts_at>:<max_num_traces>:<tracing_rate>`, e.g. `PINSIGHT_TRACE_RATE=10:20:100`.
+Each domain (OpenMP, MPI, CUDA) can operate in one of three modes:
 
-     PINSIGHT_TRACE_RATE=10:20:100: Record 20 traces starting from the 10th iteration, with tracing
-                                    rate of 100 (record 1 trace per 100 iterations).
-     PINSIGHT_TRACE_RATE=0:-1:1: This is the system default. It indicates to record all the traces 
-     PINSIGHT_TRACE_RATE=0:-1:10: Record 1 trace per 10 executions for all the executions.
-     PINSIGHT_TRACE_RATE=0:20:1: Record the first 20 iterations
-     PINSIGHT_TRACE_RATE=0:0:0: Do not record any iterations
- 
-#### Using a config file to specify runtime tracing options
-The file name can be specified using the `PINSIGHT_TRACE_CONFIG_FILE` env. Please check the sample file in the src folder.
+| Mode | Description | Overhead |
+|------|-------------|----------|
+| **OFF** | Domain callbacks deregistered; zero per-event overhead | None |
+| **MONITORING** | Bookkeeping active (lexgion creation, counters); no LTTng output | Low |
+| **TRACING** | Full tracing with LTTng tracepoint emission (default) | Normal |
 
-Further improvement: to completely turn off OMPT/PMPI/CUPTI such that no overhead will incur at all for the whole program execution. 
-1. One approach is to use an env varabile and a global flag for setting and checking upon entry to each PInsight/OMPT/PMPI/CUPTI call, though this still introduces the overhead of making those calls and one step of checking. 
-2. Another approach is to completely shutdown/finalize the OMPT/PMPI/CUPTI for the program and unload/unlink the libpinsight.so. For OpenMP, this can be accomplished by ompt_finalize call, which turn off OMPT, thus the whole PInsight is turned off and the libpinsight.so can be unloaded. For MPI, this can be accomplished by unlinking libpinsight.so. For CUPTI, **TBD**. With this approach, the program does not expect to re-enable the tracing later on. 
-3. This approach can be used for enable/disable specific tracing of OpenMP, MPI or CUPTI. With this approach, we need to build three different libraries each for OpenMP/MPI/CUPTI. 
-4. This approach can also be used in the debugging situation that after the debugger and performance analysis know the configuration, and set the configuration, tracing can be disabled to eliminate the overhead otherwise that would be introduced with tracing
+- **OFF mode** uses native deregistration APIs (`ompt_set_callback(event, NULL)` for OpenMP) so the runtime never dispatches the event — truly zero overhead.
+- **MONITORING mode** maintains internal bookkeeping (lexgion tables, execution counters, rate sampling) without emitting traces, enabling later analysis of program structure.
+- **TRACING mode** emits full LTTng tracepoints. Overhead depends on whether an LTTng session is active.
+
+For detailed benchmark results, see [`doc/domain_trace_modes.md`](doc/domain_trace_modes.md).
+
+### Environment Variables
+
+#### Domain Mode Control
+
+```bash
+PINSIGHT_TRACE_OPENMP=<MODE>     # OFF | MONITORING | TRACING (default: TRACING)
+PINSIGHT_TRACE_MPI=<MODE>        # OFF | MONITORING | TRACING (default: TRACING)
+PINSIGHT_TRACE_CUDA=<MODE>       # OFF | MONITORING | TRACING (default: TRACING)
+```
+
+Accepted values for each mode:
+| Mode | Accepted Values |
+|------|----------------|
+| OFF | `OFF`, `FALSE`, `0` |
+| MONITORING | `MONITORING`, `MONITOR` |
+| TRACING | `ON`, `TRACING`, `TRUE`, `1` (default) |
+
+Examples:
+```bash
+# Full tracing (default behavior)
+./myapp
+
+# Monitor OpenMP regions without trace output
+PINSIGHT_TRACE_OPENMP=MONITORING ./myapp
+
+# Completely disable OpenMP tracing (zero overhead)
+PINSIGHT_TRACE_OPENMP=OFF ./myapp
+
+# Mix: trace MPI, monitor OpenMP, disable CUDA
+PINSIGHT_TRACE_MPI=TRUE PINSIGHT_TRACE_OPENMP=MONITORING PINSIGHT_TRACE_CUDA=OFF ./myapp
+```
+
+#### Rate-Based Sampling
+
+```bash
+PINSIGHT_TRACE_RATE=<trace_starts_at>:<max_num_traces>:<tracing_rate>
+```
+
+Controls how frequently lexgion executions are traced:
+
+| Example | Meaning |
+|---------|---------|
+| `0:-1:1` | Record all traces (system default) |
+| `10:20:100` | Record 20 traces starting from 10th iteration, 1 per 100 |
+| `0:-1:10` | Record 1 trace per 10 executions, indefinitely |
+| `0:20:1` | Record the first 20 executions |
+| `0:0:0` | Do not record any traces |
+
+#### Other Environment Variables
+
+```bash
+PINSIGHT_TRACE_ENERGY=TRUE|FALSE       # Energy tracing via RAPL
+PINSIGHT_TRACE_BACKTRACE=TRUE|FALSE    # Backtrace capture
+PINSIGHT_DEBUG_ENABLE=0|1              # Debug printouts (default: 0)
+```
+
+### Config File
+
+A config file can provide domain-specific and lexgion-specific configuration that overrides env defaults. Specify the file via:
+
+```bash
+export PINSIGHT_TRACE_CONFIG_FILE=/path/to/trace_config.txt
+```
+
+See [`src/trace_config_example.txt`](src/trace_config_example.txt) for the config file format.
+
+### Runtime Reconfiguration via SIGUSR1
+
+Domain modes and tracing options can be changed at runtime without restarting the application:
+
+1. Edit the config file or change environment variables
+2. Send `kill -USR1 <pid>` to the running application
+3. PInsight re-reads the config and re-registers/deregisters domain callbacks accordingly
+
+This enables workflows such as:
+- Start with **OFF** mode for warm-up, switch to **TRACING** for the region of interest
+- Start with **TRACING** to capture initial behavior, switch to **MONITORING** to reduce overhead
+- Runtime performance debugging: pause tracing, analyze, reconfigure, resume
 
 ---------------------------------------------------------------------------
 
