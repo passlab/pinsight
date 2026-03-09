@@ -351,22 +351,7 @@ A config file provides domain-specific and lexgion-specific configuration. PInsi
 
 If neither exists, PInsight runs with default settings. The fallback means users can enable runtime reconfiguration at any time by simply creating a `pinsight_trace_config.txt` file — no env var needed.
 
-The config file supports two domain-level section types:
-
-- **`[Domain.global]`** — Domain-wide structural settings: `trace_mode` and punit scope
-- **`[Domain.default]`** — Default event on/off configuration for lexgions
-
-Example:
-```ini
-[OpenMP.global]
-    trace_mode = OFF             # OFF | MONITORING | TRACING
-    OpenMP.thread = (0-7)
-
-[OpenMP.default]
-    omp_task_create = off
-```
-
-See [`doc/trace_config_example.txt`](doc/trace_config_example.txt) for the full format, and [`doc/PINSIGHT_TRACE_CONFIG_FORMAT.md`](doc/PINSIGHT_TRACE_CONFIG_FORMAT.md) for detailed documentation.
+See [`doc/PINSIGHT_TRACE_CONFIG_FORMAT.md`](doc/PINSIGHT_TRACE_CONFIG_FORMAT.md) for how to create a config file, [`doc/trace_config_example.txt`](doc/trace_config_example.txt) for a complete example, and [`doc/trace_config_design.md`](doc/trace_config_design.md) for the overall configuration design.
 
 ### Runtime Reconfiguration via SIGUSR1
 
