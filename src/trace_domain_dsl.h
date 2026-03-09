@@ -29,32 +29,28 @@
  */
 
 /* Event-ID mode */
-#define TRACE_EVENT_ID_INTERNAL   0
-#define TRACE_EVENT_ID_NATIVE     1
+#define TRACE_EVENT_ID_INTERNAL 0
+#define TRACE_EVENT_ID_NATIVE 1
 
-#define PUNIT_ID_FUNC_0_ARG   0
-#define PUNIT_ID_FUNC_1_ARG   1
+#define PUNIT_ID_FUNC_0_ARG 0
+#define PUNIT_ID_FUNC_1_ARG 1
 
-#define TRACE_DOMAIN_BEGIN(display_name, event_id_mode) \
-    TRACE_IMPL_DOMAIN_BEGIN(display_name, event_id_mode)
+#define TRACE_DOMAIN_BEGIN(display_name, event_id_mode)                        \
+  TRACE_IMPL_DOMAIN_BEGIN(display_name, event_id_mode)
 
-#define TRACE_DOMAIN_END() \
-    TRACE_IMPL_DOMAIN_END()
+#define TRACE_DOMAIN_END() TRACE_IMPL_DOMAIN_END()
 
-#define TRACE_PUNIT(name, low, high, punit_id_func) \
-    TRACE_IMPL_PUNIT(name, low, high, punit_id_func, NULL, PUNIT_ID_FUNC_0_ARG)
+#define TRACE_PUNIT(name, low, high, punit_id_func)                            \
+  TRACE_IMPL_PUNIT(name, low, high, punit_id_func, NULL, PUNIT_ID_FUNC_0_ARG)
 
-#define TRACE_PUNIT1(name, low, high, punit_id_func, arg) \
-    TRACE_IMPL_PUNIT(name, low, high, punit_id_func, arg, PUNIT_ID_FUNC_1_ARG)
+#define TRACE_PUNIT1(name, low, high, punit_id_func, arg)                      \
+  TRACE_IMPL_PUNIT(name, low, high, punit_id_func, arg, PUNIT_ID_FUNC_1_ARG)
 
-#define TRACE_SUBDOMAIN_BEGIN(name) \
-    TRACE_IMPL_SUBDOMAIN_BEGIN(name)
+#define TRACE_SUBDOMAIN_BEGIN(name) TRACE_IMPL_SUBDOMAIN_BEGIN(name)
 
-#define TRACE_SUBDOMAIN_END() \
-    TRACE_IMPL_SUBDOMAIN_END()
+#define TRACE_SUBDOMAIN_END() TRACE_IMPL_SUBDOMAIN_END()
 
-#define TRACE_EVENT(native_id, name, initial_status) \
-    TRACE_IMPL_EVENT(native_id, name, initial_status)
+#define TRACE_EVENT(name, initial_status, native_id, callback_fn)              \
+  TRACE_IMPL_EVENT(name, initial_status, native_id, callback_fn)
 
 #endif /* TRACE_DOMAIN_DSL_H */
- 

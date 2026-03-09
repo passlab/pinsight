@@ -1,3 +1,6 @@
+/* This file implements OMPT callbacks — tell ompt_callback.h to use
+ * extern declarations instead of NULL stubs for callback function pointers. */
+#define PINSIGHT_OMPT_CALLBACKS
 #include <execinfo.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -23,7 +26,7 @@ static int debug_on;
 static long long package_energy[MAX_PACKAGES];
 #endif
 
-#include "trace_domain_OpenMP.h"
+#include "ompt_callback.h"
 
 int OpenMP_domain_index;
 domain_info_t *OpenMP_domain_info;
@@ -216,8 +219,8 @@ static void print_current_address() {
  * @param thread_type
  * @param thread_data
  */
-static void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
-                                          ompt_data_t *thread_data) {
+void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
+                                   ompt_data_t *thread_data) {
   thread_data->ptr =
       (void *)init_thread_data(get_global_thread_num() /*, thread_type */);
 #ifdef PINSIGHT_ENERGY
@@ -278,7 +281,7 @@ static void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
 
 #define PRINT_LEXGION_SUMMARY 1
 
-static void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
+void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
   if (pinsight_thread_data
           .initial_thread) { // we should pop up initial implicit task and
                              // initial parallel region that are set up by the
@@ -396,7 +399,7 @@ static void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
         ompt_parallel_team = 0x80000000
    } ompt_parallel_flag_t;
  */
-static void on_ompt_callback_parallel_begin(
+void on_ompt_callback_parallel_begin(
     ompt_data_t *parent_task, /* data of encountering task           */
     const ompt_frame_t *parent_task_frame, /* frame data of encountering task */
     ompt_data_t *parallel_data, unsigned int requested_team_size, int flag,
@@ -442,9 +445,9 @@ static void on_ompt_callback_parallel_begin(
  * Also for both teams and parallel constructs, use flag to know which one,
  * check parallel_begin
  */
-static void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
-                                          ompt_data_t *parent_task, int flag,
-                                          const void *codeptr_ra) {
+void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
+                                   ompt_data_t *parent_task, int flag,
+                                   const void *codeptr_ra) {
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -499,11 +502,11 @@ static void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
  * ompt_task_implicit) evaluates to true for the regular implicit tasks of both
  * teams and parallel region
  */
-static void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
-                                           ompt_data_t *parallel_data,
-                                           ompt_data_t *task_data,
-                                           unsigned int team_size,
-                                           unsigned int thread_num, int flags) {
+void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
+                                    ompt_data_t *parallel_data,
+                                    ompt_data_t *task_data,
+                                    unsigned int team_size,
+                                    unsigned int thread_num, int flags) {
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -584,11 +587,9 @@ static void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
   }
 }
 
-static void on_ompt_callback_work(ompt_work_t wstype,
-                                  ompt_scope_endpoint_t endpoint,
-                                  ompt_data_t *parallel_data,
-                                  ompt_data_t *task_data, uint64_t count,
-                                  const void *codeptr_ra) {
+void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
+                           ompt_data_t *parallel_data, ompt_data_t *task_data,
+                           uint64_t count, const void *codeptr_ra) {
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -689,10 +690,9 @@ static void on_ompt_callback_work(ompt_work_t wstype,
   }
 }
 
-static void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
-                                    ompt_data_t *parallel_data,
-                                    ompt_data_t *task_data,
-                                    const void *codeptr_ra) {
+void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
+                             ompt_data_t *parallel_data, ompt_data_t *task_data,
+                             const void *codeptr_ra) {
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -773,11 +773,11 @@ static void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
  * @param task_data
  * @param codeptr_ra
  */
-static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
-                                         ompt_scope_endpoint_t endpoint,
-                                         ompt_data_t *parallel_data,
-                                         ompt_data_t *task_data,
-                                         const void *codeptr_ra) {
+void on_ompt_callback_sync_region(ompt_sync_region_t kind,
+                                  ompt_scope_endpoint_t endpoint,
+                                  ompt_data_t *parallel_data,
+                                  ompt_data_t *task_data,
+                                  const void *codeptr_ra) {
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -1062,11 +1062,11 @@ static void on_ompt_callback_sync_region(ompt_sync_region_t kind,
   }
 }
 
-static void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
-                                              ompt_scope_endpoint_t endpoint,
-                                              ompt_data_t *parallel_data,
-                                              ompt_data_t *task_data,
-                                              const void *codeptr_ra) {
+void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
+                                       ompt_scope_endpoint_t endpoint,
+                                       ompt_data_t *parallel_data,
+                                       ompt_data_t *task_data,
+                                       const void *codeptr_ra) {
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -1653,54 +1653,28 @@ static int on_ompt_callback_control_tool(uint64_t command, uint64_t modifier,
   return 0; // success
 }
 
-#define register_callback_t(name, type)                                        \
-  do {                                                                         \
-    type f_##name = &on_##name;                                                \
-    if (ompt_set_callback(name, (ompt_callback_t)f_##name) ==                  \
-        ompt_set_never) {                                                      \
-      if (debug_on) {                                                          \
-        printf("0: Could not register callback '" #name "'\n");                \
-      }                                                                        \
-    }                                                                          \
-  } while (0)
-
-#define register_callback(name) register_callback_t(name, name##_t)
-
-#define deregister_callback(name)                                              \
-  do {                                                                         \
-    ompt_set_callback(name, (ompt_callback_t)NULL);                            \
-  } while (0)
-
 /**
  * Register or deregister all OpenMP callbacks based on current domain mode.
+ * Iterates the event_table populated by TRACE_EVENT entries in
+ * trace_domain_OpenMP.h — events with a non-NULL callback pointer are
+ * registered (ACTIVE) or deregistered (OFF).
+ *
  * Called from ompt_initialize (initial setup) and can be called from
  * the SIGUSR1 config reload path for dynamic re-registration.
  */
-static void pinsight_sync_openmp_callbacks(void) {
-  if (PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode)) {
-    /* (Re-)register all callbacks */
-    register_callback(ompt_callback_sync_region);
-    register_callback_t(ompt_callback_sync_region_wait,
-                        ompt_callback_sync_region_t);
-    register_callback(ompt_callback_implicit_task);
-    register_callback(ompt_callback_work);
-    register_callback(ompt_callback_masked);
-    register_callback(ompt_callback_parallel_begin);
-    register_callback(ompt_callback_parallel_end);
-    register_callback(ompt_callback_thread_begin);
-    register_callback(ompt_callback_thread_end);
-  } else {
-    /* OFF mode: deregister all callbacks for zero runtime overhead */
-    deregister_callback(ompt_callback_sync_region);
-    deregister_callback(ompt_callback_sync_region_wait);
-    deregister_callback(ompt_callback_implicit_task);
-    deregister_callback(ompt_callback_work);
-    deregister_callback(ompt_callback_masked);
-    deregister_callback(ompt_callback_parallel_begin);
-    deregister_callback(ompt_callback_parallel_end);
-    deregister_callback(ompt_callback_thread_begin);
-    deregister_callback(ompt_callback_thread_end);
+void pinsight_register_openmp_callbacks(void) {
+  int active = PINSIGHT_DOMAIN_ACTIVE(
+      domain_default_trace_config[OpenMP_domain_index].mode);
+  domain_info_t *di = OpenMP_domain_info;
+
+  for (int i = 0; i < di->event_id_upper; i++) {
+    struct event *ev = &di->event_table[i];
+    if (!ev->valid || ev->callback == NULL)
+      continue; /* unimplemented or invalid slot */
+    if (active)
+      ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
+    else
+      ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
   }
 }
 
@@ -1722,7 +1696,7 @@ int ompt_initialize(ompt_function_lookup_t lookup, int initial_device_num,
   ompt_get_proc_id = (ompt_get_proc_id_t)lookup("ompt_get_proc_id");
 
   /* Register or deregister callbacks based on current domain mode */
-  pinsight_sync_openmp_callbacks();
+  pinsight_register_openmp_callbacks();
 
   // Query environment variables to enable/dsiable debug printouts.
   debug_on = env_get_long(PINSIGHT_DEBUG_ENABLE, PINSIGHT_DEBUG_ENABLE_DEFAULT);

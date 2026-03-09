@@ -1,4 +1,5 @@
 #include "pinsight.h"
+#include "ompt_callback.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -215,6 +216,9 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
    * Use atomic exchange so exactly one thread performs the reload. */
   if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
     pinsight_load_trace_config(NULL);
+#ifdef PINSIGHT_OPENMP
+    pinsight_register_openmp_callbacks();
+#endif
   }
 
   lexgion_trace_config_t *trace_config = lgp->trace_config;

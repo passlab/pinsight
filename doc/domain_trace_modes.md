@@ -156,7 +156,7 @@ Modes can be changed at runtime via SIGUSR1 config reload:
 
 1. Set `PINSIGHT_TRACE_OPENMP=OFF` (or `MONITORING`, `TRACING`)
 2. Send `kill -USR1 <pid>`
-3. PInsight re-reads the environment and calls `pinsight_sync_openmp_callbacks()` to register/deregister callbacks dynamically
+3. PInsight re-reads the environment and calls `pinsight_register_openmp_callbacks()` to register/deregister callbacks dynamically by iterating the DSL-populated `event_table`
 
 ## Per-Domain Mechanisms
 
@@ -164,7 +164,7 @@ Modes can be changed at runtime via SIGUSR1 config reload:
 
 - **OFF**: `ompt_set_callback(event, NULL)` — the OpenMP runtime stops dispatching the event entirely
 - **Re-registration**: `ompt_set_callback(event, fn)` — restores callback dispatch
-- **Function**: `pinsight_sync_openmp_callbacks()` in `ompt_callback.c`
+- **Function**: `pinsight_register_openmp_callbacks()` — iterates `domain_info_t.event_table[]`, declared in `ompt_callback.h`, defined in `ompt_callback.c`
 
 ### CUDA (CUPTI)
 
@@ -207,6 +207,8 @@ typedef struct domain_trace_config {
 | `src/trace_config.c` | Env parsing (3 modes), init, print |
 | `src/pinsight.c` | Kill-switch: `.mode == PINSIGHT_DOMAIN_OFF` |
 | `src/pinsight.h` | Kill-switch in `lexgion_check_event_enabled()` |
-| `src/ompt_callback.c` | `pinsight_sync_openmp_callbacks()`, PINSIGHT_SHOULD_TRACE guards |
+| `src/ompt_callback.c` | `pinsight_register_openmp_callbacks()`, PINSIGHT_SHOULD_TRACE guards |
+| `src/ompt_callback.h` | Callback declarations, OpenMP domain externs, `pinsight_register_openmp_callbacks()` |
+| `src/pinsight.c` | Calls `pinsight_register_openmp_callbacks()` after SIGUSR1 config reload |
 | `src/trace_config_parse.c` | `.set` → `.mode` in reset |
 | `test/trace_config_parse/test_config_parser.c` | Three-mode test cases |
