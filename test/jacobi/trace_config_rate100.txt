@@ -1,0 +1,9 @@
+# Rate-limited trace config for overhead benchmarking
+# With 5000 iterations × 2 parallel-for regions:
+#   tracing_rate = 50 → trace every 50th execution → ~100 traces per lexgion
+#   max_num_traces = 100 → hard cap at 100 traces per lexgion
+
+[Lexgion.default]
+	trace_starts_at = 0
+	max_num_traces = 100
+	tracing_rate = 50

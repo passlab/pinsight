@@ -161,13 +161,30 @@ typedef struct punit_trace_config {
 } punit_trace_config_t;
 
 /**
+ * Domain operating modes for fine-grained overhead control.
+ * OFF:        Callbacks deregistered (zero per-event overhead).
+ * MONITORING: Callbacks active, bookkeeping runs, no LTTng tracepoints.
+ * TRACING:    Full tracing with LTTng output (default).
+ */
+typedef enum {
+  PINSIGHT_DOMAIN_OFF = 0,
+  PINSIGHT_DOMAIN_MONITORING = 1,
+  PINSIGHT_DOMAIN_TRACING = 2
+} pinsight_domain_mode_t;
+
+/* True if domain is active (MONITORING or TRACING) */
+#define PINSIGHT_DOMAIN_ACTIVE(mode) ((mode) >= PINSIGHT_DOMAIN_MONITORING)
+/* True if domain should emit LTTng tracepoints */
+#define PINSIGHT_SHOULD_TRACE(domain)                                          \
+  (domain_default_trace_config[domain].mode == PINSIGHT_DOMAIN_TRACING)
+
+/**
  * The default domain trace config that specifies the events on/off for the
  * domain
  */
 typedef struct domain_trace_config { // The trace config for a domain
-  int set; // The global flag to indicate whether tracing is enabled for this
-           // domain
-  unsigned long int events; // The default event config for the domain
+  pinsight_domain_mode_t mode; // Domain operating mode (OFF/MONITORING/TRACING)
+  unsigned long int events;    // The default event config for the domain
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];

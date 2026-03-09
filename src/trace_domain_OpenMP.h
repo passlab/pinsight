@@ -29,6 +29,7 @@ extern domain_trace_config_t *OpenMP_trace_config;
   TRACE_SUBDOMAIN_BEGIN("parallel")                                            \
   TRACE_EVENT(ompt_callback_parallel_begin, "omp_parallel_begin", 1)           \
   TRACE_EVENT(ompt_callback_parallel_end, "omp_parallel_end", 1)               \
+  TRACE_EVENT(ompt_callback_implicit_task, "omp_implicit_task", 1)             \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [OpenMP(thread)] */                                                       \
@@ -41,7 +42,6 @@ extern domain_trace_config_t *OpenMP_trace_config;
   TRACE_SUBDOMAIN_BEGIN("task")                                                \
   TRACE_EVENT(ompt_callback_task_create, "omp_task_create", 1)                 \
   TRACE_EVENT(ompt_callback_task_schedule, "omp_task_schedule", 1)             \
-  TRACE_EVENT(ompt_callback_implicit_task, "omp_implicit_task", 1)             \
   TRACE_EVENT(ompt_callback_dependences, "omp_dependences", 0)                 \
   TRACE_EVENT(ompt_callback_task_dependence, "omp_task_dependence", 0)         \
   TRACE_SUBDOMAIN_END()                                                        \
@@ -51,13 +51,13 @@ extern domain_trace_config_t *OpenMP_trace_config;
   TRACE_EVENT(ompt_callback_work, "omp_work", 1)                               \
   TRACE_EVENT(ompt_callback_dispatch, "omp_dispatch", 0)                       \
   TRACE_EVENT(ompt_callback_reduction, "omp_reduction", 0)                     \
+  TRACE_EVENT(ompt_callback_masked, "omp_masked", 1)                           \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [OpenMP(sync)] */                                                         \
   TRACE_SUBDOMAIN_BEGIN("sync")                                                \
   TRACE_EVENT(ompt_callback_sync_region_wait, "omp_sync_region_wait", 1)       \
   TRACE_EVENT(ompt_callback_sync_region, "omp_sync_region", 1)                 \
-  TRACE_EVENT(ompt_callback_masked, "omp_masked", 1)                           \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [OpenMP(critical)] */                                                     \

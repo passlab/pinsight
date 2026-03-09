@@ -108,8 +108,16 @@ void setup_trace_config_env() {
 
     char *val = getenv(env_var);
     if (val) {
-      int enable = (strcasecmp(val, "TRUE") == 0 || strcmp(val, "1") == 0);
-      domain_default_trace_config[i].set = enable;
+      if (strcasecmp(val, "OFF") == 0 || strcasecmp(val, "FALSE") == 0 ||
+          strcmp(val, "0") == 0) {
+        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_OFF;
+      } else if (strcasecmp(val, "MONITORING") == 0 ||
+                 strcasecmp(val, "MONITOR") == 0) {
+        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_MONITORING;
+      } else {
+        /* ON, TRACING, TRUE, 1, or any unrecognized → full tracing */
+        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_TRACING;
+      }
     }
   }
 
@@ -228,9 +236,9 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
     domain_default_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
     if (domain_default_trace_config[i].events) {
-      domain_default_trace_config[i].set = 1;
+      domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_TRACING;
     } else {
-      domain_default_trace_config[i].set = 0;
+      domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_OFF;
     }
   }
 
@@ -373,7 +381,12 @@ void print_domain_trace_config(FILE *out) {
 
   for (int i = 0; i < num_domain; i++) {
     struct domain_info *d = &domain_info_table[i];
-    fprintf(out, "[%s.default]\n", d->name);
+    const char *mode_str = "TRACING";
+    if (domain_default_trace_config[i].mode == PINSIGHT_DOMAIN_OFF)
+      mode_str = "OFF";
+    else if (domain_default_trace_config[i].mode == PINSIGHT_DOMAIN_MONITORING)
+      mode_str = "MONITORING";
+    fprintf(out, "[%s.default]  # mode: %s\n", d->name, mode_str);
     unsigned long current_events = domain_default_trace_config[i].events;
     for (int k = 0; k < d->num_events; k++) {
       if (strlen(d->event_table[k].name) == 0)

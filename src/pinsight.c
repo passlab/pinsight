@@ -210,12 +210,6 @@ int lexgion_set_top_trace_bit() {
  */
 int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
                                            int event) {
-  /* Domain-level kill switch: if the entire domain is disabled via env
-   * (e.g. PINSIGHT_TRACE_OPENMP=FALSE), skip all tracing for this domain */
-  if (!domain_default_trace_config[domain].set) {
-    lgp->trace_bit = 0;
-    return 0;
-  }
 
   /* Check if a config reload was requested via SIGUSR1.
    * Use atomic exchange so exactly one thread performs the reload. */
