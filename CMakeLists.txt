@@ -93,14 +93,14 @@ if (PINSIGHT_ENERGY)
 endif()
 
 add_library(pinsight SHARED ${SOURCE_FILES})
-# Define PINSIGHT_OMPT_CALLBACKS for all pinsight source files so that
-# ompt_callback.h resolves callback names to real extern declarations
-# rather than NULL stubs. The test binary omits this to avoid link errors.
-target_compile_definitions(pinsight PRIVATE PINSIGHT_OMPT_CALLBACKS)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(pinsight m dl lttng-ust)
 
 if (PINSIGHT_OPENMP)
+# Define PINSIGHT_OMPT_CALLBACKS for all pinsight source files so that
+# ompt_callback.h resolves callback names to real extern declarations
+# rather than NULL stubs. The test binary omits this to avoid link errors.
+    target_compile_definitions(pinsight PRIVATE PINSIGHT_OMPT_CALLBACKS)
 #	target_link_libraries(pinsight omp) # no need libomp.so for pinsight
 endif()
 
