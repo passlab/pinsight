@@ -684,10 +684,10 @@ static void parse_key_value(char *line) {
         *dot = '.'; // restore
       }
     }
-  } else if ((current_section_type == SECTION_DOMAIN_GLOBAL ||
-              current_section_type == SECTION_DOMAIN_DEFAULT) &&
+  } else if (current_section_type == SECTION_DOMAIN_GLOBAL &&
              current_domain_idx >= 0) {
-    // trace_mode key (Domain.global only, but accept in .default too)
+    // --- Domain.global key-value parsing ---
+    // Accepts: trace_mode, Domain.PunitKind = (Range)
     if (strcmp(key, "trace_mode") == 0) {
       if (strcasecmp(val, "OFF") == 0 || strcasecmp(val, "FALSE") == 0 ||
           strcmp(val, "0") == 0) {
@@ -702,18 +702,15 @@ static void parse_key_value(char *line) {
         domain_default_trace_config[current_domain_idx].mode =
             PINSIGHT_DOMAIN_TRACING;
       }
-    }
-    // Check for Domain.Punit = (low, high) or (low-high)
-    else {
+    } else {
+      // Check for Domain.PunitKind = (Range)
+      // e.g. OpenMP.thread = (0-64)
       char *dot = strchr(key, '.');
       if (dot) {
-        // It might be a punit range specification
-        // e.g. OpenMP.thread = (0-64)
         *dot = '\0';
         char *domain_name = key;
         char *punit_name = dot + 1;
 
-        // Verify domain name matches current section?
         if (strcmp(domain_info_table[current_domain_idx].name, domain_name) ==
             0) {
           int p_idx = find_punit_kind_index(current_domain_idx, punit_name);
@@ -740,77 +737,50 @@ static void parse_key_value(char *line) {
           }
         }
         *dot = '.'; // restore
-      } else if (current_section_type == SECTION_DOMAIN_DEFAULT) {
-        // Event = on/off (only in Domain.default, not Domain.global)
-        struct domain_info *d = &domain_info_table[current_domain_idx];
-        int eid = -1;
-        for (int k = 0; k < d->num_events; k++) {
-          if (strcmp(d->event_table[k].name, key) == 0) {
-            eid = k;
-            break;
-          }
-        }
-        if (eid != -1) {
-          // Update domain default config
-          int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
-
-          // Check installation status
-          int installed = (d->eventInstallStatus >> eid) & 1;
-          if (enable && !installed) {
-            fprintf(stderr,
-                    "PInSight Warning: Event '%s.%s' is enabled but not "
-                    "installed (implemented). Ignoring and setting to OFF.\n",
-                    d->name, d->event_table[eid].name);
-            enable = 0;
-          }
-
-          if (enable)
-            domain_default_trace_config[current_domain_idx].events |=
-                (1UL << eid);
-          else
-            domain_default_trace_config[current_domain_idx].events &=
-                ~(1UL << eid);
-        }
       }
     }
-  } else if (current_section_type == SECTION_DOMAIN_PUNIT &&
-             current_punit_config) {
-    // Update event for specific punit config
-    punit_trace_config_t *pcfg = (punit_trace_config_t *)current_punit_config;
-    int dom_idx = -1;
-    // Find which domain this punit config belongs to?
-    // We stored it in linked list of domain_default_trace_config[dom_idx],
-    // but here we just need to search for event name in ALL domains?
-    // OR usually it belongs to the domain defined in the header.
-    // Let's assume current_domain_idx was set correctly in parse_section_header
-
-    if (current_domain_idx >= 0) {
-      struct domain_info *d = &domain_info_table[current_domain_idx];
-      int eid = -1;
-      for (int k = 0; k < d->num_events; k++) {
-        if (strcmp(d->event_table[k].name, key) == 0) {
-          eid = k;
-          break;
-        }
+  } else if (((current_section_type == SECTION_DOMAIN_DEFAULT &&
+               current_domain_idx >= 0) ||
+              (current_section_type == SECTION_DOMAIN_PUNIT &&
+               current_punit_config)) &&
+             current_domain_idx >= 0) {
+    // --- Domain.default and Domain.punit key-value parsing ---
+    // Both accept: EventName = on/off
+    struct domain_info *d = &domain_info_table[current_domain_idx];
+    int eid = -1;
+    for (int k = 0; k < d->num_events; k++) {
+      if (strcmp(d->event_table[k].name, key) == 0) {
+        eid = k;
+        break;
       }
-      if (eid != -1) {
-        int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
+    }
+    if (eid != -1) {
+      int enable = (strcasecmp(val, "on") == 0 || strcmp(val, "1") == 0);
 
-        // Check installation status
-        int installed = (d->eventInstallStatus >> eid) & 1;
-        if (enable && !installed) {
-          fprintf(stderr,
-                  "PInSight Warning: Event '%s.%s' is enabled but not "
-                  "installed (implemented). Ignoring and setting to OFF.\n",
-                  d->name, d->event_table[eid].name);
-          enable = 0;
-        }
-
-        if (enable)
-          pcfg->events |= (1UL << eid);
-        else
-          pcfg->events &= ~(1UL << eid);
+      // Check installation status
+      int installed = (d->eventInstallStatus >> eid) & 1;
+      if (enable && !installed) {
+        fprintf(stderr,
+                "PInSight Warning: Event '%s.%s' is enabled but not "
+                "installed (implemented). Ignoring and setting to OFF.\n",
+                d->name, d->event_table[eid].name);
+        enable = 0;
       }
+
+      // Update the appropriate bitmask
+      unsigned long *events_ptr;
+      if (current_section_type == SECTION_DOMAIN_PUNIT) {
+        punit_trace_config_t *pcfg =
+            (punit_trace_config_t *)current_punit_config;
+        events_ptr = &pcfg->events;
+      } else {
+        events_ptr = &domain_default_trace_config[current_domain_idx].events;
+      }
+
+      if (enable)
+        *events_ptr |= (1UL << eid);
+      else
+        *events_ptr &= ~(1UL << eid);
     }
   }
 }

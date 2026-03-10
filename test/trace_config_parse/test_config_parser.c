@@ -418,38 +418,6 @@ void test_parsing() {
     punit_trace_config_t *curr = domain_punit_trace_config[omp_idx];
   }
 
-  // Check OpenMP.thread range from [OpenMP.default]
-  // In example: OpenMP.thread = (0-15)
-  // Find OpenMP domain index
-  // Check OpenMP.thread range from [OpenMP.default]
-  // In example: OpenMP.thread = (0-15)
-  // Find OpenMP domain index
-  if (omp_idx >= 0) {
-    int thread_pidx = -1;
-    for (int k = 0; k < domain_info_table[omp_idx].num_punits; k++) {
-      if (strcmp(domain_info_table[omp_idx].punits[k].name, "thread") == 0) {
-        thread_pidx = k;
-        break;
-      }
-    }
-
-    if (thread_pidx >= 0) {
-      int low = domain_info_table[omp_idx].punits[thread_pidx].low;
-      int high = domain_info_table[omp_idx].punits[thread_pidx].high;
-      if (low == 0 && high == 15) {
-        printf("[PASS] Domain Default Punit Range Parsed: OpenMP.thread = "
-               "(%d-%d)\n",
-               low, high);
-      } else {
-        printf("[FAIL] Domain Default Punit Range Mismatch: OpenMP.thread = "
-               "(%d-%d), expected (0-15)\n",
-               low, high);
-      }
-    } else {
-      printf("[FAIL] OpenMP.thread punit kind not found.\n");
-    }
-  }
-
   // Find struct with OpenMP.thread bits 0, 2, 3, 5 set (and not 1, 4)
   if (omp_idx >= 0) {
     punit_trace_config_t *curr = domain_punit_trace_config[omp_idx];
@@ -765,14 +733,9 @@ void test_reload() {
   FILE *fp = fopen("reload_config_1.txt", "w");
   fprintf(fp, "[RESET OpenMP.default]\n");
   // RESET has no body — it reverts to install defaults.
-  // To set team range, use a separate SET section:
-  fprintf(fp, "[OpenMP.default]\n");
+  // Punit range is set via Domain.global:
+  fprintf(fp, "[OpenMP.global]\n");
   fprintf(fp, "    OpenMP.team = (0-4)\n");
-  // Explicitly enable an event to test
-  // Need to know valid event name. checking implementation...
-  // In test setup, we might stick to what we know works or generic check.
-  // Let's rely on domain_default_trace_config[i].set and .events bitmask
-  // changes.
   fclose(fp);
 
   pinsight_load_trace_config("reload_config_1.txt");

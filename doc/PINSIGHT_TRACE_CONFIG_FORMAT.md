@@ -35,9 +35,9 @@ Specifies what is being configured. There are five types of targets:
 | `Domain.default` | ✅ Merge settings | ✅ Revert to system install defaults | ❌ Invalid (use RESET) |
 | `Lexgion.default` | ✅ Merge settings | ✅ Revert to system defaults | ❌ Invalid (use RESET) |
 | `Lexgion(Domain).default` | ✅ Merge settings | ✅ Revert to `Lexgion.default ⊕ Domain.default` | ❌ Invalid (use RESET) |
-| `Domain.PunitKind(Set)` | ✅ Merge settings | ❌ Invalid (use REMOVE) | ✅ Clear/disable this punit config |
-| `Domain.PunitKind(*)` | ❌ Invalid | ❌ Invalid | ✅ Remove ALL configs of this punit kind |
-| `Lexgion(Address)` | ✅ Merge settings | ❌ Invalid (use REMOVE) | ✅ Mark lexgion as removed (stop tracing) |
+| `Domain.PunitKind(Set)` | ✅ Merge settings | ❌ Invalid (use REMOVE) | ✅ Clear/disable this punit-specific config so they will use default settings in the future |
+| `Domain.PunitKind(*)` | ❌ Invalid | ❌ Invalid | ✅ Remove ALL configs of this punit kind so they will use default settings in the future |
+| `Lexgion(Address)` | ✅ Merge settings | ❌ Invalid (use REMOVE) | ✅ Mark lexgion-specific config as removed so they will use default settings in the future |
 
 ##### RESET Semantics by Target
 
@@ -45,7 +45,7 @@ Specifies what is being configured. There are five types of targets:
 |---|---|
 | `Domain.global` | Install defaults: mode = TRACING if domain has registered events, OFF otherwise |
 | `Domain.default` | System install defaults (events as registered by the domain) |
-| `Lexgion.default` | System defaults: `tracing_rate=1`, `trace_starts_at=0`, `max_num_traces=-1`, all event overrides cleared |
+| `Lexgion.default` | System install defaults: `tracing_rate=1`, `trace_starts_at=0`, `max_num_traces=-1`, all event overrides cleared |
 | `Lexgion(Domain).default` | Computed default: rate triple from `Lexgion.default` + events from `Domain.default` |
 
 #### 3. Inheritance (Optional)
@@ -67,8 +67,6 @@ Additional punit constraints from other domains, separated by commas. **Only app
 
 #### Domain Default Configuration (`Domain.default`)
 - **Event Control**: `EventName = on|off`
-- **Punit Range Override**: `Domain.PunitKind = (Range)` (backward compatible, prefer `Domain.global`)
-- **Trace Mode**: `trace_mode = OFF|MONITORING|TRACING` (also accepted here)
 
 #### Lexgion Configuration (applies to `Lexgion.default`, `Lexgion(Domain).default`, and `Lexgion(Address)`)
 - **Tracing Rate**: `tracing_rate = N` (Trace 1 out of N executions)
