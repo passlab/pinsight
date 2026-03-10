@@ -1489,6 +1489,171 @@ void test_domain_global() {
   }
 }
 
+void test_trace_mode_after() {
+  printf("\n===== trace_mode_after Tests =====\n");
+
+  // Find first OpenMP domain index (same as parser's find_domain_index)
+  int omp_idx = -1;
+  int mpi_idx = -1;
+  for (int i = 0; i < num_domain; i++) {
+    if (strcmp(domain_info_table[i].name, "OpenMP") == 0 && omp_idx < 0)
+      omp_idx = i;
+    if (strcmp(domain_info_table[i].name, "MPI") == 0 && mpi_idx < 0)
+      mpi_idx = i;
+  }
+  if (omp_idx < 0 || mpi_idx < 0) {
+    printf("[FAIL] OpenMP or MPI domain not found\n");
+    return;
+  }
+
+  // --- TMA1: Shorthand trace_mode_after = MONITORING ---
+  printf("\n  -- TMA1: [Lexgion.default] trace_mode_after = MONITORING --\n");
+  {
+    FILE *fp = fopen("test_tma.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n");
+    fprintf(fp, "    max_num_traces = 100\n");
+    fprintf(fp, "    trace_mode_after = MONITORING\n");
+    fclose(fp);
+    // Reset
+    lexgion_default_trace_config->num_mode_triggers = 0;
+    parse_trace_config_file("test_tma.txt");
+
+    if (lexgion_default_trace_config->num_mode_triggers == 1 &&
+        lexgion_default_trace_config->mode_triggers[0].domain_idx == -1 &&
+        lexgion_default_trace_config->mode_triggers[0].mode ==
+            PINSIGHT_DOMAIN_MONITORING) {
+      printf("[PASS] TMA1: shorthand trace_mode_after=MONITORING parsed "
+             "(domain_idx=-1, mode=MONITORING)\n");
+    } else {
+      printf("[FAIL] TMA1: num_triggers=%d, domain_idx=%d, mode=%d\n",
+             lexgion_default_trace_config->num_mode_triggers,
+             lexgion_default_trace_config->num_mode_triggers > 0
+                 ? lexgion_default_trace_config->mode_triggers[0].domain_idx
+                 : -99,
+             lexgion_default_trace_config->num_mode_triggers > 0
+                 ? lexgion_default_trace_config->mode_triggers[0].mode
+                 : -99);
+    }
+    if (lexgion_default_trace_config->max_num_traces == 100) {
+      printf("[PASS] TMA1: max_num_traces=100 correctly set\n");
+    } else {
+      printf("[FAIL] TMA1: max_num_traces=%d (expected 100)\n",
+             lexgion_default_trace_config->max_num_traces);
+    }
+  }
+
+  // --- TMA2: Explicit trace_mode_after = OpenMP:OFF ---
+  printf("\n  -- TMA2: trace_mode_after = OpenMP:OFF --\n");
+  {
+    FILE *fp = fopen("test_tma.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n");
+    fprintf(fp, "    max_num_traces = 200\n");
+    fprintf(fp, "    trace_mode_after = OpenMP:OFF\n");
+    fclose(fp);
+    lexgion_default_trace_config->num_mode_triggers = 0;
+    parse_trace_config_file("test_tma.txt");
+
+    if (lexgion_default_trace_config->num_mode_triggers == 1 &&
+        lexgion_default_trace_config->mode_triggers[0].domain_idx == omp_idx &&
+        lexgion_default_trace_config->mode_triggers[0].mode ==
+            PINSIGHT_DOMAIN_OFF) {
+      printf("[PASS] TMA2: OpenMP:OFF parsed (domain_idx=%d, mode=OFF)\n",
+             omp_idx);
+    } else {
+      printf("[FAIL] TMA2: num_triggers=%d, domain_idx=%d, mode=%d\n",
+             lexgion_default_trace_config->num_mode_triggers,
+             lexgion_default_trace_config->num_mode_triggers > 0
+                 ? lexgion_default_trace_config->mode_triggers[0].domain_idx
+                 : -99,
+             lexgion_default_trace_config->num_mode_triggers > 0
+                 ? lexgion_default_trace_config->mode_triggers[0].mode
+                 : -99);
+    }
+  }
+
+  // --- TMA3: Multi trace_mode_after = OpenMP:MONITORING, MPI:OFF ---
+  printf("\n  -- TMA3: trace_mode_after = OpenMP:MONITORING, MPI:OFF --\n");
+  {
+    FILE *fp = fopen("test_tma.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n");
+    fprintf(fp, "    max_num_traces = 300\n");
+    fprintf(fp, "    trace_mode_after = OpenMP:MONITORING, MPI:OFF\n");
+    fclose(fp);
+    lexgion_default_trace_config->num_mode_triggers = 0;
+    parse_trace_config_file("test_tma.txt");
+
+    if (lexgion_default_trace_config->num_mode_triggers == 2) {
+      printf("[PASS] TMA3: 2 triggers parsed\n");
+      // Check first trigger
+      if (lexgion_default_trace_config->mode_triggers[0].domain_idx ==
+              omp_idx &&
+          lexgion_default_trace_config->mode_triggers[0].mode ==
+              PINSIGHT_DOMAIN_MONITORING) {
+        printf("[PASS] TMA3: trigger[0] = OpenMP:MONITORING\n");
+      } else {
+        printf("[FAIL] TMA3: trigger[0] domain_idx=%d mode=%d\n",
+               lexgion_default_trace_config->mode_triggers[0].domain_idx,
+               lexgion_default_trace_config->mode_triggers[0].mode);
+      }
+      // Check second trigger
+      if (lexgion_default_trace_config->mode_triggers[1].domain_idx ==
+              mpi_idx &&
+          lexgion_default_trace_config->mode_triggers[1].mode ==
+              PINSIGHT_DOMAIN_OFF) {
+        printf("[PASS] TMA3: trigger[1] = MPI:OFF\n");
+      } else {
+        printf("[FAIL] TMA3: trigger[1] domain_idx=%d mode=%d\n",
+               lexgion_default_trace_config->mode_triggers[1].domain_idx,
+               lexgion_default_trace_config->mode_triggers[1].mode);
+      }
+    } else {
+      printf("[FAIL] TMA3: num_triggers=%d (expected 2)\n",
+             lexgion_default_trace_config->num_mode_triggers);
+    }
+  }
+
+  // --- TMA4: Per-address lexgion with trace_mode_after ---
+  printf("\n  -- TMA4: [Lexgion(0x400500)] trace_mode_after = OFF --\n");
+  {
+    FILE *fp = fopen("test_tma.txt", "w");
+    fprintf(fp, "[Lexgion(0x400500)]\n");
+    fprintf(fp, "    max_num_traces = 50\n");
+    fprintf(fp, "    trace_mode_after = OFF\n");
+    fclose(fp);
+    parse_trace_config_file("test_tma.txt");
+
+    // Find the address config
+    int found = 0;
+    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+      if (lexgion_address_trace_config[i].codeptr == (void *)0x400500) {
+        lexgion_trace_config_t *lc = &lexgion_address_trace_config[i];
+        if (lc->num_mode_triggers == 1 &&
+            lc->mode_triggers[0].domain_idx == -1 &&
+            lc->mode_triggers[0].mode == PINSIGHT_DOMAIN_OFF &&
+            lc->max_num_traces == 50) {
+          printf("[PASS] TMA4: Lexgion(0x400500) trace_mode_after=OFF, "
+                 "max=50\n");
+        } else {
+          printf("[FAIL] TMA4: num_triggers=%d, domain_idx=%d, mode=%d, "
+                 "max=%d\n",
+                 lc->num_mode_triggers,
+                 lc->num_mode_triggers > 0 ? lc->mode_triggers[0].domain_idx
+                                           : -99,
+                 lc->num_mode_triggers > 0 ? lc->mode_triggers[0].mode : -99,
+                 lc->max_num_traces);
+        }
+        found = 1;
+        break;
+      }
+    }
+    if (!found) {
+      printf("[FAIL] TMA4: Lexgion(0x400500) not found in address configs\n");
+    }
+  }
+
+  remove("test_tma.txt");
+}
+
 int main() {
   // Setup mock domain info
   // ... (This part was in original file, assuming it's still there)
@@ -1502,6 +1667,7 @@ int main() {
   test_implicit_add();
   test_actions_and_features();
   test_domain_global();
+  test_trace_mode_after();
 
   return 0;
 }

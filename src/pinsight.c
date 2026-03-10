@@ -1,9 +1,50 @@
 #include "pinsight.h"
 #include "ompt_callback.h"
+#include "trace_domain_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 __thread pinsight_thread_data_t pinsight_thread_data;
+
+volatile sig_atomic_t mode_change_requested = 0;
+
+/**
+ * Fire auto-trigger mode changes when a lexgion reaches max_num_traces.
+ * Sets mode_change_requested flag to defer callback re-registration.
+ */
+void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
+  for (int i = 0; i < tc->num_mode_triggers; i++) {
+    int d = tc->mode_triggers[i].domain_idx;
+    pinsight_domain_mode_t new_mode = tc->mode_triggers[i].mode;
+
+    if (d < 0) {
+      // Shorthand: apply to all domains this lexgion has events from
+      for (int j = 0; j < num_domain; j++) {
+        if (tc->domain_events[j].set &&
+            !domain_default_trace_config[j].auto_triggered) {
+          domain_default_trace_config[j].mode = new_mode;
+          domain_default_trace_config[j].auto_triggered = 1;
+          fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
+                  domain_info_table[j].name,
+                  new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
+                  : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                           : "TRACING");
+        }
+      }
+    } else if (d < num_domain &&
+               !domain_default_trace_config[d].auto_triggered) {
+      domain_default_trace_config[d].mode = new_mode;
+      domain_default_trace_config[d].auto_triggered = 1;
+      fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
+              domain_info_table[d].name,
+              new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
+              : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                       : "TRACING");
+    }
+  }
+  // Defer callback re-registration to next top-level callback entry
+  mode_change_requested = 1;
+}
 
 /** init thread data
  */
@@ -216,6 +257,16 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
    * Use atomic exchange so exactly one thread performs the reload. */
   if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
     pinsight_load_trace_config(NULL);
+    // Reset auto_triggered flags so triggers can fire again
+    for (int i = 0; i < num_domain; i++)
+      domain_default_trace_config[i].auto_triggered = 0;
+#ifdef PINSIGHT_OPENMP
+    pinsight_register_openmp_callbacks();
+#endif
+  }
+
+  /* Check if an auto-trigger mode change needs callback re-registration */
+  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
 #ifdef PINSIGHT_OPENMP
     pinsight_register_openmp_callbacks();
 #endif

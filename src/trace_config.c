@@ -243,6 +243,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   for (i = 0; i < num_domain; i++) {
     domain_default_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
+    domain_default_trace_config[i].auto_triggered = 0;
     if (domain_default_trace_config[i].events) {
       domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_TRACING;
     } else {
@@ -258,6 +259,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
       DEFAULT_TRACE_START; // start tracing from the first execution
   lexgion_default_trace_config->max_num_traces =
       DEFAULT_TRACE_MAX; // unlimited traces
+  lexgion_default_trace_config->num_mode_triggers = 0;
 
   // set default lexgion domain config which is the combination of lexgion
   // default c and the domian default config.

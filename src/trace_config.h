@@ -179,12 +179,24 @@ typedef enum {
   (domain_default_trace_config[domain].mode == PINSIGHT_DOMAIN_TRACING)
 
 /**
+ * Auto-trigger: when a lexgion reaches max_num_traces, switch domain modes.
+ * domain_idx = -1 means apply to all domains the lexgion has events from.
+ */
+typedef struct {
+  int domain_idx;              // target domain index (-1 = all with events)
+  pinsight_domain_mode_t mode; // target mode to switch to
+} trace_mode_trigger_t;
+
+#define MAX_MODE_TRIGGERS MAX_NUM_DOMAINS
+
+/**
  * The default domain trace config that specifies the events on/off for the
  * domain
  */
 typedef struct domain_trace_config { // The trace config for a domain
   pinsight_domain_mode_t mode; // Domain operating mode (OFF/MONITORING/TRACING)
   unsigned long int events;    // The default event config for the domain
+  int auto_triggered; // Prevents repeated auto-triggers; reset on config reload
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
@@ -216,6 +228,10 @@ typedef struct lexgion_trace_config {
                // config is removed.
                //  When it is removed , the object may still exist in the array
                //  but should not be used.
+
+  // Auto-trigger: switch domain modes when max_num_traces is reached
+  int num_mode_triggers;
+  trace_mode_trigger_t mode_triggers[MAX_MODE_TRIGGERS];
 } lexgion_trace_config_t;
 
 // Default rate trace config: trace every execution,
@@ -234,6 +250,8 @@ extern unsigned int
                                 cached trace_config in lexgions */
 extern volatile sig_atomic_t
     config_reload_requested; /* set by SIGUSR1 handler */
+extern volatile sig_atomic_t
+    mode_change_requested; /* set by auto-trigger, deferred re-registration */
 extern void pinsight_install_signal_handler(void);
 extern void pinsight_load_trace_config(char *filepath);
 void parse_trace_config_file(char *filename);

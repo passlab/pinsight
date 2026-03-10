@@ -56,6 +56,14 @@ static int num_current_lexgion_configs = 0;
 
 // --- Utility Functions ---
 
+static pinsight_domain_mode_t parse_mode_value(const char *val) {
+  if (strcasecmp(val, "OFF") == 0)
+    return PINSIGHT_DOMAIN_OFF;
+  if (strcasecmp(val, "MONITORING") == 0 || strcasecmp(val, "MONITOR") == 0)
+    return PINSIGHT_DOMAIN_MONITORING;
+  return PINSIGHT_DOMAIN_TRACING;
+}
+
 static char *trim_whitespace(char *str) {
   char *end;
   while (isspace((unsigned char)*str))
@@ -587,6 +595,52 @@ static void parse_key_value(char *line) {
       int v = atoi(val);
       for (int ci = 0; ci < cfg_count; ci++)
         cfgs[ci]->tracing_rate = v;
+    } else if (strcmp(key, "trace_mode_after") == 0) {
+      // Parse: "MONITORING" or "OpenMP:MONITORING, MPI:OFF"
+      char val_copy[MAX_LINE_LENGTH];
+      strncpy(val_copy, val, sizeof(val_copy) - 1);
+      val_copy[sizeof(val_copy) - 1] = '\0';
+
+      // Build triggers into a temporary array
+      int n_triggers = 0;
+      trace_mode_trigger_t triggers[MAX_MODE_TRIGGERS];
+
+      char *saveptr;
+      char *token = strtok_r(val_copy, ",", &saveptr);
+      while (token && n_triggers < MAX_MODE_TRIGGERS) {
+        char *trimmed = trim_whitespace(token);
+        char *colon = strchr(trimmed, ':');
+        if (colon) {
+          // Explicit: "OpenMP:MONITORING"
+          *colon = '\0';
+          char *domain_name = trim_whitespace(trimmed);
+          char *mode_str = trim_whitespace(colon + 1);
+          int d_idx = find_domain_index(domain_name);
+          if (d_idx >= 0) {
+            triggers[n_triggers].domain_idx = d_idx;
+            triggers[n_triggers].mode = parse_mode_value(mode_str);
+            n_triggers++;
+          } else {
+            fprintf(stderr,
+                    "PInsight config: unknown domain '%s' in "
+                    "trace_mode_after\n",
+                    domain_name);
+          }
+        } else {
+          // Shorthand: "MONITORING" -> domain_idx = -1 (all with events)
+          triggers[n_triggers].domain_idx = -1;
+          triggers[n_triggers].mode = parse_mode_value(trimmed);
+          n_triggers++;
+        }
+        token = strtok_r(NULL, ",", &saveptr);
+      }
+
+      // Apply to all target configs
+      for (int ci = 0; ci < cfg_count; ci++) {
+        cfgs[ci]->num_mode_triggers = n_triggers;
+        for (int t = 0; t < n_triggers; t++)
+          cfgs[ci]->mode_triggers[t] = triggers[t];
+      }
     } else {
       // Check for Domain.Event override
       char *dot = strchr(key, '.');
