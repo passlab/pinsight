@@ -123,7 +123,7 @@ static int process_line(char *line) {
 
 // --- Helper Structs for Punit Parsing ---
 // --- Forward Declarations ---
-static int find_domain_index(const char *name);
+int find_domain_index(const char *name);
 static int find_punit_kind_index(int domain_idx, const char *punit_name);
 static int apply_inheritance(lexgion_trace_config_t *lg_config,
                              char *inheritance_str);
@@ -873,7 +873,7 @@ find_exact_punit_config(int domain_idx, domain_punit_set_t *target_set) {
   return NULL;
 }
 
-static int find_domain_index(const char *name) {
+int find_domain_index(const char *name) {
   for (int i = 0; i < num_domain; i++) {
     if (strcmp(domain_info_table[i].name, name) == 0)
       return i;

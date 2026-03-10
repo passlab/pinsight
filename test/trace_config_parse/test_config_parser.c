@@ -43,6 +43,9 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
   mode_change_requested = 1;
 }
 
+// Forward declaration for env var test (defined in trace_config.c)
+extern void setup_trace_config_env(void);
+
 // --- Stubs for Runtime Functions utilized in Domain DSL ---
 int omp_get_team_num(void) { return 0; }
 int omp_get_thread_num(void) { return 0; }
@@ -1822,6 +1825,68 @@ void test_trace_mode_after_runtime() {
   }
 }
 
+void test_trace_mode_after_env() {
+  printf("\n===== trace_mode_after Env Var Tests =====\n");
+
+  int omp_idx = -1, mpi_idx = -1;
+  for (int i = 0; i < num_domain; i++) {
+    if (strcmp(domain_info_table[i].name, "OpenMP") == 0 && omp_idx < 0)
+      omp_idx = i;
+    if (strcmp(domain_info_table[i].name, "MPI") == 0 && mpi_idx < 0)
+      mpi_idx = i;
+  }
+  if (omp_idx < 0 || mpi_idx < 0) {
+    printf("[FAIL] OpenMP or MPI domain not found\n");
+    return;
+  }
+
+  // --- TMA8: Env var multi-domain: OpenMP=MONITORING,MPI=OFF ---
+  printf(
+      "\n  -- TMA8: PINSIGHT_TRACE_RATE=0:50:1:OpenMP=MONITORING,MPI=OFF --\n");
+  {
+    lexgion_default_trace_config->num_mode_triggers = 0;
+    lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
+
+    setenv("PINSIGHT_TRACE_RATE", "0:50:1:OpenMP=MONITORING,MPI=OFF", 1);
+    setup_trace_config_env();
+    unsetenv("PINSIGHT_TRACE_RATE");
+
+    if (lexgion_default_trace_config->max_num_traces == 50) {
+      printf("[PASS] TMA8: max_num_traces=50\n");
+    } else {
+      printf("[FAIL] TMA8: max_num_traces=%d (expected 50)\n",
+             lexgion_default_trace_config->max_num_traces);
+    }
+
+    if (lexgion_default_trace_config->num_mode_triggers == 2) {
+      printf("[PASS] TMA8: 2 triggers from env var\n");
+      if (lexgion_default_trace_config->mode_triggers[0].domain_idx ==
+              omp_idx &&
+          lexgion_default_trace_config->mode_triggers[0].mode ==
+              PINSIGHT_DOMAIN_MONITORING) {
+        printf("[PASS] TMA8: trigger[0] = OpenMP=MONITORING\n");
+      } else {
+        printf("[FAIL] TMA8: trigger[0] domain_idx=%d mode=%d\n",
+               lexgion_default_trace_config->mode_triggers[0].domain_idx,
+               lexgion_default_trace_config->mode_triggers[0].mode);
+      }
+      if (lexgion_default_trace_config->mode_triggers[1].domain_idx ==
+              mpi_idx &&
+          lexgion_default_trace_config->mode_triggers[1].mode ==
+              PINSIGHT_DOMAIN_OFF) {
+        printf("[PASS] TMA8: trigger[1] = MPI=OFF\n");
+      } else {
+        printf("[FAIL] TMA8: trigger[1] domain_idx=%d mode=%d\n",
+               lexgion_default_trace_config->mode_triggers[1].domain_idx,
+               lexgion_default_trace_config->mode_triggers[1].mode);
+      }
+    } else {
+      printf("[FAIL] TMA8: num_triggers=%d (expected 2)\n",
+             lexgion_default_trace_config->num_mode_triggers);
+    }
+  }
+}
+
 int main() {
   // Setup mock domain info
   // ... (This part was in original file, assuming it's still there)
@@ -1837,6 +1902,7 @@ int main() {
   test_domain_global();
   test_trace_mode_after();
   test_trace_mode_after_runtime();
+  test_trace_mode_after_env();
 
   return 0;
 }

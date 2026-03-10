@@ -135,21 +135,55 @@ void setup_trace_config_env() {
       lexgion_default_trace_config->max_num_traces = max;
     if (count >= 3)
       lexgion_default_trace_config->tracing_rate = rate;
-    // 4th field: trace_mode_after (shorthand for all domains)
+    // 4th field: trace_mode_after
+    // Formats: MONITORING | OpenMP=MONITORING | OpenMP=MONITORING,MPI=OFF
     if (count >= 4 && mode_after_str[0]) {
-      pinsight_domain_mode_t m;
-      if (strcasecmp(mode_after_str, "OFF") == 0)
-        m = PINSIGHT_DOMAIN_OFF;
-      else if (strcasecmp(mode_after_str, "MONITORING") == 0 ||
-               strcasecmp(mode_after_str, "MONITOR") == 0)
-        m = PINSIGHT_DOMAIN_MONITORING;
-      else
-        m = PINSIGHT_DOMAIN_TRACING;
+      int n_triggers = 0;
+      char *saveptr;
+      char *token = strtok_r(mode_after_str, ",", &saveptr);
+      while (token && n_triggers < MAX_MODE_TRIGGERS) {
+        // Trim whitespace (though unlikely in env var)
+        while (*token == ' ')
+          token++;
 
-      lexgion_default_trace_config->num_mode_triggers = 1;
-      lexgion_default_trace_config->mode_triggers[0].domain_idx =
-          -1; // all domains with events
-      lexgion_default_trace_config->mode_triggers[0].mode = m;
+        char *eq = strchr(token, '=');
+        if (eq) {
+          // Explicit: "OpenMP=MONITORING"
+          *eq = '\0';
+          int d_idx = find_domain_index(token);
+          if (d_idx >= 0) {
+            char *mode_str = eq + 1;
+            pinsight_domain_mode_t m;
+            if (strcasecmp(mode_str, "OFF") == 0)
+              m = PINSIGHT_DOMAIN_OFF;
+            else if (strcasecmp(mode_str, "MONITORING") == 0 ||
+                     strcasecmp(mode_str, "MONITOR") == 0)
+              m = PINSIGHT_DOMAIN_MONITORING;
+            else
+              m = PINSIGHT_DOMAIN_TRACING;
+            lexgion_default_trace_config->mode_triggers[n_triggers].domain_idx =
+                d_idx;
+            lexgion_default_trace_config->mode_triggers[n_triggers].mode = m;
+            n_triggers++;
+          }
+        } else {
+          // Shorthand: "MONITORING" -> all domains with events
+          pinsight_domain_mode_t m;
+          if (strcasecmp(token, "OFF") == 0)
+            m = PINSIGHT_DOMAIN_OFF;
+          else if (strcasecmp(token, "MONITORING") == 0 ||
+                   strcasecmp(token, "MONITOR") == 0)
+            m = PINSIGHT_DOMAIN_MONITORING;
+          else
+            m = PINSIGHT_DOMAIN_TRACING;
+          lexgion_default_trace_config->mode_triggers[n_triggers].domain_idx =
+              -1;
+          lexgion_default_trace_config->mode_triggers[n_triggers].mode = m;
+          n_triggers++;
+        }
+        token = strtok_r(NULL, ",", &saveptr);
+      }
+      lexgion_default_trace_config->num_mode_triggers = n_triggers;
     }
   }
 }

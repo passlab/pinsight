@@ -255,6 +255,7 @@ extern volatile sig_atomic_t
 extern void pinsight_install_signal_handler(void);
 extern void pinsight_load_trace_config(char *filepath);
 void parse_trace_config_file(char *filename);
+extern int find_domain_index(const char *name);
 
 // Fill lexgion_domain_default_trace_config by combining domain defaults and
 // lexgion defaults for domains not explicitly configured by the user.
