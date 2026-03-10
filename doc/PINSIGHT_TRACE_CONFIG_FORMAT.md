@@ -74,6 +74,9 @@ Additional punit constraints from other domains, separated by commas. **Only app
 - **Tracing Rate**: `tracing_rate = N` (Trace 1 out of N executions)
 - **Max Traces**: `max_num_traces = N`
 - **Start Delay**: `trace_starts_at = N`
+- **Auto Mode Switch**: `trace_mode_after = MODE` — Automatically switch domain trace modes when `max_num_traces` is reached. Supports:
+  - Shorthand: `trace_mode_after = MONITORING` (applies to all domains with events in the lexgion)
+  - Explicit per-domain: `trace_mode_after = OpenMP:MONITORING, MPI:OFF`
 - **Event Control**: `EventName = on|off`
 
 ---
@@ -170,4 +173,21 @@ Remove the thread-specific config; those threads fall back to domain default.
 Remove all `OpenMP.thread(*)` configs without knowing individual sets.
 ```ini
 [REMOVE OpenMP.thread(*)]
+```
+
+### 14. Automatic Mode Switching After Tracing
+Trace 100 executions of each lexgion, then switch all domains to MONITORING.
+```ini
+[Lexgion.default]
+    max_num_traces = 100
+    tracing_rate = 1
+    trace_mode_after = MONITORING
+```
+
+### 15. Per-Domain Auto Mode Switch
+Trace 50 executions of a specific region, then set OpenMP to MONITORING and MPI to OFF.
+```ini
+[Lexgion(0x400500)]
+    max_num_traces = 50
+    trace_mode_after = OpenMP:MONITORING, MPI:OFF
 ```

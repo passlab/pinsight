@@ -46,15 +46,21 @@ Each variable sets the `trace_mode` for the corresponding domain. Accepted value
 #### Rate-Based Sampling
 
 ```bash
-export PINSIGHT_TRACE_RATE=trace_starts_at:max_num_traces:tracing_rate
+export PINSIGHT_TRACE_RATE=trace_starts_at:max_num_traces:tracing_rate[:mode_after]
 ```
 
 Sets the default sampling triple for **all** lexgions:
 - `trace_starts_at` — Skip this many executions before starting to trace (default: 0)
 - `max_num_traces` — Stop tracing after this many traces; -1 = unlimited (default: -1)
 - `tracing_rate` — Trace 1 out of every N executions (default: 1 = trace every execution)
+- `mode_after` (optional) — Automatically switch domain trace modes when `max_num_traces` is reached. Formats:
+  - Shorthand: `MONITORING` (switch all domains with events)
+  - Per-domain: `OpenMP=MONITORING,MPI=OFF` (comma-separated, `=` separates domain from mode)
 
-Example: `PINSIGHT_TRACE_RATE=10:100:50` — skip the first 10 executions, then trace 1-in-50, stop after 100 traces total.
+Examples:
+- `PINSIGHT_TRACE_RATE=10:100:50` — skip the first 10 executions, then trace 1-in-50, stop after 100 traces total.
+- `PINSIGHT_TRACE_RATE=0:100:1:MONITORING` — trace first 100 executions, then switch all domains to MONITORING.
+- `PINSIGHT_TRACE_RATE=0:100:1:OpenMP=MONITORING,MPI=OFF` — trace first 100, then switch OpenMP to MONITORING and MPI to OFF.
 
 > **Note:** Environment variables are read once at process launch. They cannot be changed from outside a running process. For runtime reconfiguration, use the config file.
 
@@ -82,9 +88,9 @@ The config file uses an enhanced INI-style format with three types of domain sec
 
 | Section | Purpose | Key-Value Pairs |
 |---------|---------|-----------------|
-| `[Lexgion.default]` | Default configuration for all code regions | Rate triple, event overrides |
-| `[Lexgion(Domain).default]` | Default for a specific domain's regions | Rate triple, event overrides |
-| `[Lexgion(Address)]` | Configuration for specific code regions | Rate triple, event overrides |
+| `[Lexgion.default]` | Default configuration for all code regions | Rate triple, `trace_mode_after`, event overrides |
+| `[Lexgion(Domain).default]` | Default for a specific domain's regions | Rate triple, `trace_mode_after`, event overrides |
+| `[Lexgion(Address)]` | Configuration for specific code regions | Rate triple, `trace_mode_after`, event overrides |
 
 Example config file:
 ```ini
@@ -98,10 +104,11 @@ Example config file:
     omp_task_create = off
     omp_task_schedule = off
 
-# Lexgion defaults: rate-limited sampling
+# Lexgion defaults: rate-limited sampling with auto mode switch
 [Lexgion.default]: OpenMP.default
     tracing_rate = 50
     max_num_traces = 100
+    trace_mode_after = MONITORING
 
 # Specific code region: custom rate
 [Lexgion(0x4010bd)]: OpenMP.default
@@ -144,6 +151,7 @@ Runtime reconfiguration is user-initiated via the SIGUSR1 signal. This is an exp
 | Punit ranges | ✅ | Via `[Domain.global]` or `[Domain.PunitKind(Set)]` |
 | Lexgion rate triple | ✅ | Via `[Lexgion(Address)]` section |
 | Lexgion event overrides | ✅ | Via `[Lexgion(Address)]` event keys |
+| `trace_mode_after` triggers | ✅ | Via `[Lexgion(*)]` sections; `auto_triggered` flags reset on reload |
 | RESET / REMOVE configs | ✅ | Via `[RESET ...]` and `[REMOVE ...]` actions |
 
 ### 4.4 Example Workflows
@@ -200,6 +208,26 @@ For long-running applications, the rate triple (`trace_starts_at`, `max_num_trac
 ### 5.5 Nesting Optimization
 
 Common nested regions (work, masked) piggyback on the parent region's tracing decision, avoiding redundant lookup and bookkeeping overhead. This is implemented via thread-local state (`enclosing_work_lgp`) rather than per-event configuration checks.
+
+### 5.6 Automatic Mode Switching (`trace_mode_after`)
+
+The auto-trigger mechanism enables automatic domain mode transitions without manual intervention. It is built on the same deferred re-registration pattern as SIGUSR1 reloads:
+
+1. **Trigger condition**: Inside `lexgion_post_trace_update()`, after incrementing `trace_counter`, the code checks if `trace_counter >= max_num_traces` and `num_mode_triggers > 0`.
+
+2. **Firing**: `pinsight_fire_mode_triggers(trace_config)` iterates over the configured triggers:
+   - For **shorthand triggers** (`domain_idx == -1`): all domains that have events associated with the lexgion (`domain_events[j].set == 1`) are switched to the target mode.
+   - For **explicit triggers** (`domain_idx >= 0`): only the specified domain is switched.
+   - Each domain's `auto_triggered` flag is set to prevent repeated mode switches from subsequent lexgions.
+
+3. **Deferred re-registration**: After firing, `mode_change_requested` is set (similar to `config_reload_requested`). At the next safe point in `lexgion_set_top_trace_bit_domain_event()`, this flag is consumed via atomic exchange, and `pinsight_register_openmp_callbacks()` is called to register/deregister callbacks based on the new modes.
+
+4. **Reset**: Sending `SIGUSR1` to reload the config file resets all `auto_triggered` flags, allowing triggers to fire again with the new configuration.
+
+Key data structures:
+- `trace_mode_trigger_t { int domain_idx; pinsight_domain_mode_t mode; }` — stored in `lexgion_trace_config_t.mode_triggers[]`
+- `domain_trace_config_t.auto_triggered` — per-domain flag preventing re-triggering
+- `volatile sig_atomic_t mode_change_requested` — global flag for deferred callback re-registration
 
 ## 6. Related Documentation
 

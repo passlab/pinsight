@@ -318,10 +318,10 @@ PINSIGHT_TRACE_MPI=TRUE PINSIGHT_TRACE_OPENMP=MONITORING PINSIGHT_TRACE_CUDA=OFF
 #### Rate-Based Sampling
 
 ```bash
-PINSIGHT_TRACE_RATE=<trace_starts_at>:<max_num_traces>:<tracing_rate>
+PINSIGHT_TRACE_RATE=<trace_starts_at>:<max_num_traces>:<tracing_rate>[:<mode_after>]
 ```
 
-Controls how frequently lexgion executions are traced:
+Controls how frequently lexgion executions are traced. The optional 4th field enables **automatic mode switching** when `max_num_traces` is reached (see [Automatic Mode Switching](#automatic-mode-switching-trace_mode_after) below).
 
 | Example | Meaning |
 |---------|---------|
@@ -330,6 +330,8 @@ Controls how frequently lexgion executions are traced:
 | `0:-1:10` | Record 1 trace per 10 executions, indefinitely |
 | `0:20:1` | Record the first 20 executions |
 | `0:0:0` | Do not record any traces |
+| `0:100:1:MONITORING` | Trace first 100, then switch all domains to MONITORING |
+| `0:100:1:OpenMP=MONITORING,MPI=OFF` | Trace first 100, then set OpenMP to MONITORING, MPI to OFF |
 
 #### Other Environment Variables
 
@@ -338,6 +340,43 @@ PINSIGHT_TRACE_ENERGY=TRUE|FALSE       # Energy tracing via RAPL
 PINSIGHT_TRACE_BACKTRACE=TRUE|FALSE    # Backtrace capture
 PINSIGHT_DEBUG_ENABLE=0|1              # Debug printouts (default: 0)
 ```
+
+### Automatic Mode Switching (`trace_mode_after`)
+
+PInsight can automatically switch domain trace modes after a lexgion has been traced a specified number of times (`max_num_traces`). This eliminates the need for manual `SIGUSR1` intervention and is useful for workflows like: trace the first N executions to capture behavior, then switch to low-overhead monitoring.
+
+#### Via Environment Variable
+
+Append the mode (or domain-specific modes) as a 4th field to `PINSIGHT_TRACE_RATE`:
+
+```bash
+# Shorthand: switch ALL domains to MONITORING after 100 traces
+PINSIGHT_TRACE_RATE=0:100:1:MONITORING
+
+# Per-domain: switch OpenMP to MONITORING and MPI to OFF
+PINSIGHT_TRACE_RATE=0:100:1:OpenMP=MONITORING,MPI=OFF
+```
+
+#### Via Config File
+
+Use the `trace_mode_after` key in any Lexgion section:
+
+```ini
+[Lexgion.default]
+    max_num_traces = 100
+    trace_mode_after = MONITORING           # shorthand: all domains
+
+[Lexgion(0x400500)]
+    max_num_traces = 50
+    trace_mode_after = OpenMP:MONITORING, MPI:OFF   # per-domain
+```
+
+> **Note:** The config file uses `:` as the domain-mode separator (e.g., `OpenMP:MONITORING`), while the env var uses `=` (e.g., `OpenMP=MONITORING`) to avoid ambiguity with the `:` field separator.
+
+Key behaviors:
+- The trigger fires **once** per domain per configuration load (`auto_triggered` flag prevents repeated mode switches)
+- After the mode switch, PInsight sets `mode_change_requested`, which causes callback re-registration at the next safe point (same mechanism as SIGUSR1)
+- Sending `SIGUSR1` to reload the config file resets the `auto_triggered` flags, allowing triggers to fire again
 
 ### Config File
 
