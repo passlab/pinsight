@@ -121,38 +121,49 @@ void setup_trace_config_env() {
   }
 
   // 2. Override Lexgion Rate
-  // PINSIGHT_TRACE_RATE=trace_starts_at:max_num_traces:tracing_rate[:mode_after]
+  // PINSIGHT_TRACE_RATE=start:max:rate[:mode_after]
+  // mode_after uses ':' as domain-mode separator (same as config file):
+  //   MONITORING | OpenMP:MONITORING | OpenMP:MONITORING,MPI:OFF
   char *rate_env = getenv("PINSIGHT_TRACE_RATE");
   if (rate_env) {
-    // Parse first 3 numeric fields
+    // Parse first 3 numeric fields separated by ':'
     int start = 0, max = 0, rate = 0;
-    char mode_after_str[64] = "";
-    int count =
-        sscanf(rate_env, "%d:%d:%d:%63s", &start, &max, &rate, mode_after_str);
+    int count = sscanf(rate_env, "%d:%d:%d", &start, &max, &rate);
     if (count >= 1)
       lexgion_default_trace_config->trace_starts_at = start;
     if (count >= 2)
       lexgion_default_trace_config->max_num_traces = max;
     if (count >= 3)
       lexgion_default_trace_config->tracing_rate = rate;
-    // 4th field: trace_mode_after
-    // Formats: MONITORING | OpenMP=MONITORING | OpenMP=MONITORING,MPI=OFF
-    if (count >= 4 && mode_after_str[0]) {
+
+    // Find the 4th field: skip past the 3rd ':'
+    char *p = (char *)rate_env;
+    int colons = 0;
+    while (*p && colons < 3) {
+      if (*p == ':')
+        colons++;
+      p++;
+    }
+    // p now points to the start of the mode_after string (or '\0')
+    if (colons == 3 && *p) {
+      char mode_after_buf[128];
+      strncpy(mode_after_buf, p, sizeof(mode_after_buf) - 1);
+      mode_after_buf[sizeof(mode_after_buf) - 1] = '\0';
+
       int n_triggers = 0;
       char *saveptr;
-      char *token = strtok_r(mode_after_str, ",", &saveptr);
+      char *token = strtok_r(mode_after_buf, ",", &saveptr);
       while (token && n_triggers < MAX_MODE_TRIGGERS) {
-        // Trim whitespace (though unlikely in env var)
         while (*token == ' ')
           token++;
 
-        char *eq = strchr(token, '=');
-        if (eq) {
-          // Explicit: "OpenMP=MONITORING"
-          *eq = '\0';
+        char *colon = strchr(token, ':');
+        if (colon) {
+          // Explicit: "OpenMP:MONITORING"
+          *colon = '\0';
           int d_idx = find_domain_index(token);
           if (d_idx >= 0) {
-            char *mode_str = eq + 1;
+            char *mode_str = colon + 1;
             pinsight_domain_mode_t m;
             if (strcasecmp(mode_str, "OFF") == 0)
               m = PINSIGHT_DOMAIN_OFF;

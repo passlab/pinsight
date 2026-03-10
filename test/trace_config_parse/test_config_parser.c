@@ -1840,14 +1840,14 @@ void test_trace_mode_after_env() {
     return;
   }
 
-  // --- TMA8: Env var multi-domain: OpenMP=MONITORING,MPI=OFF ---
+  // --- TMA8: Env var multi-domain: OpenMP:MONITORING,MPI:OFF ---
   printf(
-      "\n  -- TMA8: PINSIGHT_TRACE_RATE=0:50:1:OpenMP=MONITORING,MPI=OFF --\n");
+      "\n  -- TMA8: PINSIGHT_TRACE_RATE=0:50:1:OpenMP:MONITORING,MPI:OFF --\n");
   {
     lexgion_default_trace_config->num_mode_triggers = 0;
     lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
 
-    setenv("PINSIGHT_TRACE_RATE", "0:50:1:OpenMP=MONITORING,MPI=OFF", 1);
+    setenv("PINSIGHT_TRACE_RATE", "0:50:1:OpenMP:MONITORING,MPI:OFF", 1);
     setup_trace_config_env();
     unsetenv("PINSIGHT_TRACE_RATE");
 
@@ -1864,7 +1864,7 @@ void test_trace_mode_after_env() {
               omp_idx &&
           lexgion_default_trace_config->mode_triggers[0].mode ==
               PINSIGHT_DOMAIN_MONITORING) {
-        printf("[PASS] TMA8: trigger[0] = OpenMP=MONITORING\n");
+        printf("[PASS] TMA8: trigger[0] = OpenMP:MONITORING\n");
       } else {
         printf("[FAIL] TMA8: trigger[0] domain_idx=%d mode=%d\n",
                lexgion_default_trace_config->mode_triggers[0].domain_idx,
@@ -1874,7 +1874,7 @@ void test_trace_mode_after_env() {
               mpi_idx &&
           lexgion_default_trace_config->mode_triggers[1].mode ==
               PINSIGHT_DOMAIN_OFF) {
-        printf("[PASS] TMA8: trigger[1] = MPI=OFF\n");
+        printf("[PASS] TMA8: trigger[1] = MPI:OFF\n");
       } else {
         printf("[FAIL] TMA8: trigger[1] domain_idx=%d mode=%d\n",
                lexgion_default_trace_config->mode_triggers[1].domain_idx,

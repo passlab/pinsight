@@ -331,7 +331,7 @@ Controls how frequently lexgion executions are traced. The optional 4th field en
 | `0:20:1` | Record the first 20 executions |
 | `0:0:0` | Do not record any traces |
 | `0:100:1:MONITORING` | Trace first 100, then switch all domains to MONITORING |
-| `0:100:1:OpenMP=MONITORING,MPI=OFF` | Trace first 100, then set OpenMP to MONITORING, MPI to OFF |
+| `0:100:1:OpenMP:MONITORING,MPI:OFF` | Trace first 100, then set OpenMP to MONITORING, MPI to OFF |
 
 #### Other Environment Variables
 
@@ -354,7 +354,7 @@ Append the mode (or domain-specific modes) as a 4th field to `PINSIGHT_TRACE_RAT
 PINSIGHT_TRACE_RATE=0:100:1:MONITORING
 
 # Per-domain: switch OpenMP to MONITORING and MPI to OFF
-PINSIGHT_TRACE_RATE=0:100:1:OpenMP=MONITORING,MPI=OFF
+PINSIGHT_TRACE_RATE=0:100:1:OpenMP:MONITORING,MPI:OFF
 ```
 
 #### Via Config File
@@ -371,7 +371,7 @@ Use the `trace_mode_after` key in any Lexgion section:
     trace_mode_after = OpenMP:MONITORING, MPI:OFF   # per-domain
 ```
 
-> **Note:** The config file uses `:` as the domain-mode separator (e.g., `OpenMP:MONITORING`), while the env var uses `=` (e.g., `OpenMP=MONITORING`) to avoid ambiguity with the `:` field separator.
+> **Note:** Both the config file and the env var use `:` as the domain-mode separator (e.g., `OpenMP:MONITORING`). In the env var, the first three `:` delimit the rate triple fields; everything after the third `:` is the mode_after string.
 
 Key behaviors:
 - The trigger fires **once** per domain per configuration load (`auto_triggered` flag prevents repeated mode switches)

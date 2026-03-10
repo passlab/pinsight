@@ -55,12 +55,12 @@ Sets the default sampling triple for **all** lexgions:
 - `tracing_rate` — Trace 1 out of every N executions (default: 1 = trace every execution)
 - `mode_after` (optional) — Automatically switch domain trace modes when `max_num_traces` is reached. Formats:
   - Shorthand: `MONITORING` (switch all domains with events)
-  - Per-domain: `OpenMP=MONITORING,MPI=OFF` (comma-separated, `=` separates domain from mode)
+  - Per-domain: `OpenMP:MONITORING,MPI:OFF` (comma-separated, `:` separates domain from mode)
 
 Examples:
 - `PINSIGHT_TRACE_RATE=10:100:50` — skip the first 10 executions, then trace 1-in-50, stop after 100 traces total.
 - `PINSIGHT_TRACE_RATE=0:100:1:MONITORING` — trace first 100 executions, then switch all domains to MONITORING.
-- `PINSIGHT_TRACE_RATE=0:100:1:OpenMP=MONITORING,MPI=OFF` — trace first 100, then switch OpenMP to MONITORING and MPI to OFF.
+- `PINSIGHT_TRACE_RATE=0:100:1:OpenMP:MONITORING,MPI:OFF` — trace first 100, then switch OpenMP to MONITORING and MPI to OFF.
 
 > **Note:** Environment variables are read once at process launch. They cannot be changed from outside a running process. For runtime reconfiguration, use the config file.
 
