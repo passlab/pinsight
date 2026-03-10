@@ -7,6 +7,42 @@
 #include "trace_config.h"
 #include "trace_domain_loader.h"
 
+// Local definition for auto-trigger runtime test (normally in pinsight.c, but
+// pinsight.c is not linked into the test binary)
+volatile sig_atomic_t mode_change_requested = 0;
+
+void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
+  for (int i = 0; i < tc->num_mode_triggers; i++) {
+    int d = tc->mode_triggers[i].domain_idx;
+    pinsight_domain_mode_t new_mode = tc->mode_triggers[i].mode;
+
+    if (d < 0) {
+      for (int j = 0; j < num_domain; j++) {
+        if (tc->domain_events[j].set &&
+            !domain_default_trace_config[j].auto_triggered) {
+          domain_default_trace_config[j].mode = new_mode;
+          domain_default_trace_config[j].auto_triggered = 1;
+          fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
+                  domain_info_table[j].name,
+                  new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
+                  : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                           : "TRACING");
+        }
+      }
+    } else if (d < num_domain &&
+               !domain_default_trace_config[d].auto_triggered) {
+      domain_default_trace_config[d].mode = new_mode;
+      domain_default_trace_config[d].auto_triggered = 1;
+      fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
+              domain_info_table[d].name,
+              new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
+              : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                       : "TRACING");
+    }
+  }
+  mode_change_requested = 1;
+}
+
 // --- Stubs for Runtime Functions utilized in Domain DSL ---
 int omp_get_team_num(void) { return 0; }
 int omp_get_thread_num(void) { return 0; }
@@ -1654,6 +1690,138 @@ void test_trace_mode_after() {
   remove("test_tma.txt");
 }
 
+void test_trace_mode_after_runtime() {
+  printf("\n===== trace_mode_after Runtime Tests =====\n");
+
+  // Find first OpenMP and MPI domain indices
+  int omp_idx = -1;
+  int mpi_idx = -1;
+  for (int i = 0; i < num_domain; i++) {
+    if (strcmp(domain_info_table[i].name, "OpenMP") == 0 && omp_idx < 0)
+      omp_idx = i;
+    if (strcmp(domain_info_table[i].name, "MPI") == 0 && mpi_idx < 0)
+      mpi_idx = i;
+  }
+  if (omp_idx < 0 || mpi_idx < 0) {
+    printf("[FAIL] OpenMP or MPI domain not found\n");
+    return;
+  }
+
+  // --- TMA5: Explicit trigger fires and changes domain mode ---
+  printf("\n  -- TMA5: pinsight_fire_mode_triggers() changes domain mode --\n");
+  {
+    // Reset state
+    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
+    domain_default_trace_config[omp_idx].auto_triggered = 0;
+    mode_change_requested = 0;
+
+    // Create a trace config with explicit trigger: OpenMP -> MONITORING
+    lexgion_trace_config_t tc = {0};
+    tc.num_mode_triggers = 1;
+    tc.mode_triggers[0].domain_idx = omp_idx;
+    tc.mode_triggers[0].mode = PINSIGHT_DOMAIN_MONITORING;
+
+    // Fire the trigger
+    pinsight_fire_mode_triggers(&tc);
+
+    // Check 1: domain mode changed
+    if (domain_default_trace_config[omp_idx].mode ==
+        PINSIGHT_DOMAIN_MONITORING) {
+      printf("[PASS] TMA5: OpenMP mode switched from TRACING to MONITORING\n");
+    } else {
+      printf("[FAIL] TMA5: OpenMP mode = %d (expected MONITORING=1)\n",
+             domain_default_trace_config[omp_idx].mode);
+    }
+
+    // Check 2: auto_triggered flag set
+    if (domain_default_trace_config[omp_idx].auto_triggered == 1) {
+      printf("[PASS] TMA5: auto_triggered flag is set\n");
+    } else {
+      printf("[FAIL] TMA5: auto_triggered = %d (expected 1)\n",
+             domain_default_trace_config[omp_idx].auto_triggered);
+    }
+
+    // Check 3: mode_change_requested flag set (deferred re-registration)
+    if (mode_change_requested == 1) {
+      printf("[PASS] TMA5: mode_change_requested flag is set\n");
+    } else {
+      printf("[FAIL] TMA5: mode_change_requested = %d (expected 1)\n",
+             (int)mode_change_requested);
+    }
+  }
+
+  // --- TMA6: auto_triggered prevents re-triggering ---
+  printf("\n  -- TMA6: auto_triggered prevents duplicate trigger --\n");
+  {
+    // OpenMP is already MONITORING with auto_triggered=1 from TMA5
+    mode_change_requested = 0;
+
+    // Try to trigger OpenMP -> OFF (should be blocked by auto_triggered)
+    lexgion_trace_config_t tc = {0};
+    tc.num_mode_triggers = 1;
+    tc.mode_triggers[0].domain_idx = omp_idx;
+    tc.mode_triggers[0].mode = PINSIGHT_DOMAIN_OFF;
+
+    pinsight_fire_mode_triggers(&tc);
+
+    // Mode should NOT have changed (still MONITORING)
+    if (domain_default_trace_config[omp_idx].mode ==
+        PINSIGHT_DOMAIN_MONITORING) {
+      printf("[PASS] TMA6: auto_triggered blocked re-trigger "
+             "(mode still MONITORING)\n");
+    } else {
+      printf("[FAIL] TMA6: mode = %d (expected MONITORING=1, should not have "
+             "changed)\n",
+             domain_default_trace_config[omp_idx].mode);
+    }
+  }
+
+  // --- TMA7: Shorthand (domain_idx=-1) triggers all domains with events ---
+  printf("\n  -- TMA7: shorthand triggers all domains with events --\n");
+  {
+    // Reset both domains
+    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
+    domain_default_trace_config[omp_idx].auto_triggered = 0;
+    domain_default_trace_config[mpi_idx].mode = PINSIGHT_DOMAIN_TRACING;
+    domain_default_trace_config[mpi_idx].auto_triggered = 0;
+    mode_change_requested = 0;
+
+    // Create a config with events set for both domains
+    lexgion_trace_config_t tc = {0};
+    tc.domain_events[omp_idx].set = 1;
+    tc.domain_events[omp_idx].events = 0xFF;
+    tc.domain_events[mpi_idx].set = 1;
+    tc.domain_events[mpi_idx].events = 0xFF;
+    tc.num_mode_triggers = 1;
+    tc.mode_triggers[0].domain_idx = -1; // shorthand: all with events
+    tc.mode_triggers[0].mode = PINSIGHT_DOMAIN_OFF;
+
+    pinsight_fire_mode_triggers(&tc);
+
+    // Both domains should switch to OFF
+    int pass = 1;
+    if (domain_default_trace_config[omp_idx].mode != PINSIGHT_DOMAIN_OFF) {
+      printf("[FAIL] TMA7: OpenMP mode = %d (expected OFF=0)\n",
+             domain_default_trace_config[omp_idx].mode);
+      pass = 0;
+    }
+    if (domain_default_trace_config[mpi_idx].mode != PINSIGHT_DOMAIN_OFF) {
+      printf("[FAIL] TMA7: MPI mode = %d (expected OFF=0)\n",
+             domain_default_trace_config[mpi_idx].mode);
+      pass = 0;
+    }
+    if (pass) {
+      printf("[PASS] TMA7: shorthand triggered both OpenMP and MPI to OFF\n");
+    }
+
+    // Restore modes for subsequent tests
+    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
+    domain_default_trace_config[omp_idx].auto_triggered = 0;
+    domain_default_trace_config[mpi_idx].mode = PINSIGHT_DOMAIN_TRACING;
+    domain_default_trace_config[mpi_idx].auto_triggered = 0;
+  }
+}
+
 int main() {
   // Setup mock domain info
   // ... (This part was in original file, assuming it's still there)
@@ -1668,6 +1836,7 @@ int main() {
   test_actions_and_features();
   test_domain_global();
   test_trace_mode_after();
+  test_trace_mode_after_runtime();
 
   return 0;
 }

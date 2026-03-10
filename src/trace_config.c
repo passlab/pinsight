@@ -121,17 +121,36 @@ void setup_trace_config_env() {
   }
 
   // 2. Override Lexgion Rate
-  // PINSIGHT_TRACE_RATE=trace_starts_at:max_num_traces:tracing_rate
+  // PINSIGHT_TRACE_RATE=trace_starts_at:max_num_traces:tracing_rate[:mode_after]
   char *rate_env = getenv("PINSIGHT_TRACE_RATE");
   if (rate_env) {
+    // Parse first 3 numeric fields
     int start = 0, max = 0, rate = 0;
-    int count = sscanf(rate_env, "%d:%d:%d", &start, &max, &rate);
+    char mode_after_str[64] = "";
+    int count =
+        sscanf(rate_env, "%d:%d:%d:%63s", &start, &max, &rate, mode_after_str);
     if (count >= 1)
       lexgion_default_trace_config->trace_starts_at = start;
     if (count >= 2)
       lexgion_default_trace_config->max_num_traces = max;
     if (count >= 3)
       lexgion_default_trace_config->tracing_rate = rate;
+    // 4th field: trace_mode_after (shorthand for all domains)
+    if (count >= 4 && mode_after_str[0]) {
+      pinsight_domain_mode_t m;
+      if (strcasecmp(mode_after_str, "OFF") == 0)
+        m = PINSIGHT_DOMAIN_OFF;
+      else if (strcasecmp(mode_after_str, "MONITORING") == 0 ||
+               strcasecmp(mode_after_str, "MONITOR") == 0)
+        m = PINSIGHT_DOMAIN_MONITORING;
+      else
+        m = PINSIGHT_DOMAIN_TRACING;
+
+      lexgion_default_trace_config->num_mode_triggers = 1;
+      lexgion_default_trace_config->mode_triggers[0].domain_idx =
+          -1; // all domains with events
+      lexgion_default_trace_config->mode_triggers[0].mode = m;
+    }
   }
 }
 
@@ -471,6 +490,25 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
   fprintf(out, "    trace_starts_at = %d\n", lg->trace_starts_at);
   fprintf(out, "    max_num_traces = %d\n", lg->max_num_traces);
   fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
+  if (lg->num_mode_triggers > 0) {
+    fprintf(out, "    trace_mode_after =");
+    for (int t = 0; t < lg->num_mode_triggers; t++) {
+      int d = lg->mode_triggers[t].domain_idx;
+      const char *mode_str =
+          lg->mode_triggers[t].mode == PINSIGHT_DOMAIN_OFF ? "OFF"
+          : lg->mode_triggers[t].mode == PINSIGHT_DOMAIN_MONITORING
+              ? "MONITORING"
+              : "TRACING";
+      if (d < 0) {
+        fprintf(out, " %s", mode_str);
+      } else {
+        fprintf(out, " %s:%s", domain_info_table[d].name, mode_str);
+      }
+      if (t < lg->num_mode_triggers - 1)
+        fprintf(out, ",");
+    }
+    fprintf(out, "\n");
+  }
 
   for (int di = 0; di < num_domain; di++) {
     if (lg->domain_events[di].set) {
