@@ -1,6 +1,6 @@
-/* This file implements OMPT callbacks — tell ompt_callback.h to use
- * extern declarations instead of NULL stubs for callback function pointers. */
-#define PINSIGHT_OMPT_CALLBACKS
+/* This file implements OMPT callbacks — ompt_callback.h resolves callback
+ * names to real extern declarations via PINSIGHT_OMPT_CALLBACKS (set by
+ * CMake target_compile_definitions for the pinsight library target). */
 #include <execinfo.h>
 #include <inttypes.h>
 #include <stdio.h>
