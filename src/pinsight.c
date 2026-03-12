@@ -52,6 +52,7 @@ pinsight_thread_data_t *init_thread_data(int _thread_num) {
   global_thread_num = _thread_num;
   //    pinsight_thread_data.thread_type = thread_type;
   pinsight_thread_data.stack_top = -1;
+  pinsight_thread_data.current_record = NULL;
   pinsight_thread_data.num_lexgions = 0;
   pinsight_thread_data.recent_lexgion = -1;
 
@@ -74,6 +75,8 @@ lexgion_record_t *push_lexgion(lexgion_t *lgp, unsigned int record_id) {
   lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
   record->lgp = lgp;
   record->record_id = record_id;
+  record->parent = pinsight_thread_data.current_record;
+  pinsight_thread_data.current_record = record;
   pinsight_thread_data.stack_top = top;
 
   return record;
@@ -86,10 +89,13 @@ lexgion_record_t *push_lexgion(lexgion_t *lgp, unsigned int record_id) {
  * @return
  */
 lexgion_t *pop_lexgion(unsigned int *record_id) {
-  int top = pinsight_thread_data.stack_top;
-  lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
+  lexgion_record_t *record = pinsight_thread_data.current_record;
+  if (record == NULL)
+    return NULL;
+  lexgion_t *lgp = record->lgp;
   if (record_id != NULL)
-    *record_id = pinsight_thread_data.lexgion_stack[top].record_id;
+    *record_id = record->record_id;
+  pinsight_thread_data.current_record = record->parent;
   pinsight_thread_data.stack_top--;
   return lgp;
 }
@@ -194,25 +200,18 @@ lexgion_t *lexgion_end(unsigned int *record_id) {
  * @return
  */
 lexgion_record_t *top_lexgion_type(int class, int type) {
-  int top = pinsight_thread_data.stack_top;
-  while (top >= 0) {
-    lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
+  lexgion_record_t *record = pinsight_thread_data.current_record;
+  while (record != NULL) {
     lexgion_t *lgp = record->lgp;
     if (lgp->class == class && lgp->type == type) {
       return record;
     }
-    top--;
+    record = record->parent;
   }
   return NULL;
 }
 
-lexgion_record_t *top_lexgion() {
-  int top = pinsight_thread_data.stack_top;
-  if (top >= 0) {
-    return &pinsight_thread_data.lexgion_stack[top];
-  }
-  return NULL;
-}
+lexgion_record_t *top_lexgion() { return pinsight_thread_data.current_record; }
 
 /**
  * set the trace bit for the top lexgion in the stack
@@ -253,17 +252,10 @@ int lexgion_set_top_trace_bit() {
 int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
                                            int event) {
 
-  /* Check if a config reload was requested via SIGUSR1.
-   * Use atomic exchange so exactly one thread performs the reload. */
-  if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
-    pinsight_load_trace_config(NULL);
-    // Reset auto_triggered flags so triggers can fire again
-    for (int i = 0; i < num_domain; i++)
-      domain_default_trace_config[i].auto_triggered = 0;
-#ifdef PINSIGHT_OPENMP
-    pinsight_register_openmp_callbacks();
-#endif
-  }
+  /* SIGUSR1 config reload is deferred to the sequential post-join point
+   * in on_ompt_callback_parallel_end, next to mode_change_requested.
+   * This avoids data races from reloading config or re-registering
+   * callbacks while other threads are in-flight. */
 
   /* Auto-trigger mode changes are deferred to the sequential path:
    * on_ompt_callback_parallel_end (after join) in ompt_callback.c

@@ -294,7 +294,7 @@ void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
      * until we reach the initial parallel region or the stack is empty. */
     lgp = lexgion_end(&record_id);
     while (lgp && lgp->codeptr_ra != (void *)INITIAL_PARALLEL_CODEPTR &&
-           pinsight_thread_data.stack_top >= 0) {
+           pinsight_thread_data.current_record != NULL) {
       lgp = lexgion_end(&record_id);
     }
     if (lgp == NULL || lgp->codeptr_ra != (void *)INITIAL_PARALLEL_CODEPTR) {
@@ -482,30 +482,38 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
                          flag ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
     lexgion_post_trace_update(lgp);
   }
-  /* find the topmost parallel lexgion in the lexgion record stack including
-   * nest parallel-parallel regions, but not considering the explicit
-   * task-parallel situation) */
-  enclosing_task_lexgion_record = top_lexgion_type(
-      OPENMP_LEXGION,
-      ompt_callback_implicit_task); /* not considering task->parallel nested */
-  assert(enclosing_task_lexgion_record == parent_task->ptr);
+  /* Use OMPT data pointers + parent chain instead of top_lexgion_type.
+   * The stack is still maintained via lexgion_end() above, but we use
+   * the OMPT-provided pointers for direct access to enclosing records. */
+  enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
   task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
   task_record_id = enclosing_task_lexgion_record->record_id;
-  enclosing_parallel_lexgion_record =
-      top_lexgion_type(OPENMP_LEXGION, ompt_callback_parallel_begin);
+  /* The parent of the enclosing task record is the enclosing parallel */
+  enclosing_parallel_lexgion_record = enclosing_task_lexgion_record->parent;
   parallel_codeptr = enclosing_parallel_lexgion_record->lgp->codeptr_ra;
   parallel_record_id = enclosing_parallel_lexgion_record->record_id;
   omp_thread_num = 0;
 
-  /* Apply deferred mode-change callback re-registration at the END of
-   * parallel_end, AFTER all bookkeeping is done.  This is the sequential
-   * point after the join barrier — all worker threads have finished and
-   * no callbacks are in-flight, so ompt_set_callback is safe. */
-  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
-#ifdef PINSIGHT_OPENMP
-    pinsight_register_openmp_callbacks();
-#endif
+  /* Deferred handlers at the sequential post-join point — all worker
+   * threads have finished and no callbacks are in-flight. */
+
+  int need_reregister = 0;
+
+  /* SIGUSR1 config reload: re-read config file */
+  if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
+    pinsight_load_trace_config(NULL);
+    // Reset auto_triggered flag for OpenMP so triggers can fire again
+    domain_default_trace_config[OpenMP_domain_index].auto_triggered = 0;
+    need_reregister = 1;
   }
+
+  /* Auto-trigger mode change (e.g. mode_after=OFF) */
+  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
+    need_reregister = 1;
+  }
+
+  if (need_reregister)
+    pinsight_register_openmp_callbacks();
 
   /* For explicit task-parallel nested, the ompt_task_create should be set,
    * task_codeptr and task_record_id

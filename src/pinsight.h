@@ -116,12 +116,16 @@ typedef struct lexgion {
 } lexgion_t;
 
 /**
- * The runtime instance/frame/record of a lexgion of a thread
+ * The runtime instance/frame/record of a lexgion of a thread.
+ * Records form a linked list via the `parent` pointer, replacing
+ * the traditional array-indexed stack with a pointer-based stack.
  */
 typedef struct lexgion_record_t {
   lexgion_t *lgp;
   unsigned int record_id; /* the record_id is the counter of lgp when an lexgion
                            * instance is created and pushed to the stack */
+  struct lexgion_record_t *parent; /* link to enclosing record (parent in the
+                                    * runtime stack) */
 } lexgion_record_t;
 
 extern domain_trace_config_t domain_default_trace_config[];
@@ -141,9 +145,13 @@ typedef struct pinsight_thread_data {
                                               // only for the initial thread
   int initial_thread; // flag to indicate whether this is initial thread or not
 
-  /* the runtime stack for lexgion instances */
+  /* the runtime stack for lexgion instances — records are stored in the
+   * lexgion_stack array (for pre-allocated storage) and linked via parent
+   * pointers (for traversal). stack_top tracks the next free slot;
+   * current_record points to the top of the linked stack. */
   struct lexgion_record_t lexgion_stack[MAX_LEXGION_STACK_DEPTH];
   int stack_top;
+  struct lexgion_record_t *current_record; /* head of parent-pointer chain */
 
   /* this is the lexgion cache runtime stores, a lexgion is added to the array
    * when the runtime encounters it. The lexgion counter is updated when the
@@ -179,8 +187,7 @@ extern __thread pinsight_thread_data_t pinsight_thread_data;
   (pinsight_thread_data.lexgions[pinsight_thread_data.lexgion_recent])
 
 static inline int get_trace_bit() {
-  return pinsight_thread_data.lexgion_stack[pinsight_thread_data.stack_top]
-      .lgp->trace_bit;
+  return pinsight_thread_data.current_record->lgp->trace_bit;
 }
 
 // Forward declaration for auto-trigger (defined in pinsight.c)
