@@ -6,89 +6,79 @@
 
 ## Strategy 1: Selective Callback Deregistration in MONITORING Mode ✅ Implemented
 
-Deregister non-essential callbacks when mode is MONITORING. Only keep:
+Deregister non-essential callbacks when mode is MONITORING. Keep only:
 - `thread_begin/end` — lifecycle management
 - `parallel_begin/end` — region counting, lexgion stack
-- `implicit_task` — thread tracking within regions
 
-Deregister in MONITORING: `sync_region`, `sync_region_wait`, `work`, `masked`, `mutex_released`, `task_create`, `task_schedule`, `dependences`, `target*`, `device*`, `control_tool`.
+Deregister: `sync_region`, `sync_region_wait`, `work`, `masked`, `implicit_task`, `mutex_released`, `task_create`, `task_schedule`, `dependences`, `target*`, `device*`, `control_tool`.
 
-**Result**: Reduces 6T overhead from 15.5% → 11.1% (~28% reduction). Modest at lower thread counts because `parallel_begin/end` + `implicit_task` dominate — they fire 44×N times per iteration for LULESH's 44 parallel regions.
+**Result (LULESH s=30, 6T)**: Overhead reduced from **15.5% → 11.1%** (~28% reduction) by eliminating sync/work/barrier callbacks.
 
 ---
 
-## Strategy 2: Replace Array Stack with Parent-Pointer Linked Stack
+## Strategy 2: Parent-Pointer Stack + Deregister `implicit_task` ✅ Implemented
 
-### Motivation
+### 2a: Parent-Pointer Linked Stack
 
-The current per-thread lexgion stack is a fixed-size array (`lexgion_stack[16]`) with an integer `stack_top`. It's used to pass lexgion records between paired `_begin`/`_end` callbacks. However:
-
-1. **OMPT data pointers already carry records**: `parallel_data->ptr`, `task_data->ptr`, and `parent_task->ptr` carry `lexgion_record_t *` through the OMPT runtime — these are redundant with the stack.
-2. **`top_lexgion_type()` walks are redundant**: `parallel_end` uses `top_lexgion_type(implicit_task)` to find the enclosing task, but `parent_task->ptr` already provides it (proven by the existing `assert` on line 490).
-3. **`enclosing_work_lgp` is already a thread-local**: sync_region's trace inheritance uses a direct thread-local variable, not the stack.
-4. **`work`/`masked` end callbacks use the stack only to check "was a lexgion pushed?"** — this can be replaced with a thread-local flag.
-
-### Proposed Change
-
-Add a `parent` pointer to `lexgion_record_t`:
+Replaced the fixed-size array stack (`lexgion_stack[16]` + `stack_top` index) with a parent-pointer linked stack. Added `parent` pointer to `lexgion_record_t`:
 
 ```c
 typedef struct lexgion_record_t {
   lexgion_t *lgp;
   unsigned int record_id;
-  struct lexgion_record_t *parent;  // ← link to enclosing record
+  struct lexgion_record_t *parent;  // link to enclosing record
 } lexgion_record_t;
 ```
 
-Records form a linked list through the OMPT data pointers:
-- **Push**: `record->parent = current_top; current_top = record; data->ptr = record;`
-- **Pop**: `current_top = record->parent;`
-- **Walk**: follow `parent` chain
+Records are still stored in the pre-allocated array (cache locality), but traversal uses the parent chain. This enables:
+- `parallel_end` to use `parent_task->ptr` + `record->parent` instead of `top_lexgion_type()` stack walks
+- Unlimited nesting depth for future callback extensions
+- Natural integration with OMPT data pointers (`parallel_data->ptr`, `task_data->ptr`)
 
-### Comparison: Array Stack vs. Parent-Pointer Stack
+### 2b: Defer SIGUSR1 Config Reload to `parallel_end`
 
-| Aspect | Current (array) | Proposed (parent pointer) |
-|--------|----------------|--------------------------|
-| Max depth | Fixed 16 | Unlimited |
-| Push/pop | Array index ±1 | Pointer assignment |
-| `top_lexgion_type` | Walk array backwards | Follow parent chain |
-| Cache locality | Better (contiguous) | Same in practice (TLS, L1) |
-| OMPT integration | Separate from OMPT data ptrs | OMPT `data->ptr` IS the stack |
-| Memory | 16 × record always allocated | One pointer per active record |
-| Extensibility | Must increase MAX_DEPTH | Automatic |
+Moved `config_reload_requested` handling from `lexgion_set_top_trace_bit_domain_event` (racy mid-parallel) to `parallel_end` (safe sequential post-join), alongside `mode_change_requested`. Eliminates data races during config reload and enables safe callback re-registration for MONITORING↔TRACING transitions.
 
-### Performance Impact
+### 2c: Deregister `implicit_task` in MONITORING
 
-**Negligible**. Push/pop differ by ~1 store (2 stores vs 1 increment + 1 store). `top_lexgion_type` walks 2-3 entries via pointer chase vs array indexing — both in L1 cache. These operations are dwarfed by callback dispatch and `find_lexgion` hash lookup.
+With SIGUSR1 reload deferred to `parallel_end`, bidirectional MONITORING↔TRACING switching is safe at region boundaries. This enables deregistering `implicit_task` in MONITORING:
 
-### Benefits for Future Work
+- `parallel_end` skips context restoration (`parent_task->ptr`, enclosing records) in MONITORING since `implicit_task` may not have set `task_data->ptr`
+- Workers receive NO callbacks in MONITORING (only `thread_begin/end` for lifecycle)
+- Eliminates N×R callbacks per iteration (6×44 = 264 at 6T for LULESH)
 
-- Natural support for task-parallel nesting (arbitrary depth)
-- Cleaner OMPT integration (records live in OMPT data pointers)
-- No fixed stack size limit when extending to new callback types (target, task_create, etc.)
-- Potential to eliminate `implicit_task` in MONITORING mode (Strategy 2b) since `parallel_data->ptr->parent` chains naturally
+**Result (LULESH s=30, 6T)**: Overhead reduced from **11.1% → 4.9%** (56% further reduction).
+
+### Combined Results
+
+| Config | 1T | 2T | 4T | 6T |
+|--------|------|------|------|------|
+| MONITORING (original) | +3.6% | +7.1% | +9.5% | **+15.5%** |
+| opt #1 (deregister sync/work) | +2.6% | +6.3% | +9.3% | **+11.1%** |
+| **opt #2 (+ deregister implicit_task)** | **+2.3%** | **+3.9%** | **+3.6%** | **+4.9%** |
+| RATE → OFF (reference) | +2.1% | +2.2% | +1.6% | +12.5% |
+
+**Key finding**: opt #2 MONITORING now outperforms RATE→OFF at higher thread counts (4.9% vs 12.5% at 6T). The remaining ~5% overhead comes from just 44 `parallel_begin/end` + `lexgion_begin/end` calls per iteration on the master thread.
 
 ---
 
-## Strategy 3: Cache Config Resolution
+## Strategy 3: Cache Config Resolution (not yet implemented)
 Replace linear search in `lexgion_address_trace_config` with a hash map for O(1) lookup by `codeptr_ra`.
 
 **Expected impact**: Small-moderate — depends on number of distinct lexgions.
 
-## Strategy 4: Per-Thread Counter Batching
-Use thread-local counters, merge to shared `lgp->counter` periodically instead of every callback.
-
-**Expected impact**: Small — reduces contention on shared counter.
+## ~~Strategy 4: Per-Thread Counter Batching~~ ❌ Not Applicable
+`lgp->counter` is already thread-local — each thread maintains its own `pinsight_thread_data.lexgions[]` array, so `lgp->counter++` has zero contention. Additionally, counters are per-region and drive per-region trace rate decisions (`tracing_rate`, `max_num_traces`), so they cannot be batched or merged across different lexgions with different trace configs.
 
 ---
 
 ## Overhead Breakdown (LULESH, 6T)
 
-| Component | Overhead contribution |
-|-----------|----------------------|
-| `implicit_task` callbacks (6×44 per iteration) | **High** — largest remaining cost after #1 |
-| `parallel_begin/end` callbacks (44 per iteration) | Medium — master thread only |
-| `lexgion_begin`/`lexgion_end` (hash + stack) | Medium — per-callback |
-| `lexgion_set_top_trace_bit_domain_event` | Low — already skipped by `SHOULD_TRACE` |
-| Sync/work/barrier callbacks (eliminated by #1) | ~4% at 6T |
-| LTTng tracepoint emission | Very low |
+| Component | Status | Impact |
+|-----------|--------|--------|
+| Sync/work/barrier callbacks | ✅ Eliminated in MONITORING | ~4% |
+| `implicit_task` callbacks (6×44/iter) | ✅ Eliminated in MONITORING | ~6% |
+| `parallel_begin/end` (44/iter, master only) | Active | ~5% |
+| `lexgion_begin/end` (hash + stack) | Active | included above |
+| `lexgion_set_top_trace_bit_domain_event` | Skipped by `SHOULD_TRACE` | ~0% |
+| LTTng tracepoint emission | N/A in MONITORING | ~0% |

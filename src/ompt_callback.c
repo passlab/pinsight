@@ -482,17 +482,20 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
                          flag ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
     lexgion_post_trace_update(lgp);
   }
-  /* Use OMPT data pointers + parent chain instead of top_lexgion_type.
-   * The stack is still maintained via lexgion_end() above, but we use
-   * the OMPT-provided pointers for direct access to enclosing records. */
-  enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
-  task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
-  task_record_id = enclosing_task_lexgion_record->record_id;
-  /* The parent of the enclosing task record is the enclosing parallel */
-  enclosing_parallel_lexgion_record = enclosing_task_lexgion_record->parent;
-  parallel_codeptr = enclosing_parallel_lexgion_record->lgp->codeptr_ra;
-  parallel_record_id = enclosing_parallel_lexgion_record->record_id;
-  omp_thread_num = 0;
+  /* Restore enclosing context only in TRACING mode. In MONITORING,
+   * implicit_task is deregistered so parent_task->ptr may not be set,
+   * and the context variables are only used for tracepoint arguments. */
+  if (domain_default_trace_config[OpenMP_domain_index].mode ==
+      PINSIGHT_DOMAIN_TRACING) {
+    enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
+    task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
+    task_record_id = enclosing_task_lexgion_record->record_id;
+    /* The parent of the enclosing task record is the enclosing parallel */
+    enclosing_parallel_lexgion_record = enclosing_task_lexgion_record->parent;
+    parallel_codeptr = enclosing_parallel_lexgion_record->lgp->codeptr_ra;
+    parallel_record_id = enclosing_parallel_lexgion_record->record_id;
+    omp_thread_num = 0;
+  }
 
   /* Deferred handlers at the sequential post-join point — all worker
    * threads have finished and no callbacks are in-flight. */
@@ -1709,11 +1712,11 @@ void pinsight_register_openmp_callbacks(void) {
       /* TRACING: register everything */
       ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
     } else if (mode == PINSIGHT_DOMAIN_MONITORING) {
-      /* MONITORING: keep only essential callbacks for region counting.
-       * Thread lifecycle + parallel begin/end + implicit_task. */
+      /* MONITORING: keep only thread lifecycle + parallel begin/end.
+       * implicit_task is deregistered — workers get no callbacks,
+       * reducing overhead by eliminating N×R callbacks per iteration. */
       if (is_lifecycle || ev->native_id == ompt_callback_parallel_begin ||
-          ev->native_id == ompt_callback_parallel_end ||
-          ev->native_id == ompt_callback_implicit_task) {
+          ev->native_id == ompt_callback_parallel_end) {
         ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
       } else {
         ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
