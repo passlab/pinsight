@@ -289,11 +289,18 @@ void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
     unsigned int record_id;
     lexgion_t *lgp;
 
-    lgp = lexgion_end(&record_id); // pop up initial parallel region
+    /* Drain any stale lexgion stack entries left by callbacks that were
+     * deregistered mid-execution (e.g. mode_after=OFF).  Keep popping
+     * until we reach the initial parallel region or the stack is empty. */
+    lgp = lexgion_end(&record_id);
+    while (lgp && lgp->codeptr_ra != (void *)INITIAL_PARALLEL_CODEPTR &&
+           pinsight_thread_data.stack_top >= 0) {
+      lgp = lexgion_end(&record_id);
+    }
+    if (lgp == NULL || lgp->codeptr_ra != (void *)INITIAL_PARALLEL_CODEPTR) {
+      goto thread_end_report;
+    }
     lgp->end_codeptr_ra = (void *)UNKNOWN_END_CODEPTR;
-    assert(lgp->codeptr_ra == (void *)INITIAL_PARALLEL_CODEPTR);
-    assert(record_id == lgp->counter ==
-           1); // both should be 1, since it is only recorded once
 
 #ifdef PINSIGHT_BACKTRACE
     retrieve_backtrace();
@@ -315,6 +322,7 @@ void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
                          0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
   }
 
+thread_end_report:
 #ifdef PRINT_LEXGION_SUMMARY
   // print out lexgion summary */
   if (global_thread_num == 0) {
@@ -488,6 +496,16 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
   parallel_codeptr = enclosing_parallel_lexgion_record->lgp->codeptr_ra;
   parallel_record_id = enclosing_parallel_lexgion_record->record_id;
   omp_thread_num = 0;
+
+  /* Apply deferred mode-change callback re-registration at the END of
+   * parallel_end, AFTER all bookkeeping is done.  This is the sequential
+   * point after the join barrier — all worker threads have finished and
+   * no callbacks are in-flight, so ompt_set_callback is safe. */
+  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
+#ifdef PINSIGHT_OPENMP
+    pinsight_register_openmp_callbacks();
+#endif
+  }
 
   /* For explicit task-parallel nested, the ompt_task_create should be set,
    * task_codeptr and task_record_id
@@ -1643,8 +1661,8 @@ static void on_ompt_callback_task_dependence(ompt_data_t *first_task_data,
   }
 }
 
-static int on_ompt_callback_control_tool(uint64_t command, uint64_t modifier,
-                                         void *arg, const void *codeptr_ra) {
+static int on_ompt_callback_control_tocol(uint64_t command, uint64_t modifier,
+                                          void *arg, const void *codeptr_ra) {
   if (debug_on) {
     printf("%" PRIu64 ": ompt_event_control_tool: command=%" PRIu64
            ", modifier=%" PRIu64 ", arg=%p, codeptr_ra=%p\n",
@@ -1654,27 +1672,51 @@ static int on_ompt_callback_control_tool(uint64_t command, uint64_t modifier,
 }
 
 /**
- * Register or deregister all OpenMP callbacks based on current domain mode.
- * Iterates the event_table populated by TRACE_EVENT entries in
- * trace_domain_OpenMP.h — events with a non-NULL callback pointer are
- * registered (ACTIVE) or deregistered (OFF).
+ * Register or deregister OpenMP callbacks based on current domain mode.
+ * Three modes:
+ *   TRACING    — register all callbacks
+ *   MONITORING — register only essential callbacks (thread lifecycle,
+ *                parallel begin/end, implicit_task) for region counting;
+ *                deregister high-frequency callbacks (sync, work, etc.)
+ *   OFF        — deregister all except thread lifecycle (needed for
+ *                stack cleanup at shutdown)
  *
- * Called from ompt_initialize (initial setup) and can be called from
- * the SIGUSR1 config reload path for dynamic re-registration.
+ * Called from ompt_initialize (initial setup), from the SIGUSR1 config
+ * reload path, and from the mode_change_requested handler in parallel_end.
  */
 void pinsight_register_openmp_callbacks(void) {
-  int active = PINSIGHT_DOMAIN_ACTIVE(
-      domain_default_trace_config[OpenMP_domain_index].mode);
+  pinsight_domain_mode_t mode =
+      domain_default_trace_config[OpenMP_domain_index].mode;
   domain_info_t *di = OpenMP_domain_info;
 
   for (int i = 0; i < di->event_id_upper; i++) {
     struct event *ev = &di->event_table[i];
     if (!ev->valid || ev->callback == NULL)
       continue; /* unimplemented or invalid slot */
-    if (active)
+
+    int is_lifecycle = (ev->native_id == ompt_callback_thread_begin ||
+                        ev->native_id == ompt_callback_thread_end);
+
+    if (mode == PINSIGHT_DOMAIN_TRACING) {
+      /* TRACING: register everything */
       ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
-    else
+    } else if (mode == PINSIGHT_DOMAIN_MONITORING) {
+      /* MONITORING: keep only essential callbacks for region counting.
+       * Thread lifecycle + parallel begin/end + implicit_task. */
+      if (is_lifecycle || ev->native_id == ompt_callback_parallel_begin ||
+          ev->native_id == ompt_callback_parallel_end ||
+          ev->native_id == ompt_callback_implicit_task) {
+        ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
+      } else {
+        ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
+      }
+    } else {
+      /* OFF: deregister everything except thread lifecycle (needed for
+       * stack cleanup at shutdown). */
+      if (is_lifecycle)
+        continue;
       ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
+    }
   }
 }
 

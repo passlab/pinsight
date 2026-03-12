@@ -265,12 +265,10 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
 #endif
   }
 
-  /* Check if an auto-trigger mode change needs callback re-registration */
-  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
-#ifdef PINSIGHT_OPENMP
-    pinsight_register_openmp_callbacks();
-#endif
-  }
+  /* Auto-trigger mode changes are deferred to the sequential path:
+   * on_ompt_callback_parallel_end (after join) in ompt_callback.c
+   * checks mode_change_requested and calls
+   * pinsight_register_openmp_callbacks() when safe. */
 
   lexgion_trace_config_t *trace_config = lgp->trace_config;
 
