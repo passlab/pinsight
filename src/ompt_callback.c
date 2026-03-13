@@ -51,6 +51,13 @@ extern int __kmpc_global_num_threads(void *);
  */
 __thread lexgion_record_t *enclosing_parallel_lexgion_record = NULL;
 __thread lexgion_record_t *enclosing_task_lexgion_record = NULL;
+
+/* Cached pointers to the initial parallel region and initial implicit task
+ * lexgion records.  These are set once during initialization and reused
+ * when transitioning to TRACING mode (to reconnect the task_data->ptr
+ * that may not have been set if the program started in MONITORING/OFF). */
+__thread lexgion_record_t *initial_parallel_lexgion_record = NULL;
+__thread lexgion_record_t *initial_task_lexgion_record = NULL;
 __thread const void *parallel_codeptr = NULL;
 __thread unsigned int parallel_record_id = -1;
 __thread const void *task_codeptr = NULL;
@@ -246,8 +253,7 @@ void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
     enclosing_parallel_lexgion_record =
         lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin,
                       (void *)INITIAL_PARALLEL_CODEPTR);
-    // printf("thread_begin: initial parallel lexgion: %p\n",
-    // enclosing_parallel_lexgion_record->lgp);
+    initial_parallel_lexgion_record = enclosing_parallel_lexgion_record;
     parallel_codeptr = (void *)INITIAL_PARALLEL_CODEPTR;
     parallel_record_id = enclosing_parallel_lexgion_record->record_id;
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
@@ -412,18 +418,63 @@ void on_ompt_callback_parallel_begin(
     const ompt_frame_t *parent_task_frame, /* frame data of encountering task */
     ompt_data_t *parallel_data, unsigned int requested_team_size, int flag,
     const void *codeptr_ra) {
+  /* Deferred handlers at the pre-fork sequential point — check before
+   * starting the region so that config/mode changes take effect for the
+   * upcoming parallel region and workers spawn with correct callbacks.
+   * This also handles the SIGUSR1 wakeup path from OFF mode. */
+  int need_reregister = 0;
+
+  if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
+    pinsight_load_trace_config(NULL);
+    domain_default_trace_config[OpenMP_domain_index].auto_triggered = 0;
+    need_reregister = 1;
+  }
+
+  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
+    need_reregister = 1;
+  }
+
+  if (need_reregister) {
+    pinsight_register_openmp_callbacks();
+
+    /* When switching to TRACING, reconnect the initial implicit task. */
+    if (domain_default_trace_config[OpenMP_domain_index].mode ==
+            PINSIGHT_DOMAIN_TRACING &&
+        pinsight_thread_data.initial_thread) {
+      ompt_data_t *task_data;
+      ompt_get_task_info(0, NULL, &task_data, NULL, NULL, NULL);
+
+      if (initial_task_lexgion_record == NULL) {
+        enclosing_parallel_lexgion_record = initial_parallel_lexgion_record;
+        parallel_codeptr = (void *)INITIAL_PARALLEL_CODEPTR;
+        parallel_record_id = initial_parallel_lexgion_record->record_id;
+
+        initial_task_lexgion_record = lexgion_begin(
+            OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
+        enclosing_task_lexgion_record = initial_task_lexgion_record;
+        task_data->ptr = (void *)initial_task_lexgion_record;
+        task_codeptr = parallel_codeptr;
+        task_record_id = initial_task_lexgion_record->record_id;
+      } else {
+        enclosing_task_lexgion_record = initial_task_lexgion_record;
+        task_data->ptr = (void *)initial_task_lexgion_record;
+        task_codeptr =
+            initial_task_lexgion_record->lgp->codeptr_ra;
+        task_record_id = initial_task_lexgion_record->record_id;
+        enclosing_parallel_lexgion_record = initial_parallel_lexgion_record;
+        parallel_codeptr = (void *)INITIAL_PARALLEL_CODEPTR;
+        parallel_record_id = initial_parallel_lexgion_record->record_id;
+      }
+    }
+  }
+
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
-  // void * extracted_codeptr_ra = __builtin_extract_return_addr(codeptr_ra);
-  // printf("codeptr: %x, extracted: %x\n", codeptr_ra, extracted_codeptr_ra);
-  //  parallel_data->value = ompt_get_unique_id();
-  //  printf("parallel_begin: codeptr_ra: 0x%" PRIx64 "\n", codeptr_ra);
+
   enclosing_parallel_lexgion_record =
       lexgion_begin(OPENMP_LEXGION, ompt_callback_parallel_begin, codeptr_ra);
-  // This parallel_data->ptr will be passed to the callback of implicit tasks,
   parallel_data->ptr = enclosing_parallel_lexgion_record;
-  // lgp->num_exes_after_last_trace ++;
 
   /* Set up thread local for tracing, though the implicit task will do them */
   parallel_codeptr = codeptr_ra;
@@ -459,19 +510,15 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
+
   lexgion_t *lgp =
       lexgion_end(NULL); // pop up the current parallel lexgion record
   assert(parallel_data->ptr == enclosing_parallel_lexgion_record);
   lgp->end_codeptr_ra = codeptr_ra;
-  // turn off this assertation. LLVM openmp runtime has a bug that for
-  // serialized parallel region, codeptr_ra for parallel_end callback is NULL
-  // assert (lgp->codeptr_ra == codeptr_ra); /* for parallel region and
-  // parallel_end event */ printf("parallel_end: begin codeptr_ra: %x, end
-  // codeptr_ra: %x\n", lgp->codeptr_ra, codeptr_ra);
   if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
     if (global_thread_num == 0) {
-      rapl_sysfs_read_packages(package_energy); // Read package energy counters.
+      rapl_sysfs_read_packages(package_energy);
     }
 #endif
 
@@ -482,46 +529,19 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
                          flag ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
     lexgion_post_trace_update(lgp);
   }
-  /* Restore enclosing context only in TRACING mode. In MONITORING,
-   * implicit_task is deregistered so parent_task->ptr may not be set,
-   * and the context variables are only used for tracepoint arguments. */
+  /* Restore enclosing context only in TRACING mode when parent_task->ptr
+   * is available.  During a MONITORING→TRACING switch, implicit_task may
+   * not have fired for workers in the current region, leaving ptr NULL. */
   if (domain_default_trace_config[OpenMP_domain_index].mode ==
-      PINSIGHT_DOMAIN_TRACING) {
+      PINSIGHT_DOMAIN_TRACING && parent_task->ptr != NULL) {
     enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
     task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
     task_record_id = enclosing_task_lexgion_record->record_id;
-    /* The parent of the enclosing task record is the enclosing parallel */
     enclosing_parallel_lexgion_record = enclosing_task_lexgion_record->parent;
     parallel_codeptr = enclosing_parallel_lexgion_record->lgp->codeptr_ra;
     parallel_record_id = enclosing_parallel_lexgion_record->record_id;
     omp_thread_num = 0;
   }
-
-  /* Deferred handlers at the sequential post-join point — all worker
-   * threads have finished and no callbacks are in-flight. */
-
-  int need_reregister = 0;
-
-  /* SIGUSR1 config reload: re-read config file */
-  if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
-    pinsight_load_trace_config(NULL);
-    // Reset auto_triggered flag for OpenMP so triggers can fire again
-    domain_default_trace_config[OpenMP_domain_index].auto_triggered = 0;
-    need_reregister = 1;
-  }
-
-  /* Auto-trigger mode change (e.g. mode_after=OFF) */
-  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
-    need_reregister = 1;
-  }
-
-  if (need_reregister)
-    pinsight_register_openmp_callbacks();
-
-  /* For explicit task-parallel nested, the ompt_task_create should be set,
-   * task_codeptr and task_record_id
-   * TODO: we need to store and restore the omp_thread_num, task_codeptr,
-   * task_record_id in the nested parallel situation */
 }
 
 /**
@@ -564,6 +584,8 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
     enclosing_task_lexgion_record = lexgion_begin(
         OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
     task_data->ptr = (void *)enclosing_task_lexgion_record;
+    if (flags & ompt_task_initial)
+      initial_task_lexgion_record = enclosing_task_lexgion_record;
     task_codeptr = parallel_codeptr;
     task_record_id = enclosing_task_lexgion_record->record_id;
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) &&
@@ -588,6 +610,11 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
     // parallel_data is NULL here
     if (flags & ompt_task_initial) { // nothing special
     }
+    /* Stale _end event from a monitoring-mode region: implicit_task_begin
+     * never fired for this thread, so task_data->ptr is NULL and the
+     * lexgion stack is empty.  Skip safely. */
+    if (task_data->ptr == NULL)
+      break;
     lexgion_t *lgp = lexgion_end(NULL);
     lgp->end_codeptr_ra = (void *)
         UNKNOWN_END_CODEPTR; // Sadly, it is unknow at this point since
@@ -810,6 +837,8 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
+  if (task_data->ptr == NULL)
+    return; /* Mode transition: task_data not yet initialized */
   lexgion_record_t *record = (lexgion_record_t *)task_data->ptr;
   lexgion_t *lgp = record->lgp;
   switch (endpoint) {
@@ -1099,6 +1128,8 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
+  if (task_data->ptr == NULL)
+    return; /* Mode transition: task_data not yet initialized */
   lexgion_record_t *record = (lexgion_record_t *)task_data->ptr;
   lexgion_t *lgp = record->lgp;
   switch (endpoint) {
@@ -1722,11 +1753,35 @@ void pinsight_register_openmp_callbacks(void) {
         ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
       }
     } else {
-      /* OFF: deregister everything except thread lifecycle (needed for
-       * stack cleanup at shutdown). */
+      /* OFF: deregister everything except thread lifecycle (zero overhead).
+       * SIGUSR1 wakeup from OFF is handled by pinsight_wakeup_from_off()
+       * which temporarily re-registers parallel_begin/end. */
       if (is_lifecycle)
         continue;
       ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
+    }
+  }
+}
+
+/**
+ * Re-register parallel_begin/end to wake up from OFF mode after SIGUSR1.
+ * Called from signal handler — safe because OFF mode has no callbacks in
+ * flight.  The next parallel_begin will consume config_reload_requested
+ * and perform the full re-registration.
+ *
+ * Named with _openmp suffix for future extensibility: MPI and CUDA
+ * domains will need their own wakeup mechanisms when mode switching
+ * is implemented for those domains.
+ */
+void pinsight_wakeup_from_off_openmp(void) {
+  domain_info_t *di = OpenMP_domain_info;
+  for (int i = 0; i < di->event_id_upper; i++) {
+    struct event *ev = &di->event_table[i];
+    if (!ev->valid || ev->callback == NULL)
+      continue;
+    if (ev->native_id == ompt_callback_parallel_begin ||
+        ev->native_id == ompt_callback_parallel_end) {
+      ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
     }
   }
 }

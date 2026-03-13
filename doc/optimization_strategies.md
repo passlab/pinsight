@@ -62,10 +62,28 @@ With SIGUSR1 reload deferred to `parallel_end`, bidirectional MONITORING↔TRACI
 
 ---
 
-## Strategy 3: Cache Config Resolution (not yet implemented)
-Replace linear search in `lexgion_address_trace_config` with a hash map for O(1) lookup by `codeptr_ra`.
+## ~~Strategy 3: Hash Map for `find_lexgion`~~ ❌ Reverted — Cache Regression
 
-**Expected impact**: Small-moderate — depends on number of distinct lexgions.
+**Idea**: Replace O(n) linear scan in `find_lexgion` with an open-addressing hash table keyed on `(codeptr_ra, type)` for O(1) lookup.
+
+**Implementation**: Added 1024-slot hash table (`lexgion_hash_entry_t[1024]`) to `pinsight_thread_data`, using linear probing. Hash key combined `codeptr_ra >> 4` with type.
+
+**Result (LULESH s=30)**: **Regression across all thread counts in TRACING mode.**
+
+| Mode | 1T | 2T | 4T | 6T |
+|------|------|------|------|------|
+| TRACING (before hash) FOM | 1018 | 1485 | 2196 | 2560 |
+| TRACING (with hash) FOM | 937 | 1340 | 2033 | 2420 |
+| **Change** | **−8%** | **−10%** | **−7%** | **−5%** |
+| MONITORING (before hash) FOM | 1028 | 1510 | 2390 | 2900 |
+| MONITORING (with hash) FOM | 1025 | 1503 | 2411 | 2930 |
+| **Change** | ~0% | ~0% | ~0% | ~0% |
+
+**Root cause**: The 1024-entry hash table adds ~24KB to thread-local storage per thread. This displaces useful data from L1 cache (typically 32-48KB), increasing cache misses throughout the application. LULESH only has 44 distinct parallel regions, so the existing MRU + linear scan (at most 44 comparisons of pointer+int) is already fast enough — the algorithmic improvement of O(1) vs O(44) is dwarfed by the cache penalty.
+
+MONITORING is barely affected because `find_lexgion` is only called from `parallel_begin` (master thread, 44×/iteration), not from the eliminated callbacks.
+
+**Conclusion**: Reverted. The hash table would only help applications with hundreds or thousands of distinct lexgions where the linear scan becomes a real bottleneck. For a future attempt, a much smaller table (64-128 entries, ~1.5-3KB) might avoid the cache pressure while still providing O(1) lookup.
 
 ## ~~Strategy 4: Per-Thread Counter Batching~~ ❌ Not Applicable
 `lgp->counter` is already thread-local — each thread maintains its own `pinsight_thread_data.lexgions[]` array, so `lgp->counter++` has zero contention. Additionally, counters are per-region and drive per-region trace rate decisions (`tracing_rate`, `max_num_traces`), so they cannot be batched or merged across different lexgions with different trace configs.

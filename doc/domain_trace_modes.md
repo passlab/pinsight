@@ -210,10 +210,96 @@ typedef struct domain_trace_config {
 | File | Changes |
 |------|---------|
 | `src/trace_config.h` | Mode enum, macros |
-| `src/trace_config.c` | Env parsing (3 modes), init, print |
+| `src/trace_config.c` | Env parsing (3 modes), init, print, SIGUSR1 handler |
 | `src/trace_config_parse.c` | `SECTION_DOMAIN_GLOBAL`, `trace_mode` key, `[Domain.global]` section |
 | `src/pinsight.c` | Kill-switch: `.mode == PINSIGHT_DOMAIN_OFF`, SIGUSR1 callback re-registration |
 | `src/pinsight.h` | Kill-switch in `lexgion_check_event_enabled()` |
-| `src/ompt_callback.c` | `pinsight_register_openmp_callbacks()`, PINSIGHT_SHOULD_TRACE guards |
-| `src/ompt_callback.h` | Callback declarations, OpenMP domain externs, `pinsight_register_openmp_callbacks()` |
+| `src/ompt_callback.c` | `pinsight_register_openmp_callbacks()`, `pinsight_wakeup_from_off_openmp()`, initial task reconnection, NULL guards |
+| `src/ompt_callback.h` | Callback and wakeup function declarations |
 | `test/trace_config_parse/test_config_parser.c` | Three-mode test cases |
+
+## Bidirectional Mode Switch Evaluation
+
+### Mechanism
+
+Mode switching is triggered by modifying the config file and sending `SIGUSR1`:
+
+1. Edit config file: set `trace_mode` in `[OpenMP.global]` (or other domain)
+2. Send `kill -USR1 <pid>`
+3. The SIGUSR1 handler sets `config_reload_requested = 1`
+4. At the next `parallel_begin` (sequential pre-fork point), the deferred handler:
+   - Calls `pinsight_load_trace_config()` to re-read the config
+   - Calls `pinsight_register_openmp_callbacks()` to register/deregister callbacks
+   - Reconnects the initial implicit task if switching to TRACING mode
+
+For OFF→\* transitions, `pinsight_wakeup_from_off_openmp()` temporarily re-registers `parallel_begin/end` so the deferred handler can run.
+
+### Test Setup
+
+- **Binary**: LULESH 2.0, `-s 40`, `OMP_NUM_THREADS=4`
+- **Single run**: 7 phases, 6 mode transitions via SIGUSR1 (4s intervals)
+- **Config**: `max_num_traces` changed across phases to test config propagation
+
+| Phase | Time | Mode | Transition | max_traces |
+|-------|------|------|-----------|------------|
+| 0 | 0s | TRACING | Initial | 50 |
+| 1 | +4s | MONITORING | TRACING→MON | 50 |
+| 2 | +8s | OFF | MON→OFF | 50 |
+| 3 | +12s | MONITORING | OFF→MON | 50 |
+| 4 | +16s | TRACING | MON→TRACING | 200 |
+| 5 | +20s | OFF | TRACING→OFF | 200 |
+| 6 | +24s | TRACING | OFF→TRACING | 500 |
+
+### Transition Results
+
+All 6 bidirectional transitions completed without crashes:
+
+| # | Transition | Mechanism | Status |
+|---|-----------|-----------|--------|
+| 1 | TRACING → MONITORING | SIGUSR1 | ✅ |
+| 2 | MONITORING → OFF | SIGUSR1 | ✅ |
+| 3 | OFF → MONITORING | SIGUSR1 | ✅ |
+| 4 | MONITORING → TRACING | SIGUSR1 | ✅ |
+| 5 | TRACING → OFF | SIGUSR1 | ✅ |
+| 6 | OFF → TRACING | SIGUSR1 | ✅ |
+
+**Performance**: 1,294 iterations, 36s elapsed, FOM = 2,323.87 z/s, exit code 0.
+
+### LTTng Validation
+
+Traces were validated using LTTng (`lttng-tools 2.13.11`) with `babeltrace`:
+
+- **31,070 trace events** captured in the `ompt_pinsight_lttng_ust` provider
+- Events clustered during TRACING phases (Phase 0: ~6,250 events/second)
+- **Zero events** during MONITORING and OFF phases, confirming correct callback deregistration
+- Shutdown events (`thread_end`, `implicit_task_end`, `parallel_end`) correctly emitted at program termination
+
+### Correctness Summary
+
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| Mode switching | ✅ | All 6 transitions work, no crashes |
+| Stale event handling | ✅ | NULL guards skip stale `_end` events from pre-switch regions |
+| Initial task reconnection | ✅ | `initial_task_lexgion_record` correctly reconnects master thread |
+| Config reload on SIGUSR1 | ✅ | `trace_mode` changes propagated |
+| Worker thread safety | ✅ | Workers handle transitions without crashes |
+| `parallel_end` context restore | ✅ | NULL guard on `parent_task->ptr` prevents crashes |
+| LTTng event presence | ✅ | Events emitted only during TRACING phases |
+
+### Bugs Fixed During Mode Switch Development
+
+1. **Env var override on reload** — `setup_trace_config_env()` was called after config file parsing on SIGUSR1 reloads, causing environment variables to override the `trace_mode` set in the config file. Fixed by moving `setup_trace_config_env()` to init-only (`initial_setup_trace_config`).
+
+2. **Stale `_end` events after re-registration** — The OpenMP runtime fires `implicit_task_end`, `sync_region_end`, and `sync_region_wait_end` for the previous region after callbacks are re-registered. These have `task_data->ptr = NULL`. Fixed with NULL guards in `implicit_task_end`, `sync_region`, and `sync_region_wait`.
+
+3. **Initial implicit task reconnection** — When switching to TRACING from MONITORING/OFF, the initial implicit task's `task_data->ptr` may not have been set (if `implicit_task` was deregistered at startup). Fixed by adding `initial_parallel_lexgion_record` and `initial_task_lexgion_record` thread-local pointers, with reconnection logic in `parallel_begin`.
+
+4. **`parallel_end` NULL guard** — Added `parent_task->ptr != NULL` check for context restoration during MONITORING→TRACING transitions.
+
+### Known Limitation
+
+Per-lexgion config changes (e.g., `max_num_traces`, `tracing_rate`) in the config file do not fully propagate on SIGUSR1 reload. The `[Lexgion.default]` snapshot is taken at initialization and the domain-default copy is not refreshed on reload. Mode switching (`trace_mode`) works correctly. This is tracked as a future enhancement.
+
+### Test Script
+
+The evaluation test script is at [`eva/LULESH/test_bidir_mode_switch.sh`](../eva/LULESH/test_bidir_mode_switch.sh).

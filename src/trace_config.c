@@ -12,6 +12,7 @@
 #endif
 
 #ifdef PINSIGHT_OPENMP
+#include "ompt_callback.h"
 #include "trace_domain_OpenMP.h"
 #endif
 
@@ -209,6 +210,15 @@ volatile sig_atomic_t config_reload_requested = 0;
 static void pinsight_sigusr1_handler(int sig) {
   (void)sig;
   config_reload_requested = 1; // Only safe operation in a signal handler
+  /* In OFF mode, parallel_begin/end are deregistered so the deferred
+   * handler in parallel_begin would never run.  Re-register them now so
+   * the next parallel_begin can consume config_reload_requested. */
+#ifdef PINSIGHT_OMPT_CALLBACKS
+  if (domain_default_trace_config[OpenMP_domain_index].mode ==
+      PINSIGHT_DOMAIN_OFF) {
+    pinsight_wakeup_from_off_openmp();
+  }
+#endif
 }
 
 void pinsight_install_signal_handler() {
@@ -249,9 +259,6 @@ void pinsight_load_trace_config(char *filepath) {
     trace_config_change_counter++; // Bump counter so threads re-resolve
                                    // cached trace_config pointers
   }
-
-  setup_trace_config_env(); // Re-apply env overrides (modifies defaults
-                            // in-place, no counter bump needed)
 }
 
 /**
@@ -329,6 +336,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   // default c and the domian default config.
 
   pinsight_load_trace_config(NULL);
+  setup_trace_config_env();
   fill_lexgion_domain_default_trace_config();
   pinsight_install_signal_handler();
   print_domain_trace_config(stdout);
