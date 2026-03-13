@@ -271,55 +271,8 @@ void test_parsing() {
     printf("[FAIL] Lexgion(0x4010bd) not found in config table.\n");
   }
 
-  // Verify [Lexgion(OpenMP).default] from trace_config_example.txt
-  if (omp_idx >= 0) {
-    lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[omp_idx];
-    if (dlg->codeptr != NULL) { // Non-NULL means it was configured
-      int pass = 1;
-      if (dlg->trace_starts_at != 0) {
-        pass = 0;
-        printf(
-            "[FAIL] Lexgion(OpenMP).default: trace_starts_at=%d (expected 0)\n",
-            dlg->trace_starts_at);
-      }
-      if (dlg->max_num_traces != 2000) {
-        pass = 0;
-        printf("[FAIL] Lexgion(OpenMP).default: max_num_traces=%d (expected "
-               "2000)\n",
-               dlg->max_num_traces);
-      }
-      if (dlg->tracing_rate != 1) {
-        pass = 0;
-        printf("[FAIL] Lexgion(OpenMP).default: tracing_rate=%d (expected 1)\n",
-               dlg->tracing_rate);
-      }
-      if (pass)
-        printf("[PASS] Lexgion(OpenMP).default: rate tracing config correct\n");
-
-      // Check event on/off
-      int id_task_create_lg = -1, id_task_schedule_lg = -1;
-      domain_info_t *d = &domain_info_table[omp_idx];
-      for (int k = 0; k < d->num_events; k++) {
-        if (strcmp(d->event_table[k].name, "omp_task_create") == 0)
-          id_task_create_lg = k;
-        if (strcmp(d->event_table[k].name, "omp_task_schedule") == 0)
-          id_task_schedule_lg = k;
-      }
-      if (id_task_create_lg != -1 && dlg->domain_events[omp_idx].set) {
-        unsigned long lg_events = dlg->domain_events[omp_idx].events;
-        int create_on = (lg_events >> id_task_create_lg) & 1;
-        int schedule_on = (id_task_schedule_lg != -1)
-                              ? ((lg_events >> id_task_schedule_lg) & 1)
-                              : -1;
-        printf("[INFO] Lexgion(OpenMP).default: omp_task_create=%s, "
-               "omp_task_schedule=%s\n",
-               create_on ? "on" : "off", schedule_on ? "on" : "off");
-      }
-    } else {
-      printf(
-          "[FAIL] Lexgion(OpenMP).default not configured (codeptr is NULL).\n");
-    }
-  }
+  // [Lexgion(OpenMP).default] is tested by T3 and T4 in
+  // test_actions_and_features() with proper state setup.
 
   // 4. Verify Complex Header: [OpenMP.thread(0-3): OpenMP.default: MPI.rank(0),
   // CUDA.device(0)] This should create a punit_trace_config attached to OpenMP
@@ -489,13 +442,12 @@ void test_parsing() {
 }
 
 void setup_and_test_env() {
-  // 1. Register Domains.
-  // NOTE: Domains are registered by library constructor
-  // `initial_setup_trace_config` in trace_config.c calling them again creates
-  // duplicates and messes up indices.
-  register_OpenMP_trace_domain();
-  register_MPI_trace_domain();
-  register_CUDA_trace_domain();
+  // 1. Register Domains (only if not already registered by constructor).
+  if (num_domain == 0) {
+    register_OpenMP_trace_domain();
+    register_MPI_trace_domain();
+    register_CUDA_trace_domain();
+  }
 
   // register_CUDA_trace_domain();
 
@@ -789,7 +741,7 @@ void test_reload() {
                                             // handles hex 0x
   fclose(fp);
 
-  pinsight_load_trace_config("reload_config_remove.txt");
+  parse_trace_config_file("reload_config_remove.txt");
 
   // Check if removed flag is set
   if (lg->removed == 1) {
@@ -834,7 +786,7 @@ void test_implicit_add() {
   fprintf(fp, "    omp_thread_begin = on\n");
   fclose(fp);
 
-  pinsight_load_trace_config("implicit_add.txt");
+  parse_trace_config_file("implicit_add.txt");
   unlink("implicit_add.txt");
 
   // Verify

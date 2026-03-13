@@ -255,35 +255,35 @@ void pinsight_load_trace_config(char *filepath) {
     }
   } else if (st.st_mtime != last_config_mtime) {
     last_config_mtime = st.st_mtime;
+    // Reset domain-default codeptr so the parser can eagerly re-initialize
+    // [Lexgion(Domain).default] entries.  Domains without an explicit section
+    // in the config file will remain NULL and be auto-filled below.
+    for (int i = 0; i < num_domain; i++) {
+      lexgion_domain_default_trace_config[i].codeptr = NULL;
+    }
     parse_trace_config_file(filepath);
+
+    // Fill domain defaults: combine global lexgion default (rate triple) with
+    // each domain's default event config for domains not explicitly configured
+    // by the user via [Lexgion(Domain).default] sections.
+    for (int i = 0; i < num_domain; i++) {
+      lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[i];
+      if (dlg->codeptr != NULL) {
+        // User provided a [Lexgion(Domain).default] for this domain
+        // during parsing; do not overwrite.
+        continue;
+      }
+      // Combine global lexgion default with domain event config
+      *dlg = *lexgion_default_trace_config;
+      // Set non-NULL marker (convention: domain index + 1)
+      dlg->codeptr = (void *)(uintptr_t)(i + 1);
+      // Merge this domain's default event config
+      dlg->domain_events[i].set = 1;
+      dlg->domain_events[i].events = domain_default_trace_config[i].events;
+    }
+
     trace_config_change_counter++; // Bump counter so threads re-resolve
                                    // cached trace_config pointers
-  }
-}
-
-/**
- * Fill the lexgion_domain_default_trace_config array by combining the global
- * lexgion default (rate triple) with each domain's default event config.
- * Only fills entries that were not explicitly configured by the user in the
- * config file (i.e., codeptr == NULL). This should be called once after the
- * initial config file is loaded.
- */
-void fill_lexgion_domain_default_trace_config(void) {
-  int i;
-  for (i = 0; i < num_domain; i++) {
-    lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[i];
-    if (dlg->codeptr != NULL) {
-      // User already provided a [Lexgion(Domain).default] for this domain;
-      // do not overwrite.
-      continue;
-    }
-    // Start from the global lexgion default
-    *dlg = *lexgion_default_trace_config;
-    // Set non-NULL marker (convention: domain index + 1)
-    dlg->codeptr = (void *)(uintptr_t)(i + 1);
-    // Merge this domain's default event config
-    dlg->domain_events[i].set = 1;
-    dlg->domain_events[i].events = domain_default_trace_config[i].events;
   }
 }
 
@@ -337,7 +337,6 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
 
   pinsight_load_trace_config(NULL);
   setup_trace_config_env();
-  fill_lexgion_domain_default_trace_config();
   pinsight_install_signal_handler();
   print_domain_trace_config(stdout);
   print_lexgion_trace_config(stdout);

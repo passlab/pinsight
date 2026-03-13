@@ -257,10 +257,6 @@ extern void pinsight_load_trace_config(char *filepath);
 void parse_trace_config_file(char *filename);
 extern int find_domain_index(const char *name);
 
-// Fill lexgion_domain_default_trace_config by combining domain defaults and
-// lexgion defaults for domains not explicitly configured by the user.
-extern void fill_lexgion_domain_default_trace_config(void);
-
 // Check whether the current execution punit id's match the domain_punit_set
 // constraints
 extern int domain_punit_set_match(domain_punit_set_t *domain_punit_set);

@@ -94,6 +94,13 @@ void parse_trace_config_file(char *filename) {
     return;
   }
 
+  // Reset parser state to avoid leaking state from previous calls
+  current_section_type = SECTION_NONE;
+  current_domain_idx = -1;
+  current_lexgion_config = NULL;
+  current_punit_config = NULL;
+  num_current_lexgion_configs = 0;
+
   char line[MAX_LINE_LENGTH];
   int line_num = 0;
   while (fgets(line, sizeof(line), fp)) {
@@ -212,16 +219,15 @@ static int parse_section_header(char *line) {
             current_domain_idx = d_idx;
             is_default_section = 1;
             lg = &lexgion_domain_default_trace_config[d_idx];
-            // Eagerly initialize: Lexgion(Domain).default = Lexgion.default +
-            // Domain.default
-            if (lg->codeptr == NULL) {
-              *lg = *lexgion_default_trace_config;
-              lg->codeptr = (void *)(uintptr_t)(d_idx + 1); // non-NULL marker
-              // Merge domain default events
-              lg->domain_events[d_idx].set = 1;
-              lg->domain_events[d_idx].events =
-                  domain_default_trace_config[d_idx].events;
-            }
+            // Initialize from Lexgion.default + Domain.default so user
+            // key-values apply on top of the correct base.  Also marks
+            // codeptr non-NULL so the fill loop in
+            // pinsight_load_trace_config() skips this entry.
+            *lg = *lexgion_default_trace_config;
+            lg->codeptr = (void *)(uintptr_t)(d_idx + 1);
+            lg->domain_events[d_idx].set = 1;
+            lg->domain_events[d_idx].events =
+                domain_default_trace_config[d_idx].events;
           }
         } else {
           // Lexgion(0x...) or Lexgion(0x..., 0x..., ...) - address-specific
@@ -283,16 +289,10 @@ static int parse_section_header(char *line) {
           lg->max_num_traces = DEFAULT_TRACE_MAX;
           memset(lg->domain_events, 0, sizeof(lg->domain_events));
           memset(lg->domain_punits, 0, sizeof(lg->domain_punits));
-        } else if (current_section_type == SECTION_LEXGION_DOMAIN_DEFAULT) {
-          // Reset to Lexgion.default + Domain.default (computed default)
-          int d_idx = current_domain_idx;
-          void *saved_codeptr = lg->codeptr;
-          *lg = *lexgion_default_trace_config;
-          lg->codeptr = saved_codeptr;
-          lg->domain_events[d_idx].set = 1;
-          lg->domain_events[d_idx].events =
-              domain_default_trace_config[d_idx].events;
         }
+        // For SECTION_LEXGION_DOMAIN_DEFAULT, the section entry (above)
+        // already re-combined from Lexgion.default + Domain.default,
+        // so no extra work needed here.
         current_section_type = SECTION_NONE; // No body for RESET
         return 0;
       }

@@ -263,25 +263,40 @@ All 6 bidirectional transitions completed without crashes:
 | 5 | TRACING → OFF | SIGUSR1 | ✅ |
 | 6 | OFF → TRACING | SIGUSR1 | ✅ |
 
-**Performance**: 1,294 iterations, 36s elapsed, FOM = 2,323.87 z/s, exit code 0.
+**Performance**: 1,294 iterations, 33s elapsed, FOM = 2,494 z/s, exit code 0.
 
 ### LTTng Validation
 
 Traces were validated using LTTng (`lttng-tools 2.13.11`) with `babeltrace`:
 
-- **31,070 trace events** captured in the `ompt_pinsight_lttng_ust` provider
-- Events clustered during TRACING phases (Phase 0: ~6,250 events/second)
+**Per-phase event counts** (verifying `max_num_traces` propagation):
+
+| Phase | Mode | max_traces | LTTng Events | Notes |
+|-------|------|-----------|-------------|-------|
+| 0 | TRACING | 50 | 31,070 | Initial tracing burst |
+| 1 | MONITORING | 50 | 0 | No trace output |
+| 2 | OFF | 50 | 0 | Callbacks deregistered |
+| 3 | MONITORING | 50 | 0 | Bookkeeping only |
+| 4 | TRACING | 200 | 92,936 | Config propagated: more events than Phase 0 |
+| 5 | OFF | 200 | 0 | Callbacks deregistered |
+| 6 | TRACING | 500 | 138,700 | Config propagated: most events |
+| **Total** | | | **262,706** | |
+
+**Key observations:**
+- Events scale correctly with `max_num_traces` values (50→200→500), confirming per-lexgion config propagation on SIGUSR1 reload
+- Per-lexgion trace counts in PInsight's internal report reach 268–504, exceeding Phase 0's cap of 50 — this proves Phases 4 and 6 reloads raised the limit
 - **Zero events** during MONITORING and OFF phases, confirming correct callback deregistration
-- Shutdown events (`thread_end`, `implicit_task_end`, `parallel_end`) correctly emitted at program termination
+- All `begin`/`end` event pairs match perfectly
 
 ### Correctness Summary
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
 | Mode switching | ✅ | All 6 transitions work, no crashes |
+| Config propagation | ✅ | `max_num_traces`, `tracing_rate` changes propagated on reload |
 | Stale event handling | ✅ | NULL guards skip stale `_end` events from pre-switch regions |
 | Initial task reconnection | ✅ | `initial_task_lexgion_record` correctly reconnects master thread |
-| Config reload on SIGUSR1 | ✅ | `trace_mode` changes propagated |
+| Config reload on SIGUSR1 | ✅ | `trace_mode` and per-lexgion config changes propagated |
 | Worker thread safety | ✅ | Workers handle transitions without crashes |
 | `parallel_end` context restore | ✅ | NULL guard on `parent_task->ptr` prevents crashes |
 | LTTng event presence | ✅ | Events emitted only during TRACING phases |
@@ -296,9 +311,7 @@ Traces were validated using LTTng (`lttng-tools 2.13.11`) with `babeltrace`:
 
 4. **`parallel_end` NULL guard** — Added `parent_task->ptr != NULL` check for context restoration during MONITORING→TRACING transitions.
 
-### Known Limitation
-
-Per-lexgion config changes (e.g., `max_num_traces`, `tracing_rate`) in the config file do not fully propagate on SIGUSR1 reload. The `[Lexgion.default]` snapshot is taken at initialization and the domain-default copy is not refreshed on reload. Mode switching (`trace_mode`) works correctly. This is tracked as a future enhancement.
+5. **Config propagation on reload** — `pinsight_load_trace_config()` now resets `lexgion_domain_default_trace_config[].codeptr` before re-parsing, then fills missing domain-specific defaults from `lexgion.default ⊕ domain.default`. Also added parser state reset in `parse_trace_config_file()` to prevent state leakage between calls.
 
 ### Test Script
 
