@@ -458,8 +458,7 @@ void on_ompt_callback_parallel_begin(
       } else {
         enclosing_task_lexgion_record = initial_task_lexgion_record;
         task_data->ptr = (void *)initial_task_lexgion_record;
-        task_codeptr =
-            initial_task_lexgion_record->lgp->codeptr_ra;
+        task_codeptr = initial_task_lexgion_record->lgp->codeptr_ra;
         task_record_id = initial_task_lexgion_record->record_id;
         enclosing_parallel_lexgion_record = initial_parallel_lexgion_record;
         parallel_codeptr = (void *)INITIAL_PARALLEL_CODEPTR;
@@ -527,13 +526,30 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
 #endif
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end,
                          flag ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-    lexgion_post_trace_update(lgp);
+    /* Rate-limit only if this parallel region has address-specific config
+     * or is the topmost (outermost) parallel region.  After lexgion_end()
+     * popped the current record, current_record points to the parent.
+     * Walk the parent chain: if no enclosing parallel_begin lexgion exists,
+     * this is the topmost. */
+    int is_topmost_parallel = 1;
+    for (lexgion_record_t *r = pinsight_thread_data.current_record; r != NULL;
+         r = r->parent) {
+      if (r->lgp->type == ompt_callback_parallel_begin &&
+          r->lgp->codeptr_ra != (void *)INITIAL_PARALLEL_CODEPTR) {
+        is_topmost_parallel = 0;
+        break;
+      }
+    }
+    if (lexgion_has_address_specific_config(lgp) || is_topmost_parallel) {
+      lexgion_post_trace_update(lgp);
+    }
   }
   /* Restore enclosing context only in TRACING mode when parent_task->ptr
    * is available.  During a MONITORING→TRACING switch, implicit_task may
    * not have fired for workers in the current region, leaving ptr NULL. */
   if (domain_default_trace_config[OpenMP_domain_index].mode ==
-      PINSIGHT_DOMAIN_TRACING && parent_task->ptr != NULL) {
+          PINSIGHT_DOMAIN_TRACING &&
+      parent_task->ptr != NULL) {
     enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
     task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
     task_record_id = enclosing_task_lexgion_record->record_id;
@@ -631,7 +647,11 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
 #endif
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_end,
                            team_size ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-      lexgion_post_trace_update(lgp);
+      /* No lexgion_post_trace_update here: implicit_task is associated
+       * with the enclosing parallel region.  Rate-limiting for the
+       * parallel region is enforced by the master thread at parallel_end.
+       * The implicit_task lexgion exists mainly so non-master threads
+       * can access the enclosing task record. */
     }
     /* for the nested situation (parallel-parallel, and task-parallel), popping
      * back to the state of the enclosing is set by the parallel_end callback
@@ -716,9 +736,11 @@ void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
     break;
   case ompt_scope_end:;
     unsigned int record_id;
-    /* Approach 1: check stack top to determine if a work lexgion was pushed */
+    /* Check if a work lexgion was created at begin (address-specific config)
+     * before popping.  Only rate-limit if work has its own lexgion. */
     lexgion_record_t *top = top_lexgion();
-    if (top->lgp->type == ompt_callback_work) {
+    int work_has_own_lexgion = (top->lgp->type == ompt_callback_work);
+    if (work_has_own_lexgion) {
       /* A work lexgion was created at begin, pop it */
       lgp = lexgion_end(&record_id);
       lgp->end_codeptr_ra = codeptr_ra;
@@ -740,7 +762,11 @@ void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_end, (short)wstype,
                            lgp->codeptr_ra, codeptr_ra, record_id,
                            count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-      lexgion_post_trace_update(lgp);
+      /* Rate-limit only if work region has its own lexgion, meaning user
+       * provided an address-specific config for this work region. */
+      if (work_has_own_lexgion) {
+        lexgion_post_trace_update(lgp);
+      }
     }
     break;
   }
@@ -789,10 +815,11 @@ void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
     break;
   case ompt_scope_end:;
     unsigned int record_id;
-    /* Approach 1: check stack top to determine if a masked lexgion was pushed
-     */
+    /* Check if a masked lexgion was created at begin (address-specific config)
+     * before popping.  Only rate-limit if masked has its own lexgion. */
     lexgion_record_t *top = top_lexgion();
-    if (top->lgp->type == ompt_callback_masked) {
+    int masked_has_own_lexgion = (top->lgp->type == ompt_callback_masked);
+    if (masked_has_own_lexgion) {
       lgp = lexgion_end(&record_id);
       lgp->end_codeptr_ra = codeptr_ra;
     } else {
@@ -813,7 +840,11 @@ void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, masked_end, lgp->codeptr_ra,
                            codeptr_ra,
                            record_id ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
-      lexgion_post_trace_update(lgp);
+      /* Rate-limit only if masked region has its own lexgion, meaning user
+       * provided an address-specific config for this masked region. */
+      if (masked_has_own_lexgion) {
+        lexgion_post_trace_update(lgp);
+      }
     }
     break;
   }

@@ -102,7 +102,11 @@ typedef struct lexgion {
    * two master threads enter into the same region */
   volatile unsigned int
       counter; /* counter for total number of execution of the region */
-  unsigned int trace_counter; /* counter for total number of traced execution */
+  unsigned int trace_counter; /* counter for traced invocations of this lexgion
+                               * (used for rate-limiting via max_num_traces;
+                               * incremented only for regions with independent
+                               * rate-limiting: topmost parallel/task or regions
+                               * with address-specific config) */
   unsigned int
       first_trace_num; // the execution number when the first trace is recorded
   unsigned int
@@ -208,6 +212,17 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
       lgp->trace_counter >= tc->max_num_traces) {
     pinsight_fire_mode_triggers(tc);
   }
+}
+
+/**
+ * Check if this lexgion has a user-specified (address-specific) trace config,
+ * as opposed to inheriting domain/global default config.
+ * Address-specific configs have codeptr matching the lexgion's codeptr_ra.
+ * @return 1 if address-specific config, 0 if default/domain config
+ */
+static inline int lexgion_has_address_specific_config(lexgion_t *lgp) {
+  return lgp->trace_config != NULL &&
+         lgp->trace_config->codeptr == lgp->codeptr_ra;
 }
 
 /**
