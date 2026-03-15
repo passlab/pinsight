@@ -162,14 +162,15 @@ typedef struct punit_trace_config {
 
 /**
  * Domain operating modes for fine-grained overhead control.
- * OFF:        Callbacks deregistered (zero per-event overhead).
- * MONITORING: Callbacks active, bookkeeping runs, no LTTng tracepoints.
- * TRACING:    Full tracing with LTTng output (default).
+ * OFF:        All callbacks deregistered (zero per-event overhead).
+ * MONITORING: Only core callbacks active, bookkeeping runs, no LTTng
+ * tracepoints. TRACING:    Full tracing with LTTng output (default).
  */
 typedef enum {
-  PINSIGHT_DOMAIN_OFF = 0,
-  PINSIGHT_DOMAIN_MONITORING = 1,
-  PINSIGHT_DOMAIN_TRACING = 2
+  PINSIGHT_DOMAIN_NONE = 0,
+  PINSIGHT_DOMAIN_OFF = 1,
+  PINSIGHT_DOMAIN_MONITORING = 2,
+  PINSIGHT_DOMAIN_TRACING = 3,
 } pinsight_domain_mode_t;
 
 /* True if domain is active (MONITORING or TRACING) */
@@ -177,17 +178,6 @@ typedef enum {
 /* True if domain should emit LTTng tracepoints */
 #define PINSIGHT_SHOULD_TRACE(domain)                                          \
   (domain_default_trace_config[domain].mode == PINSIGHT_DOMAIN_TRACING)
-
-/**
- * Auto-trigger: when a lexgion reaches max_num_traces, switch domain modes.
- * domain_idx = -1 means apply to all domains the lexgion has events from.
- */
-typedef struct {
-  int domain_idx;              // target domain index (-1 = all with events)
-  pinsight_domain_mode_t mode; // target mode to switch to
-} trace_mode_trigger_t;
-
-#define MAX_MODE_TRIGGERS MAX_NUM_DOMAINS
 
 /**
  * The default domain trace config that specifies the events on/off for the
@@ -203,8 +193,8 @@ extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
 
 /**
  * A lexgion trace config includes the triple (trace_starts_at, max_num_traces,
- * tracing_rate) for rate tracing, and the event on/off config for each domain
- * constrained by the given punit sets of one or multiple domains.
+ * tracing_rate) for rate-limit tracing, and the event on/off config for each
+ * domain constrained by the given punit sets of one or multiple domains.
  */
 typedef struct lexgion_trace_config {
   int domain_punit_set_set; // The flag to indicate whether the domain_punits is
@@ -230,8 +220,7 @@ typedef struct lexgion_trace_config {
                //  but should not be used.
 
   // Auto-trigger: switch domain modes when max_num_traces is reached
-  int num_mode_triggers;
-  trace_mode_trigger_t mode_triggers[MAX_MODE_TRIGGERS];
+  pinsight_domain_mode_t mode_after[MAX_NUM_DOMAINS];
 } lexgion_trace_config_t;
 
 // Default rate trace config: trace every execution,
@@ -289,6 +278,7 @@ typedef struct domain_info {
   unsigned long int
       eventInstallStatus; // For setting whether the event is enabled or not
 
+  pinsight_domain_mode_t starting_mode;
   struct punit {
     char name[16];
     unsigned int low; // should be 0

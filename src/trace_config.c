@@ -51,6 +51,7 @@ static inline int pinsight_cuda_runtime_available(void);
  */
 int domain_punit_set_match(domain_punit_set_t *domain_punit_set) {
   int i;
+  int match = 0;
   for (i = 0; i < num_domain; i++) {
     if (!domain_punit_set->set)
       continue;
@@ -70,14 +71,15 @@ int domain_punit_set_match(domain_punit_set_t *domain_punit_set) {
       if (punit_id < d->punits[k].low || punit_id > d->punits[k].high ||
           !bitset_test(&dpst->punit[k].punit_ids, (size_t)punit_id)) {
         return 0;
-      }
+      } else
+        match = 1;
     }
   }
-  return 1;
+  return match;
 }
 
 /**
- * Given a codeptr, lookup or reserve a config struct object
+ * Given a codeptr, lookup a config struct object
  * @param codeptr the pointer to the codeptr
  * @return the pointer to the config struct object
  */
@@ -151,21 +153,23 @@ void setup_trace_config_env() {
       strncpy(mode_after_buf, p, sizeof(mode_after_buf) - 1);
       mode_after_buf[sizeof(mode_after_buf) - 1] = '\0';
 
-      int n_triggers = 0;
+      /* We should NOT reset all mode_after slots to NONE before parsing env
+       * var since the config file may have already set some slots. */
       char *saveptr;
       char *token = strtok_r(mode_after_buf, ",", &saveptr);
-      while (token && n_triggers < MAX_MODE_TRIGGERS) {
+      while (token) {
         while (*token == ' ')
           token++;
 
+        /* Parse mode string into enum */
+        pinsight_domain_mode_t m;
         char *colon = strchr(token, ':');
         if (colon) {
-          // Explicit: "OpenMP:MONITORING"
+          /* Explicit: "OpenMP:MONITORING" */
           *colon = '\0';
           int d_idx = find_domain_index(token);
           if (d_idx >= 0) {
             char *mode_str = colon + 1;
-            pinsight_domain_mode_t m;
             if (strcasecmp(mode_str, "OFF") == 0)
               m = PINSIGHT_DOMAIN_OFF;
             else if (strcasecmp(mode_str, "MONITORING") == 0 ||
@@ -173,14 +177,10 @@ void setup_trace_config_env() {
               m = PINSIGHT_DOMAIN_MONITORING;
             else
               m = PINSIGHT_DOMAIN_TRACING;
-            lexgion_default_trace_config->mode_triggers[n_triggers].domain_idx =
-                d_idx;
-            lexgion_default_trace_config->mode_triggers[n_triggers].mode = m;
-            n_triggers++;
+            lexgion_default_trace_config->mode_after[d_idx] = m;
           }
         } else {
-          // Shorthand: "MONITORING" -> all domains with events
-          pinsight_domain_mode_t m;
+          /* Shorthand: "MONITORING" -> apply to all registered domains */
           if (strcasecmp(token, "OFF") == 0)
             m = PINSIGHT_DOMAIN_OFF;
           else if (strcasecmp(token, "MONITORING") == 0 ||
@@ -188,14 +188,11 @@ void setup_trace_config_env() {
             m = PINSIGHT_DOMAIN_MONITORING;
           else
             m = PINSIGHT_DOMAIN_TRACING;
-          lexgion_default_trace_config->mode_triggers[n_triggers].domain_idx =
-              -1;
-          lexgion_default_trace_config->mode_triggers[n_triggers].mode = m;
-          n_triggers++;
+          for (int i = 0; i < num_domain; i++)
+            lexgion_default_trace_config->mode_after[i] = m;
         }
         token = strtok_r(NULL, ",", &saveptr);
       }
-      lexgion_default_trace_config->num_mode_triggers = n_triggers;
     }
   }
 }
@@ -302,24 +299,14 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   }
 #endif
 
-  // Print domain info
-  for (int di = 0; di < num_domain; di++) {
-    struct domain_info *d = &domain_info_table[di];
-    dsl_print_domain_info(d);
-  }
-
   // Initialize the default domain trace configs by copying from
-  // domain_info_table that has the installed events
+  // domain_info_table that has the installed events and starting mode
   int i;
   for (i = 0; i < num_domain; i++) {
     domain_default_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
     domain_default_trace_config[i].auto_triggered = 0;
-    if (domain_default_trace_config[i].events) {
-      domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_TRACING;
-    } else {
-      domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_OFF;
-    }
+    domain_default_trace_config[i].mode = domain_info_table[i].starting_mode;
   }
 
   // Initialize the default lexgion trace config
@@ -330,14 +317,29 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
       DEFAULT_TRACE_START; // start tracing from the first execution
   lexgion_default_trace_config->max_num_traces =
       DEFAULT_TRACE_MAX; // unlimited traces
-  lexgion_default_trace_config->num_mode_triggers = 0;
+  for (int i = 0; i < num_domain; i++) {
+    lexgion_default_trace_config->mode_after[i] = PINSIGHT_DOMAIN_NONE;
+  }
 
-  // set default lexgion domain config which is the combination of lexgion
-  // default c and the domian default config.
+  // Mark the default lexgion trace config for each domain as empty config
+  // codeptr: NULL: empty config
+  //          i+1: lexgion_default + domain_default
+  //          i+2: overwritten by user specified lexgion domain default in the
+  //          config file
+  for (int i = 0; i < num_domain; i++) {
+    lexgion_domain_default_trace_config[i].codeptr =
+        NULL; // NULL for empty config
+  }
 
   pinsight_load_trace_config(NULL);
   setup_trace_config_env();
   pinsight_install_signal_handler();
+
+  // Print domain info
+  for (int di = 0; di < num_domain; di++) {
+    struct domain_info *d = &domain_info_table[di];
+    dsl_print_domain_info(d);
+  }
   print_domain_trace_config(stdout);
   print_lexgion_trace_config(stdout);
 }
@@ -383,17 +385,24 @@ void dsl_print_domain_info(struct domain_info *d) {
     return;
   }
 
-  /* Print punit ranges */
+  /* [Domain.global] section: trace_mode and punit ranges */
+  const char *mode_str = d->starting_mode == PINSIGHT_DOMAIN_OFF ? "OFF"
+                         : d->starting_mode == PINSIGHT_DOMAIN_MONITORING
+                             ? "MONITORING"
+                             : "TRACING";
+  fprintf(fp, "[%s.global]\n", d->name);
+  fprintf(fp, "    trace_mode = %s\n", mode_str);
   for (int i = 0; i < d->num_punits; ++i) {
     struct punit *p = &d->punits[i];
-    fprintf(fp, "[%s.%s(%u-%u)]\n\n", d->name, p->name, p->low, p->high);
+    fprintf(fp, "    %s.%s = (%u, %u)\n", d->name, p->name, p->low, p->high);
   }
+  fprintf(fp, "\n");
 
-  /* Print subdomains and events */
+  /* [Domain(subdomain).default] sections: events with on/off status */
   for (int s = 0; s < d->num_subdomains; ++s) {
     struct subdomain *sub = &d->subdomains[s];
 
-    fprintf(fp, "[%s(%s)]\n", d->name, sub->name);
+    fprintf(fp, "[%s(%s).default]\n", d->name, sub->name);
 
     for (int eid = 0; eid < d->event_id_upper; ++eid) {
       struct event *ev = &d->event_table[eid];
@@ -542,24 +551,31 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
   fprintf(out, "    trace_starts_at = %d\n", lg->trace_starts_at);
   fprintf(out, "    max_num_traces = %d\n", lg->max_num_traces);
   fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
-  if (lg->num_mode_triggers > 0) {
-    fprintf(out, "    trace_mode_after =");
-    for (int t = 0; t < lg->num_mode_triggers; t++) {
-      int d = lg->mode_triggers[t].domain_idx;
-      const char *mode_str =
-          lg->mode_triggers[t].mode == PINSIGHT_DOMAIN_OFF ? "OFF"
-          : lg->mode_triggers[t].mode == PINSIGHT_DOMAIN_MONITORING
-              ? "MONITORING"
-              : "TRACING";
-      if (d < 0) {
-        fprintf(out, " %s", mode_str);
-      } else {
-        fprintf(out, " %s:%s", domain_info_table[d].name, mode_str);
+  {
+    int has_mode_after = 0;
+    for (int d = 0; d < num_domain; d++) {
+      if (lg->mode_after[d] != PINSIGHT_DOMAIN_NONE) {
+        has_mode_after = 1;
+        break;
       }
-      if (t < lg->num_mode_triggers - 1)
-        fprintf(out, ",");
     }
-    fprintf(out, "\n");
+    if (has_mode_after) {
+      fprintf(out, "    trace_mode_after =");
+      int first = 1;
+      for (int d = 0; d < num_domain; d++) {
+        if (lg->mode_after[d] != PINSIGHT_DOMAIN_NONE) {
+          const char *mode_str =
+              lg->mode_after[d] == PINSIGHT_DOMAIN_OFF          ? "OFF"
+              : lg->mode_after[d] == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                                : "TRACING";
+          if (!first)
+            fprintf(out, ",");
+          fprintf(out, " %s:%s", domain_info_table[d].name, mode_str);
+          first = 0;
+        }
+      }
+      fprintf(out, "\n");
+    }
   }
 
   for (int di = 0; di < num_domain; di++) {

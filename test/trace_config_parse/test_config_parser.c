@@ -12,25 +12,11 @@
 volatile sig_atomic_t mode_change_requested = 0;
 
 void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
-  for (int i = 0; i < tc->num_mode_triggers; i++) {
-    int d = tc->mode_triggers[i].domain_idx;
-    pinsight_domain_mode_t new_mode = tc->mode_triggers[i].mode;
-
-    if (d < 0) {
-      for (int j = 0; j < num_domain; j++) {
-        if (tc->domain_events[j].set &&
-            !domain_default_trace_config[j].auto_triggered) {
-          domain_default_trace_config[j].mode = new_mode;
-          domain_default_trace_config[j].auto_triggered = 1;
-          fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
-                  domain_info_table[j].name,
-                  new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
-                  : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
-                                                           : "TRACING");
-        }
-      }
-    } else if (d < num_domain &&
-               !domain_default_trace_config[d].auto_triggered) {
+  for (int d = 0; d < num_domain; d++) {
+    pinsight_domain_mode_t new_mode = tc->mode_after[d];
+    if (new_mode == PINSIGHT_DOMAIN_NONE)
+      continue;
+    if (!domain_default_trace_config[d].auto_triggered) {
       domain_default_trace_config[d].mode = new_mode;
       domain_default_trace_config[d].auto_triggered = 1;
       fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
@@ -1426,11 +1412,9 @@ void test_domain_global() {
     fclose(fp);
     parse_trace_config_file("test_global.txt");
 
-    // Should revert to install default (TRACING if events exist)
+    // Should revert to starting_mode
     pinsight_domain_mode_t expected =
-        (domain_info_table[omp_idx].eventInstallStatus != 0)
-            ? PINSIGHT_DOMAIN_TRACING
-            : PINSIGHT_DOMAIN_OFF;
+        domain_info_table[omp_idx].starting_mode;
 
     if (domain_default_trace_config[omp_idx].mode == expected) {
       printf("[PASS] TG4: RESET restored mode to install default (%d)\n",
@@ -1468,25 +1452,28 @@ void test_trace_mode_after() {
     fprintf(fp, "    max_num_traces = 100\n");
     fprintf(fp, "    trace_mode_after = MONITORING\n");
     fclose(fp);
-    // Reset
-    lexgion_default_trace_config->num_mode_triggers = 0;
+    // Reset mode_after to NONE
+    for (int i = 0; i < MAX_NUM_DOMAINS; i++)
+      lexgion_default_trace_config->mode_after[i] = PINSIGHT_DOMAIN_NONE;
     parse_trace_config_file("test_tma.txt");
 
-    if (lexgion_default_trace_config->num_mode_triggers == 1 &&
-        lexgion_default_trace_config->mode_triggers[0].domain_idx == -1 &&
-        lexgion_default_trace_config->mode_triggers[0].mode ==
-            PINSIGHT_DOMAIN_MONITORING) {
-      printf("[PASS] TMA1: shorthand trace_mode_after=MONITORING parsed "
-             "(domain_idx=-1, mode=MONITORING)\n");
+    // Shorthand sets mode_after for all registered domains
+    int all_monitoring = 1;
+    for (int i = 0; i < num_domain; i++) {
+      if (lexgion_default_trace_config->mode_after[i] !=
+          PINSIGHT_DOMAIN_MONITORING) {
+        all_monitoring = 0;
+        break;
+      }
+    }
+    if (all_monitoring) {
+      printf("[PASS] TMA1: shorthand trace_mode_after=MONITORING set for all "
+             "registered domains\n");
     } else {
-      printf("[FAIL] TMA1: num_triggers=%d, domain_idx=%d, mode=%d\n",
-             lexgion_default_trace_config->num_mode_triggers,
-             lexgion_default_trace_config->num_mode_triggers > 0
-                 ? lexgion_default_trace_config->mode_triggers[0].domain_idx
-                 : -99,
-             lexgion_default_trace_config->num_mode_triggers > 0
-                 ? lexgion_default_trace_config->mode_triggers[0].mode
-                 : -99);
+      printf("[FAIL] TMA1: mode_after not MONITORING for all domains\n");
+      for (int i = 0; i < num_domain; i++)
+        printf("  mode_after[%d]=%d\n", i,
+               lexgion_default_trace_config->mode_after[i]);
     }
     if (lexgion_default_trace_config->max_num_traces == 100) {
       printf("[PASS] TMA1: max_num_traces=100 correctly set\n");
@@ -1504,24 +1491,21 @@ void test_trace_mode_after() {
     fprintf(fp, "    max_num_traces = 200\n");
     fprintf(fp, "    trace_mode_after = OpenMP:OFF\n");
     fclose(fp);
-    lexgion_default_trace_config->num_mode_triggers = 0;
+    for (int i = 0; i < MAX_NUM_DOMAINS; i++)
+      lexgion_default_trace_config->mode_after[i] = PINSIGHT_DOMAIN_NONE;
     parse_trace_config_file("test_tma.txt");
 
-    if (lexgion_default_trace_config->num_mode_triggers == 1 &&
-        lexgion_default_trace_config->mode_triggers[0].domain_idx == omp_idx &&
-        lexgion_default_trace_config->mode_triggers[0].mode ==
-            PINSIGHT_DOMAIN_OFF) {
-      printf("[PASS] TMA2: OpenMP:OFF parsed (domain_idx=%d, mode=OFF)\n",
-             omp_idx);
+    if (lexgion_default_trace_config->mode_after[omp_idx] ==
+            PINSIGHT_DOMAIN_OFF &&
+        lexgion_default_trace_config->mode_after[mpi_idx] ==
+            PINSIGHT_DOMAIN_NONE) {
+      printf("[PASS] TMA2: OpenMP:OFF parsed (mode_after[%d]=OFF, "
+             "mode_after[%d]=NONE)\n",
+             omp_idx, mpi_idx);
     } else {
-      printf("[FAIL] TMA2: num_triggers=%d, domain_idx=%d, mode=%d\n",
-             lexgion_default_trace_config->num_mode_triggers,
-             lexgion_default_trace_config->num_mode_triggers > 0
-                 ? lexgion_default_trace_config->mode_triggers[0].domain_idx
-                 : -99,
-             lexgion_default_trace_config->num_mode_triggers > 0
-                 ? lexgion_default_trace_config->mode_triggers[0].mode
-                 : -99);
+      printf("[FAIL] TMA2: mode_after[omp]=%d, mode_after[mpi]=%d\n",
+             lexgion_default_trace_config->mode_after[omp_idx],
+             lexgion_default_trace_config->mode_after[mpi_idx]);
     }
   }
 
@@ -1533,36 +1517,21 @@ void test_trace_mode_after() {
     fprintf(fp, "    max_num_traces = 300\n");
     fprintf(fp, "    trace_mode_after = OpenMP:MONITORING, MPI:OFF\n");
     fclose(fp);
-    lexgion_default_trace_config->num_mode_triggers = 0;
+    for (int i = 0; i < MAX_NUM_DOMAINS; i++)
+      lexgion_default_trace_config->mode_after[i] = PINSIGHT_DOMAIN_NONE;
     parse_trace_config_file("test_tma.txt");
 
-    if (lexgion_default_trace_config->num_mode_triggers == 2) {
-      printf("[PASS] TMA3: 2 triggers parsed\n");
-      // Check first trigger
-      if (lexgion_default_trace_config->mode_triggers[0].domain_idx ==
-              omp_idx &&
-          lexgion_default_trace_config->mode_triggers[0].mode ==
-              PINSIGHT_DOMAIN_MONITORING) {
-        printf("[PASS] TMA3: trigger[0] = OpenMP:MONITORING\n");
-      } else {
-        printf("[FAIL] TMA3: trigger[0] domain_idx=%d mode=%d\n",
-               lexgion_default_trace_config->mode_triggers[0].domain_idx,
-               lexgion_default_trace_config->mode_triggers[0].mode);
-      }
-      // Check second trigger
-      if (lexgion_default_trace_config->mode_triggers[1].domain_idx ==
-              mpi_idx &&
-          lexgion_default_trace_config->mode_triggers[1].mode ==
-              PINSIGHT_DOMAIN_OFF) {
-        printf("[PASS] TMA3: trigger[1] = MPI:OFF\n");
-      } else {
-        printf("[FAIL] TMA3: trigger[1] domain_idx=%d mode=%d\n",
-               lexgion_default_trace_config->mode_triggers[1].domain_idx,
-               lexgion_default_trace_config->mode_triggers[1].mode);
-      }
+    if (lexgion_default_trace_config->mode_after[omp_idx] ==
+            PINSIGHT_DOMAIN_MONITORING &&
+        lexgion_default_trace_config->mode_after[mpi_idx] ==
+            PINSIGHT_DOMAIN_OFF) {
+      printf("[PASS] TMA3: mode_after[OpenMP]=MONITORING, "
+             "mode_after[MPI]=OFF\n");
     } else {
-      printf("[FAIL] TMA3: num_triggers=%d (expected 2)\n",
-             lexgion_default_trace_config->num_mode_triggers);
+      printf("[FAIL] TMA3: mode_after[omp]=%d (exp MONITORING), "
+             "mode_after[mpi]=%d (exp OFF)\n",
+             lexgion_default_trace_config->mode_after[omp_idx],
+             lexgion_default_trace_config->mode_after[mpi_idx]);
     }
   }
 
@@ -1581,19 +1550,19 @@ void test_trace_mode_after() {
     for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
       if (lexgion_address_trace_config[i].codeptr == (void *)0x400500) {
         lexgion_trace_config_t *lc = &lexgion_address_trace_config[i];
-        if (lc->num_mode_triggers == 1 &&
-            lc->mode_triggers[0].domain_idx == -1 &&
-            lc->mode_triggers[0].mode == PINSIGHT_DOMAIN_OFF &&
-            lc->max_num_traces == 50) {
+        // Shorthand OFF sets mode_after for all registered domains
+        int all_off = 1;
+        for (int d = 0; d < num_domain; d++) {
+          if (lc->mode_after[d] != PINSIGHT_DOMAIN_OFF) {
+            all_off = 0;
+            break;
+          }
+        }
+        if (all_off && lc->max_num_traces == 50) {
           printf("[PASS] TMA4: Lexgion(0x400500) trace_mode_after=OFF, "
                  "max=50\n");
         } else {
-          printf("[FAIL] TMA4: num_triggers=%d, domain_idx=%d, mode=%d, "
-                 "max=%d\n",
-                 lc->num_mode_triggers,
-                 lc->num_mode_triggers > 0 ? lc->mode_triggers[0].domain_idx
-                                           : -99,
-                 lc->num_mode_triggers > 0 ? lc->mode_triggers[0].mode : -99,
+          printf("[FAIL] TMA4: all_off=%d, max=%d\n", all_off,
                  lc->max_num_traces);
         }
         found = 1;
@@ -1635,9 +1604,7 @@ void test_trace_mode_after_runtime() {
 
     // Create a trace config with explicit trigger: OpenMP -> MONITORING
     lexgion_trace_config_t tc = {0};
-    tc.num_mode_triggers = 1;
-    tc.mode_triggers[0].domain_idx = omp_idx;
-    tc.mode_triggers[0].mode = PINSIGHT_DOMAIN_MONITORING;
+    tc.mode_after[omp_idx] = PINSIGHT_DOMAIN_MONITORING;
 
     // Fire the trigger
     pinsight_fire_mode_triggers(&tc);
@@ -1647,8 +1614,9 @@ void test_trace_mode_after_runtime() {
         PINSIGHT_DOMAIN_MONITORING) {
       printf("[PASS] TMA5: OpenMP mode switched from TRACING to MONITORING\n");
     } else {
-      printf("[FAIL] TMA5: OpenMP mode = %d (expected MONITORING=1)\n",
-             domain_default_trace_config[omp_idx].mode);
+      printf("[FAIL] TMA5: OpenMP mode = %d (expected MONITORING=%d)\n",
+             domain_default_trace_config[omp_idx].mode,
+             PINSIGHT_DOMAIN_MONITORING);
     }
 
     // Check 2: auto_triggered flag set
@@ -1676,9 +1644,7 @@ void test_trace_mode_after_runtime() {
 
     // Try to trigger OpenMP -> OFF (should be blocked by auto_triggered)
     lexgion_trace_config_t tc = {0};
-    tc.num_mode_triggers = 1;
-    tc.mode_triggers[0].domain_idx = omp_idx;
-    tc.mode_triggers[0].mode = PINSIGHT_DOMAIN_OFF;
+    tc.mode_after[omp_idx] = PINSIGHT_DOMAIN_OFF;
 
     pinsight_fire_mode_triggers(&tc);
 
@@ -1688,14 +1654,15 @@ void test_trace_mode_after_runtime() {
       printf("[PASS] TMA6: auto_triggered blocked re-trigger "
              "(mode still MONITORING)\n");
     } else {
-      printf("[FAIL] TMA6: mode = %d (expected MONITORING=1, should not have "
+      printf("[FAIL] TMA6: mode = %d (expected MONITORING=%d, should not have "
              "changed)\n",
-             domain_default_trace_config[omp_idx].mode);
+             domain_default_trace_config[omp_idx].mode,
+             PINSIGHT_DOMAIN_MONITORING);
     }
   }
 
-  // --- TMA7: Shorthand (domain_idx=-1) triggers all domains with events ---
-  printf("\n  -- TMA7: shorthand triggers all domains with events --\n");
+  // --- TMA7: mode_after triggers multiple domains ---
+  printf("\n  -- TMA7: mode_after triggers multiple domains --\n");
   {
     // Reset both domains
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
@@ -1704,32 +1671,28 @@ void test_trace_mode_after_runtime() {
     domain_default_trace_config[mpi_idx].auto_triggered = 0;
     mode_change_requested = 0;
 
-    // Create a config with events set for both domains
+    // Create a config with mode_after set for both domains
     lexgion_trace_config_t tc = {0};
-    tc.domain_events[omp_idx].set = 1;
-    tc.domain_events[omp_idx].events = 0xFF;
-    tc.domain_events[mpi_idx].set = 1;
-    tc.domain_events[mpi_idx].events = 0xFF;
-    tc.num_mode_triggers = 1;
-    tc.mode_triggers[0].domain_idx = -1; // shorthand: all with events
-    tc.mode_triggers[0].mode = PINSIGHT_DOMAIN_OFF;
+    tc.mode_after[omp_idx] = PINSIGHT_DOMAIN_OFF;
+    tc.mode_after[mpi_idx] = PINSIGHT_DOMAIN_OFF;
 
     pinsight_fire_mode_triggers(&tc);
 
     // Both domains should switch to OFF
     int pass = 1;
     if (domain_default_trace_config[omp_idx].mode != PINSIGHT_DOMAIN_OFF) {
-      printf("[FAIL] TMA7: OpenMP mode = %d (expected OFF=0)\n",
-             domain_default_trace_config[omp_idx].mode);
+      printf("[FAIL] TMA7: OpenMP mode = %d (expected OFF=%d)\n",
+             domain_default_trace_config[omp_idx].mode, PINSIGHT_DOMAIN_OFF);
       pass = 0;
     }
     if (domain_default_trace_config[mpi_idx].mode != PINSIGHT_DOMAIN_OFF) {
-      printf("[FAIL] TMA7: MPI mode = %d (expected OFF=0)\n",
-             domain_default_trace_config[mpi_idx].mode);
+      printf("[FAIL] TMA7: MPI mode = %d (expected OFF=%d)\n",
+             domain_default_trace_config[mpi_idx].mode, PINSIGHT_DOMAIN_OFF);
       pass = 0;
     }
     if (pass) {
-      printf("[PASS] TMA7: shorthand triggered both OpenMP and MPI to OFF\n");
+      printf(
+          "[PASS] TMA7: mode_after triggered both OpenMP and MPI to OFF\n");
     }
 
     // Restore modes for subsequent tests
@@ -1759,7 +1722,8 @@ void test_trace_mode_after_env() {
   printf(
       "\n  -- TMA8: PINSIGHT_TRACE_RATE=0:50:1:OpenMP:MONITORING,MPI:OFF --\n");
   {
-    lexgion_default_trace_config->num_mode_triggers = 0;
+    for (int i = 0; i < MAX_NUM_DOMAINS; i++)
+      lexgion_default_trace_config->mode_after[i] = PINSIGHT_DOMAIN_NONE;
     lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
 
     setenv("PINSIGHT_TRACE_RATE", "0:50:1:OpenMP:MONITORING,MPI:OFF", 1);
@@ -1773,31 +1737,17 @@ void test_trace_mode_after_env() {
              lexgion_default_trace_config->max_num_traces);
     }
 
-    if (lexgion_default_trace_config->num_mode_triggers == 2) {
-      printf("[PASS] TMA8: 2 triggers from env var\n");
-      if (lexgion_default_trace_config->mode_triggers[0].domain_idx ==
-              omp_idx &&
-          lexgion_default_trace_config->mode_triggers[0].mode ==
-              PINSIGHT_DOMAIN_MONITORING) {
-        printf("[PASS] TMA8: trigger[0] = OpenMP:MONITORING\n");
-      } else {
-        printf("[FAIL] TMA8: trigger[0] domain_idx=%d mode=%d\n",
-               lexgion_default_trace_config->mode_triggers[0].domain_idx,
-               lexgion_default_trace_config->mode_triggers[0].mode);
-      }
-      if (lexgion_default_trace_config->mode_triggers[1].domain_idx ==
-              mpi_idx &&
-          lexgion_default_trace_config->mode_triggers[1].mode ==
-              PINSIGHT_DOMAIN_OFF) {
-        printf("[PASS] TMA8: trigger[1] = MPI:OFF\n");
-      } else {
-        printf("[FAIL] TMA8: trigger[1] domain_idx=%d mode=%d\n",
-               lexgion_default_trace_config->mode_triggers[1].domain_idx,
-               lexgion_default_trace_config->mode_triggers[1].mode);
-      }
+    if (lexgion_default_trace_config->mode_after[omp_idx] ==
+            PINSIGHT_DOMAIN_MONITORING &&
+        lexgion_default_trace_config->mode_after[mpi_idx] ==
+            PINSIGHT_DOMAIN_OFF) {
+      printf("[PASS] TMA8: mode_after[OpenMP]=MONITORING, "
+             "mode_after[MPI]=OFF\n");
     } else {
-      printf("[FAIL] TMA8: num_triggers=%d (expected 2)\n",
-             lexgion_default_trace_config->num_mode_triggers);
+      printf("[FAIL] TMA8: mode_after[omp]=%d (exp MONITORING), "
+             "mode_after[mpi]=%d (exp OFF)\n",
+             lexgion_default_trace_config->mode_after[omp_idx],
+             lexgion_default_trace_config->mode_after[mpi_idx]);
     }
   }
 }

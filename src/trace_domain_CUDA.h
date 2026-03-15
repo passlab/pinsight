@@ -141,6 +141,7 @@ static inline struct domain_info *register_CUDA_trace_domain(void) {
 
   /* Return pointer to this domain’s entry */
   CUDA_domain_info = &domain_info_table[CUDA_domain_index];
+  CUDA_domain_info->starting_mode = PINSIGHT_DOMAIN_TRACING;
   CUDA_trace_config = &domain_default_trace_config[CUDA_domain_index];
   return CUDA_domain_info;
 }

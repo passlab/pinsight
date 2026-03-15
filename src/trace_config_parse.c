@@ -7,7 +7,6 @@
 
 #include "bitset.h"
 #include "trace_config.h"
-#include "trace_domain_loader.h" // For domain_info_table access
 
 // Forward declarations
 static int process_line(char *line);
@@ -29,7 +28,7 @@ typedef enum {
   SECTION_DOMAIN_DEFAULT,
   SECTION_DOMAIN_GLOBAL,
   SECTION_DOMAIN_PUNIT,
-  SECTION_LEXGION,
+  SECTION_LEXGION_ADDRESS,
   SECTION_LEXGION_DEFAULT,
   SECTION_LEXGION_DOMAIN_DEFAULT
 } SectionType;
@@ -224,14 +223,14 @@ static int parse_section_header(char *line) {
             // codeptr non-NULL so the fill loop in
             // pinsight_load_trace_config() skips this entry.
             *lg = *lexgion_default_trace_config;
-            lg->codeptr = (void *)(uintptr_t)(d_idx + 1);
+            lg->codeptr = (void *)(uintptr_t)(d_idx + 2);
             lg->domain_events[d_idx].set = 1;
             lg->domain_events[d_idx].events =
                 domain_default_trace_config[d_idx].events;
           }
         } else {
           // Lexgion(0x...) or Lexgion(0x..., 0x..., ...) - address-specific
-          current_section_type = SECTION_LEXGION;
+          current_section_type = SECTION_LEXGION_ADDRESS;
           *ptr_end = '\0';
           char *addr_list = ptr_start + 1;
 
@@ -283,16 +282,12 @@ static int parse_section_header(char *line) {
       // RESET: revert to computed defaults (no body expected)
       if (action == ACTION_RESET) {
         if (current_section_type == SECTION_LEXGION_DEFAULT) {
-          // Reset to system defaults
+          // Reset entire object, then set non-zero system defaults
+          memset(lg, 0, sizeof(*lg));
           lg->tracing_rate = DEFAULT_TRACE_RATE;
           lg->trace_starts_at = DEFAULT_TRACE_START;
           lg->max_num_traces = DEFAULT_TRACE_MAX;
-          memset(lg->domain_events, 0, sizeof(lg->domain_events));
-          memset(lg->domain_punits, 0, sizeof(lg->domain_punits));
         }
-        // For SECTION_LEXGION_DOMAIN_DEFAULT, the section entry (above)
-        // already re-combined from Lexgion.default + Domain.default,
-        // so no extra work needed here.
         current_section_type = SECTION_NONE; // No body for RESET
         return 0;
       }
@@ -308,7 +303,7 @@ static int parse_section_header(char *line) {
 
       // SET: Apply Inheritance (all Lexgion section types)
       if (parts[0]) {
-        if (current_section_type == SECTION_LEXGION) {
+        if (current_section_type == SECTION_LEXGION_ADDRESS) {
           for (int i = 0; i < num_current_lexgion_configs; i++) {
             apply_inheritance(current_lexgion_configs[i], parts[0]);
           }
@@ -319,7 +314,7 @@ static int parse_section_header(char *line) {
       }
 
       // SET: Apply PunitSet (only for Lexgion(address))
-      if (parts[1] && current_section_type == SECTION_LEXGION) {
+      if (parts[1] && current_section_type == SECTION_LEXGION_ADDRESS) {
         for (int i = 0; i < num_current_lexgion_configs; i++) {
           parse_punit_set_string(parts[1],
                                  current_lexgion_configs[i]->domain_punits);
@@ -349,9 +344,9 @@ static int parse_section_header(char *line) {
         // RESET: revert mode to install default (no body)
         if (action == ACTION_RESET) {
           domain_default_trace_config[idx].mode =
-              (domain_info_table[idx].eventInstallStatus != 0)
-                  ? PINSIGHT_DOMAIN_TRACING
-                  : PINSIGHT_DOMAIN_OFF;
+              domain_info_table[idx].starting_mode;
+          domain_default_trace_config[idx].events =
+              domain_info_table[idx].eventInstallStatus;
           current_section_type = SECTION_NONE;
           return 0;
         }
@@ -569,14 +564,14 @@ static void parse_key_value(char *line) {
   char *key = trim_whitespace(line);
   char *val = trim_whitespace(eq + 1);
 
-  if ((current_section_type == SECTION_LEXGION ||
+  if ((current_section_type == SECTION_LEXGION_ADDRESS ||
        current_section_type == SECTION_LEXGION_DEFAULT ||
        current_section_type == SECTION_LEXGION_DOMAIN_DEFAULT) &&
       current_lexgion_config) {
     // Determine how many configs to update
     int cfg_count = 1;
     lexgion_trace_config_t **cfgs = &current_lexgion_config;
-    if (current_section_type == SECTION_LEXGION &&
+    if (current_section_type == SECTION_LEXGION_ADDRESS &&
         num_current_lexgion_configs > 0) {
       cfg_count = num_current_lexgion_configs;
       cfgs = current_lexgion_configs;
@@ -601,13 +596,13 @@ static void parse_key_value(char *line) {
       strncpy(val_copy, val, sizeof(val_copy) - 1);
       val_copy[sizeof(val_copy) - 1] = '\0';
 
-      // Build triggers into a temporary array
-      int n_triggers = 0;
-      trace_mode_trigger_t triggers[MAX_MODE_TRIGGERS];
+      /* Build mode_after into a temporary array, then apply to all cfgs.
+       * Zero-init gives PINSIGHT_DOMAIN_NONE (== 0) for all slots. */
+      pinsight_domain_mode_t mode_after_tmp[MAX_NUM_DOMAINS] = {0};
 
       char *saveptr;
       char *token = strtok_r(val_copy, ",", &saveptr);
-      while (token && n_triggers < MAX_MODE_TRIGGERS) {
+      while (token) {
         char *trimmed = trim_whitespace(token);
         char *colon = strchr(trimmed, ':');
         if (colon) {
@@ -617,9 +612,7 @@ static void parse_key_value(char *line) {
           char *mode_str = trim_whitespace(colon + 1);
           int d_idx = find_domain_index(domain_name);
           if (d_idx >= 0) {
-            triggers[n_triggers].domain_idx = d_idx;
-            triggers[n_triggers].mode = parse_mode_value(mode_str);
-            n_triggers++;
+            mode_after_tmp[d_idx] = parse_mode_value(mode_str);
           } else {
             fprintf(stderr,
                     "PInsight config: unknown domain '%s' in "
@@ -627,19 +620,18 @@ static void parse_key_value(char *line) {
                     domain_name);
           }
         } else {
-          // Shorthand: "MONITORING" -> domain_idx = -1 (all with events)
-          triggers[n_triggers].domain_idx = -1;
-          triggers[n_triggers].mode = parse_mode_value(trimmed);
-          n_triggers++;
+          // Shorthand: "MONITORING" -> apply to all registered domains
+          pinsight_domain_mode_t m = parse_mode_value(trimmed);
+          for (int i = 0; i < num_domain; i++)
+            mode_after_tmp[i] = m;
         }
         token = strtok_r(NULL, ",", &saveptr);
       }
 
       // Apply to all target configs
       for (int ci = 0; ci < cfg_count; ci++) {
-        cfgs[ci]->num_mode_triggers = n_triggers;
-        for (int t = 0; t < n_triggers; t++)
-          cfgs[ci]->mode_triggers[t] = triggers[t];
+        for (int d = 0; d < MAX_NUM_DOMAINS; d++)
+          cfgs[ci]->mode_after[d] = mode_after_tmp[d];
       }
     } else {
       // Check for Domain.Event override
@@ -794,11 +786,8 @@ static void reset_domain_default_config(int domain_idx) {
   // Reset events to installed defaults
   domain_default_trace_config[domain_idx].events =
       domain_info_table[domain_idx].eventInstallStatus;
-  // Set enabled/disabled based on events availability (mimic initial setup)
   domain_default_trace_config[domain_idx].mode =
-      (domain_default_trace_config[domain_idx].events != 0)
-          ? PINSIGHT_DOMAIN_TRACING
-          : PINSIGHT_DOMAIN_OFF;
+      domain_info_table[domain_idx].starting_mode;
 }
 
 static void reset_lexgion_config(lexgion_trace_config_t *lg) {
@@ -993,15 +982,36 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config,
   while (token) {
     char *name = trim_whitespace(token);
     char *dot = strchr(name, '.');
-    if (dot)
-      *dot = '\0';
-    int idx = find_domain_index(name);
-    if (idx >= 0) {
-      lg_config->domain_punits[idx].set = 1;
-      lg_config->domain_events[idx].set = 1;
-      lg_config->domain_events[idx].events =
-          domain_default_trace_config[idx].events;
+    if (!dot) {
+      fprintf(stderr,
+              "PInsight Warning: Invalid inheritance '%s'; "
+              "only Domain.default is supported. Ignoring.\n",
+              name);
+      token = strtok(NULL, ",");
+      continue;
     }
+    if (strcmp(dot + 1, "default") != 0) {
+      fprintf(stderr,
+              "PInsight Warning: Invalid inheritance '%s'; "
+              "only Domain.default is supported. Ignoring.\n",
+              name);
+      token = strtok(NULL, ",");
+      continue;
+    }
+    *dot = '\0';
+    int idx = find_domain_index(name);
+    if (idx < 0) {
+      fprintf(stderr,
+              "PInsight Warning: Unknown domain '%s' in inheritance. "
+              "Ignoring.\n",
+              name);
+      token = strtok(NULL, ",");
+      continue;
+    }
+    lg_config->domain_punits[idx].set = 1;
+    lg_config->domain_events[idx].set = 1;
+    lg_config->domain_events[idx].events =
+        domain_default_trace_config[idx].events;
     token = strtok(NULL, ",");
   }
   free(copy);
@@ -1018,8 +1028,9 @@ static lexgion_trace_config_t *get_or_create_lexgion_config(void *codeptr) {
   if (num_lexgion_address_trace_configs < MAX_NUM_LEXGIONS) {
     lexgion_trace_config_t *lg =
         &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
-    // Initialize with global defaults
-    *lg = *lexgion_default_trace_config;
+    // Zero-init; section body / inheritance will set the fields it needs.
+    // memset(0) sets mode_after[] to PINSIGHT_DOMAIN_NONE (== 0).
+    memset(lg, 0, sizeof(*lg));
     lg->codeptr = codeptr;
     return lg;
   }

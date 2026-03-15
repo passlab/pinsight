@@ -1,6 +1,4 @@
 #include "pinsight.h"
-#include "ompt_callback.h"
-#include "trace_domain_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -10,29 +8,16 @@ volatile sig_atomic_t mode_change_requested = 0;
 
 /**
  * Fire auto-trigger mode changes when a lexgion reaches max_num_traces.
+ * Iterates over mode_after[] for all domains; PINSIGHT_DOMAIN_NONE means
+ * no change requested for that domain.
  * Sets mode_change_requested flag to defer callback re-registration.
  */
 void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
-  for (int i = 0; i < tc->num_mode_triggers; i++) {
-    int d = tc->mode_triggers[i].domain_idx;
-    pinsight_domain_mode_t new_mode = tc->mode_triggers[i].mode;
-
-    if (d < 0) {
-      // Shorthand: apply to all domains this lexgion has events from
-      for (int j = 0; j < num_domain; j++) {
-        if (tc->domain_events[j].set &&
-            !domain_default_trace_config[j].auto_triggered) {
-          domain_default_trace_config[j].mode = new_mode;
-          domain_default_trace_config[j].auto_triggered = 1;
-          fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
-                  domain_info_table[j].name,
-                  new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
-                  : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
-                                                           : "TRACING");
-        }
-      }
-    } else if (d < num_domain &&
-               !domain_default_trace_config[d].auto_triggered) {
+  for (int d = 0; d < num_domain; d++) {
+    pinsight_domain_mode_t new_mode = tc->mode_after[d];
+    if (new_mode == PINSIGHT_DOMAIN_NONE)
+      continue;
+    if (!domain_default_trace_config[d].auto_triggered) {
       domain_default_trace_config[d].mode = new_mode;
       domain_default_trace_config[d].auto_triggered = 1;
       fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",

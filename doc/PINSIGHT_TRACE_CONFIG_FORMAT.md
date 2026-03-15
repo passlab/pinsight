@@ -27,6 +27,11 @@ Specifies what is being configured. There are five types of targets:
 - **`Lexgion.default`**: Default configuration for all code regions across all domains.
 - **`Lexgion(Domain).default`**: Default lexgion configuration for a specific domain (e.g., `Lexgion(OpenMP).default`). Eagerly initialized as `Lexgion.default ⊕ Domain.default` (rate triple from global default, events from domain default).
 - **`Lexgion(Address)` or `Lexgion(Addr1, Addr2, ...)`**: Configuration for one or more specific code regions by address (e.g., `Lexgion(0x400500)` or `Lexgion(0x400500, 0x400600)`). When multiple addresses are listed, each gets its own config but shares the same section body settings.
+
+> [!IMPORTANT]
+> Sections should appear in the config file in the order listed above: `Domain.global` → `Domain.default` → `Domain.PunitKind(Set)` → `Lexgion.default` → `Lexgion(Domain).default` → `Lexgion(Address)`. This is required because all inheritance is resolved at parse time as a snapshot copy of the referenced target's current state. A section that inherits from or depends on a target defined later in the file will see stale or uninitialized defaults.
+
+
 ##### Action-Target Validity
 
 | Target Type | SET | RESET | REMOVE |

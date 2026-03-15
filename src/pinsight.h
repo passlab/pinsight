@@ -207,8 +207,7 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
 
   // Auto-trigger: fire mode changes when max_num_traces is reached
   lexgion_trace_config_t *tc = lgp->trace_config;
-  if (tc && tc->num_mode_triggers > 0 &&
-      tc->max_num_traces != (unsigned int)-1 &&
+  if (tc && tc->max_num_traces != (unsigned int)-1 &&
       lgp->trace_counter >= tc->max_num_traces) {
     pinsight_fire_mode_triggers(tc);
   }
