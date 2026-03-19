@@ -224,24 +224,6 @@ static inline int lexgion_has_address_specific_config(lexgion_t *lgp) {
          lgp->trace_config->codeptr == lgp->codeptr_ra;
 }
 
-/**
- * Check if a specific domain/event is enabled for a piggybacking event.
- * Reuses the enclosing lexgion's trace_bit (rate decision) and checks
- * the event enable bit in its trace_config.
- * @return 1 if the event should be traced, 0 otherwise
- */
-static inline int lexgion_check_event_enabled(lexgion_t *lgp, int domain,
-                                              int event) {
-  if (!lgp->trace_bit)
-    return 0;
-  lexgion_trace_config_t *tc = lgp->trace_config;
-  if (tc != NULL && tc->domain_events[domain].set &&
-      !((tc->domain_events[domain].events >> event) & 1)) {
-    return 0;
-  }
-  return lgp->trace_bit;
-}
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -255,9 +237,13 @@ extern lexgion_record_t *top_lexgion_type(int class, int type);
 extern lexgion_record_t *lexgion_begin(int class, int type,
                                        const void *codeptr_ra);
 extern lexgion_t *lexgion_end(unsigned int *record_id);
-extern int lexgion_set_top_trace_bit();
 extern int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
                                                   int event);
+
+// implemented in pinsight.c
+extern lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain);
+extern int lexgion_set_rate_trace_bit(lexgion_t *lgp);
+extern int lexgion_check_event_enabled(lexgion_t *lgp, int domain, int event);
 
 // implemented in lexgion_trace_cnofig.c
 extern lexgion_trace_config_t *

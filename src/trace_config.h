@@ -186,7 +186,7 @@ typedef enum {
 typedef struct domain_trace_config { // The trace config for a domain
   pinsight_domain_mode_t mode; // Domain operating mode (OFF/MONITORING/TRACING)
   unsigned long int events;    // The default event config for the domain
-  int auto_triggered; // Prevents repeated auto-triggers; reset on config reload
+  int mode_change_fired; // Once-per-domain latch: set when mode_after fires, reset on config reload
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];

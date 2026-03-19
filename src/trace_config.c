@@ -84,12 +84,14 @@ int domain_punit_set_match(domain_punit_set_t *domain_punit_set) {
  * @return the pointer to the config struct object
  */
 lexgion_trace_config_t *retrieve_lexgion_trace_config(const void *codeptr) {
-  int i;
-  lexgion_trace_config_t *config = NULL;
-  for (i = 1; i < MAX_NUM_LEXGIONS; i++) {
-    config = &lexgion_address_trace_config[i];
+  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+    lexgion_trace_config_t *config = &lexgion_address_trace_config[i];
     if (config->codeptr == codeptr) {
-      return config;
+      if (config->removed) {
+        return NULL;
+      } else {
+        return config;
+      }
     }
   }
   return NULL;
@@ -305,7 +307,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   for (i = 0; i < num_domain; i++) {
     domain_default_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
-    domain_default_trace_config[i].auto_triggered = 0;
+    domain_default_trace_config[i].mode_change_fired = 0;
     domain_default_trace_config[i].mode = domain_info_table[i].starting_mode;
   }
 

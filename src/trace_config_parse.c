@@ -1028,10 +1028,11 @@ static lexgion_trace_config_t *get_or_create_lexgion_config(void *codeptr) {
   if (num_lexgion_address_trace_configs < MAX_NUM_LEXGIONS) {
     lexgion_trace_config_t *lg =
         &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
-    // Zero-init; section body / inheritance will set the fields it needs.
-    // memset(0) sets mode_after[] to PINSIGHT_DOMAIN_NONE (== 0).
-    memset(lg, 0, sizeof(*lg));
+    // Initialize from Lexgion.default so new entries inherit default rate,
+    // max_num_traces, trace_starts_at, mode_after[], etc.
+    *lg = *lexgion_default_trace_config;
     lg->codeptr = codeptr;
+    lg->removed = 0;
     return lg;
   }
   return NULL;

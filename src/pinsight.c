@@ -1,4 +1,5 @@
 #include "pinsight.h"
+#include "trace_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -17,9 +18,9 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
     pinsight_domain_mode_t new_mode = tc->mode_after[d];
     if (new_mode == PINSIGHT_DOMAIN_NONE)
       continue;
-    if (!domain_default_trace_config[d].auto_triggered) {
+    if (!domain_default_trace_config[d].mode_change_fired) {
       domain_default_trace_config[d].mode = new_mode;
-      domain_default_trace_config[d].auto_triggered = 1;
+      domain_default_trace_config[d].mode_change_fired = 1;
       fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
               domain_info_table[d].name,
               new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
@@ -199,34 +200,6 @@ lexgion_record_t *top_lexgion_type(int class, int type) {
 lexgion_record_t *top_lexgion() { return pinsight_thread_data.current_record; }
 
 /**
- * set the trace bit for the top lexgion in the stack
- * @return 1 if the top lexgion should be traced, 0 otherwise
- */
-int lexgion_set_top_trace_bit() {
-  int top = pinsight_thread_data.stack_top;
-  lexgion_t *lgp = pinsight_thread_data.lexgion_stack[top].lgp;
-  lexgion_trace_config_t *trace_config = lgp->trace_config;
-  if (trace_config == NULL) {
-    // Search the lexgion stack to find the next level lexgion that has a trace
-    // config
-    for (int i = top - 1; i >= 0; i--) {
-      lgp = pinsight_thread_data.lexgion_stack[i].lgp;
-      trace_config = lgp->trace_config;
-      if (trace_config != NULL) {
-        break;
-      }
-    }
-  }
-
-  lgp->trace_bit =
-      (trace_config->trace_starts_at <= (lgp->counter - 1) &&
-       ((trace_config->max_num_traces == -1) ||
-        (lgp->trace_counter < trace_config->max_num_traces)) &&
-       (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
-  return lgp->trace_bit;
-}
-
-/**
  * Set the trace bit for a lexgion based on domain and event, with 3-level
  * config resolution:
  *   1. Search lexgion_address_trace_config by lgp->codeptr_ra
@@ -305,4 +278,84 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
         (lgp->trace_counter < trace_config->max_num_traces)) &&
        (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
   return lgp->trace_bit;
+}
+
+/**
+ * Set the trace config for a lexgion by checking the
+ * lexgion_address_trace_config table, the domain_default_trace_config table,
+ * and the default_trace_config table.
+ * @return the trace config for the lexgion
+ */
+lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
+  lexgion_trace_config_t *trace_config = lgp->trace_config;
+  /* Re-resolve config if not yet set or if a reconfig has occurred since last
+   * resolution */
+  if (trace_config == NULL ||
+      lgp->trace_config_change_counter != trace_config_change_counter) {
+    trace_config = NULL;
+
+    /* 1. Search the lexgion_address_trace_config table by lgp->codeptr_ra */
+    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+      if (lexgion_address_trace_config[i].codeptr == lgp->codeptr_ra &&
+          !lexgion_address_trace_config[i].removed) {
+        trace_config = &lexgion_address_trace_config[i];
+        break;
+      }
+    }
+
+    /* 2. If not found, try the domain-specific default config */
+    if (trace_config == NULL) {
+      lexgion_trace_config_t *domain_default =
+          &lexgion_domain_default_trace_config[domain];
+      if (domain_default->codeptr != NULL) {
+        trace_config = domain_default;
+      }
+    }
+
+    /* 3. If still not found, fall back to the global default */
+    if (trace_config == NULL) {
+      trace_config = lexgion_default_trace_config;
+    }
+
+    /* Cache the resolved config and current generation */
+    lgp->trace_config = trace_config;
+    lgp->trace_config_change_counter = trace_config_change_counter;
+  }
+  return trace_config;
+}
+
+/**
+ * Set the trace bit for a lexgion based on the rate configuration.
+ * @return 1 if the event should be traced, 0 otherwise
+ */
+int lexgion_set_rate_trace_bit(lexgion_t *lgp) {
+  lexgion_trace_config_t *trace_config = lgp->trace_config;
+  lgp->trace_bit =
+      (trace_config->trace_starts_at <= (lgp->counter - 1) &&
+       ((trace_config->max_num_traces == -1) ||
+        (lgp->trace_counter < trace_config->max_num_traces)) &&
+       (lgp->num_exes_after_last_trace >= trace_config->tracing_rate));
+  return lgp->trace_bit;
+}
+
+/**
+ * Check if a specific domain/event is enabled for a lexgion or not, it also
+ * checks the mactching of the punit set.
+ * @return 1 if the event should be traced, 0 otherwise
+ */
+int lexgion_check_event_enabled(lexgion_t *lgp, int domain, int event) {
+  lexgion_trace_config_t *tc = lgp->trace_config;
+  if (tc != NULL && tc->domain_events[domain].set &&
+      !((tc->domain_events[domain].events >> event) & 1)) {
+    return 0;
+  }
+
+  /* Check whether the punit set is enabled for tracing */
+  if (tc->domain_punit_set_set) {
+    if (!domain_punit_set_match(tc->domain_punits)) {
+      return 0;
+    }
+  }
+
+  return 1;
 }

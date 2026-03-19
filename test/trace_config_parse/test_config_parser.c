@@ -16,9 +16,9 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
     pinsight_domain_mode_t new_mode = tc->mode_after[d];
     if (new_mode == PINSIGHT_DOMAIN_NONE)
       continue;
-    if (!domain_default_trace_config[d].auto_triggered) {
+    if (!domain_default_trace_config[d].mode_change_fired) {
       domain_default_trace_config[d].mode = new_mode;
-      domain_default_trace_config[d].auto_triggered = 1;
+      domain_default_trace_config[d].mode_change_fired = 1;
       fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
               domain_info_table[d].name,
               new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
@@ -1599,7 +1599,7 @@ void test_trace_mode_after_runtime() {
   {
     // Reset state
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[omp_idx].auto_triggered = 0;
+    domain_default_trace_config[omp_idx].mode_change_fired = 0;
     mode_change_requested = 0;
 
     // Create a trace config with explicit trigger: OpenMP -> MONITORING
@@ -1619,12 +1619,12 @@ void test_trace_mode_after_runtime() {
              PINSIGHT_DOMAIN_MONITORING);
     }
 
-    // Check 2: auto_triggered flag set
-    if (domain_default_trace_config[omp_idx].auto_triggered == 1) {
-      printf("[PASS] TMA5: auto_triggered flag is set\n");
+    // Check 2: mode_change_fired flag set
+    if (domain_default_trace_config[omp_idx].mode_change_fired == 1) {
+      printf("[PASS] TMA5: mode_change_fired flag is set\n");
     } else {
-      printf("[FAIL] TMA5: auto_triggered = %d (expected 1)\n",
-             domain_default_trace_config[omp_idx].auto_triggered);
+      printf("[FAIL] TMA5: mode_change_fired = %d (expected 1)\n",
+             domain_default_trace_config[omp_idx].mode_change_fired);
     }
 
     // Check 3: mode_change_requested flag set (deferred re-registration)
@@ -1636,13 +1636,13 @@ void test_trace_mode_after_runtime() {
     }
   }
 
-  // --- TMA6: auto_triggered prevents re-triggering ---
-  printf("\n  -- TMA6: auto_triggered prevents duplicate trigger --\n");
+  // --- TMA6: mode_change_fired prevents re-triggering ---
+  printf("\n  -- TMA6: mode_change_fired prevents duplicate trigger --\n");
   {
-    // OpenMP is already MONITORING with auto_triggered=1 from TMA5
+    // OpenMP is already MONITORING with mode_change_fired=1 from TMA5
     mode_change_requested = 0;
 
-    // Try to trigger OpenMP -> OFF (should be blocked by auto_triggered)
+    // Try to trigger OpenMP -> OFF (should be blocked by mode_change_fired)
     lexgion_trace_config_t tc = {0};
     tc.mode_after[omp_idx] = PINSIGHT_DOMAIN_OFF;
 
@@ -1651,7 +1651,7 @@ void test_trace_mode_after_runtime() {
     // Mode should NOT have changed (still MONITORING)
     if (domain_default_trace_config[omp_idx].mode ==
         PINSIGHT_DOMAIN_MONITORING) {
-      printf("[PASS] TMA6: auto_triggered blocked re-trigger "
+      printf("[PASS] TMA6: mode_change_fired blocked re-trigger "
              "(mode still MONITORING)\n");
     } else {
       printf("[FAIL] TMA6: mode = %d (expected MONITORING=%d, should not have "
@@ -1666,9 +1666,9 @@ void test_trace_mode_after_runtime() {
   {
     // Reset both domains
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[omp_idx].auto_triggered = 0;
+    domain_default_trace_config[omp_idx].mode_change_fired = 0;
     domain_default_trace_config[mpi_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[mpi_idx].auto_triggered = 0;
+    domain_default_trace_config[mpi_idx].mode_change_fired = 0;
     mode_change_requested = 0;
 
     // Create a config with mode_after set for both domains
@@ -1697,9 +1697,9 @@ void test_trace_mode_after_runtime() {
 
     // Restore modes for subsequent tests
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[omp_idx].auto_triggered = 0;
+    domain_default_trace_config[omp_idx].mode_change_fired = 0;
     domain_default_trace_config[mpi_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[mpi_idx].auto_triggered = 0;
+    domain_default_trace_config[mpi_idx].mode_change_fired = 0;
   }
 }
 
