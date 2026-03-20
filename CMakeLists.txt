@@ -35,6 +35,8 @@ set(SOURCE_FILES
         src/enter_exit.c
         src/enter_exit_lttng_ust_tracepoint.h
         src/common_tp_fields_global_lttng_ust_tracepoint.h
+        src/app_knob.h
+        src/app_knob.c
         )
 
 ## For OpenMP, PInsight requires OMPT support in an OpenMP runtime. But buidling PInsight only needs omp.h and ompt.h,
@@ -154,6 +156,7 @@ add_executable(test_config_parser
     src/trace_config.c
     src/bitset.c
     src/trace_domain_loader.c
+    src/app_knob.c
 )
 target_compile_definitions(test_config_parser PRIVATE PINSIGHT_OPENMP PINSIGHT_MPI PINSIGHT_CUDA)
 target_include_directories(test_config_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/src)

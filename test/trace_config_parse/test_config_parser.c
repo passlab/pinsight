@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "app_knob.h"
 #include "trace_config.h"
 #include "trace_domain_loader.h"
 
@@ -1752,6 +1753,118 @@ void test_trace_mode_after_env() {
   }
 }
 
+void test_knob_config() {
+  printf("\n--- Test: Application Knob Config ---\n");
+
+  // Reset knob state
+  num_knobs = 0;
+
+  // 1. Parse config with [Knob] section
+  FILE *fp = fopen("knob_test.txt", "w");
+  fprintf(fp, "[Knob]\n");
+  fprintf(fp, "    compute_threads = 8\n");
+  fprintf(fp, "    reduce_threads = 2\n");
+  fprintf(fp, "    learning_rate = 0.001\n");
+  fprintf(fp, "    experiment_name = baseline_run\n");
+  fclose(fp);
+
+  parse_trace_config_file("knob_test.txt");
+
+  // Verify int knobs
+  if (pinsight_get_knob_int("compute_threads") == 8) {
+    printf("[PASS] Knob: compute_threads = 8\n");
+  } else {
+    printf("[FAIL] Knob: compute_threads = %d (expected 8)\n",
+           pinsight_get_knob_int("compute_threads"));
+  }
+
+  if (pinsight_get_knob_int("reduce_threads") == 2) {
+    printf("[PASS] Knob: reduce_threads = 2\n");
+  } else {
+    printf("[FAIL] Knob: reduce_threads = %d (expected 2)\n",
+           pinsight_get_knob_int("reduce_threads"));
+  }
+
+  // Verify double knob
+  double lr = pinsight_get_knob_double("learning_rate");
+  if (lr > 0.0009 && lr < 0.0011) {
+    printf("[PASS] Knob: learning_rate = %f\n", lr);
+  } else {
+    printf("[FAIL] Knob: learning_rate = %f (expected 0.001)\n", lr);
+  }
+
+  // Verify string knob
+  const char *name = pinsight_get_knob_string("experiment_name");
+  if (strcmp(name, "baseline_run") == 0) {
+    printf("[PASS] Knob: experiment_name = %s\n", name);
+  } else {
+    printf("[FAIL] Knob: experiment_name = '%s' (expected 'baseline_run')\n",
+           name);
+  }
+
+  // Verify non-existent knob returns defaults
+  if (pinsight_get_knob_int("nonexistent") == 0) {
+    printf("[PASS] Knob: nonexistent returns 0\n");
+  } else {
+    printf("[FAIL] Knob: nonexistent returned %d (expected 0)\n",
+           pinsight_get_knob_int("nonexistent"));
+  }
+
+  // Verify num_knobs count
+  if (num_knobs == 4) {
+    printf("[PASS] Knob: num_knobs = 4\n");
+  } else {
+    printf("[FAIL] Knob: num_knobs = %d (expected 4)\n", num_knobs);
+  }
+
+  // 2. Re-parse with updated values (simulating SIGUSR1 reload)
+  fp = fopen("knob_test.txt", "w");
+  fprintf(fp, "[Knob]\n");
+  fprintf(fp, "    compute_threads = 4\n");
+  fprintf(fp, "    reduce_threads = 1\n");
+  fprintf(fp, "    learning_rate = 0.01\n");
+  fprintf(fp, "    experiment_name = tuned_run\n");
+  fclose(fp);
+
+  parse_trace_config_file("knob_test.txt");
+
+  if (pinsight_get_knob_int("compute_threads") == 4 &&
+      pinsight_get_knob_int("reduce_threads") == 1) {
+    printf("[PASS] Knob reload: int values updated\n");
+  } else {
+    printf("[FAIL] Knob reload: compute=%d (exp 4), reduce=%d (exp 1)\n",
+           pinsight_get_knob_int("compute_threads"),
+           pinsight_get_knob_int("reduce_threads"));
+  }
+
+  lr = pinsight_get_knob_double("learning_rate");
+  if (lr > 0.009 && lr < 0.011) {
+    printf("[PASS] Knob reload: learning_rate updated to %f\n", lr);
+  } else {
+    printf("[FAIL] Knob reload: learning_rate = %f (expected 0.01)\n", lr);
+  }
+
+  if (strcmp(pinsight_get_knob_string("experiment_name"), "tuned_run") == 0) {
+    printf("[PASS] Knob reload: experiment_name updated\n");
+  } else {
+    printf("[FAIL] Knob reload: experiment_name = '%s' (expected 'tuned_run')\n",
+           pinsight_get_knob_string("experiment_name"));
+  }
+
+  // No new knobs should have been created (same names)
+  if (num_knobs == 4) {
+    printf("[PASS] Knob reload: no duplicate knobs created\n");
+  } else {
+    printf("[FAIL] Knob reload: num_knobs = %d (expected 4)\n", num_knobs);
+  }
+
+  // 3. Print knob config
+  printf("\n--- Knob Config Dump ---\n");
+  pinsight_print_knob_config(stdout);
+
+  unlink("knob_test.txt");
+}
+
 int main() {
   // Setup mock domain info
   // ... (This part was in original file, assuming it's still there)
@@ -1768,6 +1881,7 @@ int main() {
   test_trace_mode_after();
   test_trace_mode_after_runtime();
   test_trace_mode_after_env();
+  test_knob_config();
 
   return 0;
 }

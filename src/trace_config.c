@@ -1,3 +1,4 @@
+#include "app_knob.h"
 #include "trace_config.h"
 #include "pinsight_config.h"
 #include <ctype.h>
@@ -344,6 +345,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   }
   print_domain_trace_config(stdout);
   print_lexgion_trace_config(stdout);
+  pinsight_print_knob_config(stdout);
 }
 
 #ifdef PINSIGHT_CUDA

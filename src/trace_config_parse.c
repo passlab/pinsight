@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app_knob.h"
 #include "bitset.h"
 #include "trace_config.h"
 
@@ -30,7 +31,8 @@ typedef enum {
   SECTION_DOMAIN_PUNIT,
   SECTION_LEXGION_ADDRESS,
   SECTION_LEXGION_DEFAULT,
-  SECTION_LEXGION_DOMAIN_DEFAULT
+  SECTION_LEXGION_DOMAIN_DEFAULT,
+  SECTION_KNOB
 } SectionType;
 
 typedef enum {
@@ -322,7 +324,11 @@ static int parse_section_header(char *line) {
       }
     }
   }
-  // Case 2a: Domain.global (must match before .default)
+  // Case 2a: Knob section
+  else if (strcmp(target, "Knob") == 0) {
+    current_section_type = SECTION_KNOB;
+  }
+  // Case 2b: Domain.global (must match before .default)
   else if (strstr(target, ".global")) {
     current_section_type = SECTION_DOMAIN_GLOBAL;
     is_default_section = 1; // RESET allowed, REMOVE not
@@ -773,6 +779,30 @@ static void parse_key_value(char *line) {
         *events_ptr |= (1UL << eid);
       else
         *events_ptr &= ~(1UL << eid);
+    }
+  } else if (current_section_type == SECTION_KNOB) {
+    // --- Knob key-value parsing ---
+    // Auto-detect type: try integer, then double, then string
+    char *endptr;
+    long lval = strtol(val, &endptr, 0);
+    if (*endptr == '\0' && endptr != val) {
+      // Integer value
+      int idx = pinsight_find_or_create_knob(key, KNOB_TYPE_INT);
+      if (idx >= 0)
+        pinsight_set_knob_int(idx, (int)lval);
+    } else {
+      double dval = strtod(val, &endptr);
+      if (*endptr == '\0' && endptr != val) {
+        // Double value
+        int idx = pinsight_find_or_create_knob(key, KNOB_TYPE_DOUBLE);
+        if (idx >= 0)
+          pinsight_set_knob_double(idx, dval);
+      } else {
+        // String value
+        int idx = pinsight_find_or_create_knob(key, KNOB_TYPE_STRING);
+        if (idx >= 0)
+          pinsight_set_knob_string(idx, val);
+      }
     }
   }
 }
