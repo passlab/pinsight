@@ -218,7 +218,242 @@ typedef struct domain_trace_config {
 | `src/ompt_callback.h` | Callback and wakeup function declarations |
 | `test/trace_config_parse/test_config_parser.c` | Three-mode test cases |
 
+## Automatic Mode Switching: `trace_mode_after`
+
+When a lexgion reaches its `max_num_traces` limit, PInsight can automatically switch domain modes. This is configured via the `trace_mode_after` key in lexgion sections:
+
+```ini
+[Lexgion.default]
+    max_num_traces = 100
+    trace_mode_after = MONITORING                    # all domains → MONITORING
+    trace_mode_after = OpenMP:MONITORING, MPI:OFF    # per-domain
+```
+
+Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:1:MONITORING`
+
+### PAUSE Action
+
+The `trace_mode_after` key supports a special **PAUSE** action for pause-analyze-resume workflows.
+When triggered, PInsight pauses application execution, rotates current LTTng traces to a completed
+archive chunk, optionally launches an analysis script, and blocks until a timeout or SIGUSR1 signal
+resumes the application.
+
+#### Syntax
+
+```
+trace_mode_after = PAUSE:timeout:script[:resume_mode]
+```
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `timeout` | Seconds to wait before auto-resuming. `0` = wait indefinitely for SIGUSR1. | (required) |
+| `script` | Path to analysis script to launch. `-` = no script. | (required) |
+| `resume_mode` | Domain mode after resume: `OFF`, `MONITORING`, or `TRACING`. | `MONITORING` |
+
+#### Execution Flow
+
+When `max_num_traces` is reached and PAUSE is configured:
+
+```
+┌─ Application running (TRACING mode) ─────────────┐
+│  Lexgion trace count reaches max_num_traces       │
+└───────────────────────────────────────────────────┘
+        │
+        ▼
+┌─ 1. lttng rotate ────────────────────────────────┐
+│  Flushes current traces to a completed archive    │
+│  chunk. PInsight parses the rotated chunk path.   │
+└───────────────────────────────────────────────────┘
+        │
+        ▼
+┌─ 2. Launch analysis script (fork + exec) ────────┐
+│  Script receives: <chunk_path> <pid> <config>     │
+│  Script can analyze traces, modify config,        │
+│  and send SIGUSR1 to resume early.                │
+└───────────────────────────────────────────────────┘
+        │
+        ▼
+┌─ 3. Block (sigsuspend) ──────────────────────────┐
+│  Blocks until:                                    │
+│   • SIGALRM fires (timeout expired), or           │
+│   • SIGUSR1 received (from script or external)    │
+└───────────────────────────────────────────────────┘
+        │
+        ▼
+┌─ 4. Resume ──────────────────────────────────────┐
+│  Switch domain modes to resume_mode.              │
+│  If SIGUSR1 triggered config_reload_requested,    │
+│  re-read the config file before continuing.       │
+└───────────────────────────────────────────────────┘
+```
+
+#### Script Arguments
+
+The analysis script is executed via `fork()` + `execlp()` and receives three positional arguments:
+
+| Argument | Description |
+|----------|-------------|
+| `$1` — chunk_path | Path to the rotated trace chunk (e.g., `/tmp/traces/archives/2026...`) |
+| `$2` — app_pid | PID of the paused application (send SIGUSR1 here to resume early) |
+| `$3` — config_file | Path to the PInsight config file (script can modify and signal reload) |
+
+Example analysis script:
+```bash
+#!/bin/bash
+CHUNK=$1; PID=$2; CONFIG=$3
+babeltrace2 "$CHUNK" | python3 analyze.py --output new_config.txt
+cp new_config.txt "$CONFIG"
+kill -USR1 $PID  # resume app with updated config
+```
+
+#### Post-PAUSE Resume Modes
+
+The `resume_mode` field controls application behavior after the pause ends.
+
+##### `MONITORING` (default) — One-shot pause
+
+After PAUSE, domains switch to MONITORING. No more traces are emitted, so `max_num_traces` is never re-reached. The PAUSE fires exactly **once**.
+
+```ini
+trace_mode_after = PAUSE:60:analyze.sh:MONITORING
+```
+```
+TRACING (10 traces) → PAUSE → MONITORING (no more traces, no more pauses)
+```
+
+##### `OFF` — One-shot pause, zero overhead after
+
+Same as MONITORING but callbacks are fully deregistered. Zero per-event overhead after resume.
+
+```ini
+trace_mode_after = PAUSE:60:analyze.sh:OFF
+```
+
+##### `TRACING` — Cyclic pause-analyze-resume
+
+> [!IMPORTANT]
+> When `resume_mode` is `TRACING`, the PAUSE action fires **repeatedly**. After each pause, the
+> application resumes tracing. When `max_num_traces` is reached again, PAUSE triggers again.
+> This creates a **cyclic** pattern:
+> ```
+> TRACE 10 → PAUSE 5s → rotate → TRACE 10 → PAUSE 5s → rotate → ...
+> ```
+> Each cycle produces a separate LTTng archive chunk, enabling **continuous windowed analysis**.
+> The application's elapsed time will include all accumulated pause durations.
+
+```ini
+trace_mode_after = PAUSE:5:-:TRACING
+```
+
+This mode is powerful for:
+- **Continuous monitoring**: periodically analyze the last N traces and adapt configuration
+- **Windowed profiling**: collect fixed-size trace windows with analysis between them
+- **Adaptive tuning**: analysis script modifies config between cycles
+
+#### Environment Variable
+
+PAUSE is also configurable via `PINSIGHT_TRACE_RATE`:
+
+```bash
+# Format: trace_starts_at:max_num_traces:tracing_rate:PAUSE:timeout:script:resume_mode
+PINSIGHT_TRACE_RATE=0:100:10:PAUSE:60:analyze.sh:TRACING
+```
+
+#### Requirements
+
+- **LTTng v2.11+** required for `lttng rotate`
+- An active LTTng session must be running for `lttng rotate` to produce archive chunks
+- Script must be executable and in `$PATH` or specified as relative/absolute path
+
+### PAUSE Evaluation — LULESH
+
+Evaluation was performed using LULESH 2.0 with 4 threads on a 48-core machine.
+
+#### Test 1: `PAUSE:5:-:MONITORING` (one-shot)
+
+```ini
+[Lexgion.default]
+    max_num_traces = 10
+    trace_mode_after = PAUSE:5:-:MONITORING
+```
+
+| Metric | Value |
+|--------|-------|
+| Events in rotated chunk (babeltrace2) | **792** |
+| Events after PAUSE (MONITORING) | **0** |
+| Elapsed time | 15s (10s computation + 5s pause) |
+| PAUSE triggers | 1 |
+
+Key events captured in rotated chunk:
+
+| Count | Event |
+|------:|-------|
+| 108 | `work_begin` |
+| 100 | `parallel_join_sync_wait_begin` / `sync_begin` / `implicit_task_begin` |
+| 97 | `parallel_join_sync_wait_end` / `sync_end` / `implicit_task_end` |
+| 26 | `parallel_begin` |
+| 25 | `parallel_end` |
+| 4 | `thread_begin` |
+
+#### Test 2: `PAUSE:5:-:TRACING` (cyclic)
+
+```ini
+[Lexgion.default]
+    max_num_traces = 10
+    trace_mode_after = PAUSE:5:-:TRACING
+```
+
+| Metric | Value |
+|--------|-------|
+| PAUSE triggers | **33** |
+| Archive chunks produced | **34** |
+| Events per chunk (post-PAUSE) | ~30 |
+| Total elapsed time | ~200s (33 × 5s pauses + computation) |
+
+Console output (abbreviated):
+```
+PInsight: Auto-trigger: OpenMP mode -> TRACING
+PInsight: PAUSED (timeout=5s, script=none)
+PInsight: Rotated traces to: .../archives/...-0
+PInsight: PAUSE timeout (5s), auto-resuming
+PInsight: PAUSED (timeout=5s, script=none)       ← re-triggers
+PInsight: Rotated traces to: .../archives/...-1
+PInsight: PAUSE timeout (5s), auto-resuming
+...  (31 more cycles)
+PInsight: PAUSED (timeout=5s, script=none)
+PInsight: Rotated traces to: .../archives/...-33
+PInsight: PAUSE timeout (5s), auto-resuming
+Elapsed time = 200 (s)
+```
+
+Each post-PAUSE chunk contains ~30 PInsight events (`work_begin`, `parallel_join_sync_*`,
+`implicit_task_*`), verifying that TRACING mode continues to emit events after each resume.
+The final chunk (chunk 34) contains `thread_end` and `parallel_end` events from application shutdown.
+
+#### Test 3: `PAUSE:5:./analyze_pause_test.sh:MONITORING` (with script)
+
+```ini
+[Lexgion.default]
+    max_num_traces = 10
+    trace_mode_after = PAUSE:5:./analyze_pause_test.sh:MONITORING
+```
+
+```
+PInsight: PAUSED (timeout=5s, script=./analyze_pause_test.sh)
+PInsight: Rotated traces to: .../archives/...-0
+PInsight: Launched analysis script './analyze_pause_test.sh' (pid 497477)
+PInsight: PAUSE timeout (5s), auto-resuming
+PInsight: Auto-trigger: OpenMP mode -> MONITORING
+```
+
+The analysis script receives the chunk path as `$1` and can use `babeltrace2` to verify
+the rotated traces contain real event data. Test script at
+[`eva/LULESH/analyze_pause_test.sh`](../eva/LULESH/analyze_pause_test.sh).
+
+---
+
 ## Bidirectional Mode Switch Evaluation
+
 
 ### Mechanism
 

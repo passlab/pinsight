@@ -127,9 +127,10 @@ void setup_trace_config_env() {
   }
 
   // 2. Override Lexgion Rate
-  // PINSIGHT_TRACE_RATE=start:max:rate[:mode_after]
-  // mode_after uses ':' as domain-mode separator (same as config file):
+  // PINSIGHT_TRACE_RATE=start:max:rate[:mode_after_string]
+  // mode_after_string can be:
   //   MONITORING | OpenMP:MONITORING | OpenMP:MONITORING,MPI:OFF
+  //   PAUSE:60:script.sh[:TRACING]
   char *rate_env = getenv("PINSIGHT_TRACE_RATE");
   if (rate_env) {
     // Parse first 3 numeric fields separated by ':'
@@ -152,50 +153,7 @@ void setup_trace_config_env() {
     }
     // p now points to the start of the mode_after string (or '\0')
     if (colons == 3 && *p) {
-      char mode_after_buf[128];
-      strncpy(mode_after_buf, p, sizeof(mode_after_buf) - 1);
-      mode_after_buf[sizeof(mode_after_buf) - 1] = '\0';
-
-      /* We should NOT reset all mode_after slots to NONE before parsing env
-       * var since the config file may have already set some slots. */
-      char *saveptr;
-      char *token = strtok_r(mode_after_buf, ",", &saveptr);
-      while (token) {
-        while (*token == ' ')
-          token++;
-
-        /* Parse mode string into enum */
-        pinsight_domain_mode_t m;
-        char *colon = strchr(token, ':');
-        if (colon) {
-          /* Explicit: "OpenMP:MONITORING" */
-          *colon = '\0';
-          int d_idx = find_domain_index(token);
-          if (d_idx >= 0) {
-            char *mode_str = colon + 1;
-            if (strcasecmp(mode_str, "OFF") == 0)
-              m = PINSIGHT_DOMAIN_OFF;
-            else if (strcasecmp(mode_str, "MONITORING") == 0 ||
-                     strcasecmp(mode_str, "MONITOR") == 0)
-              m = PINSIGHT_DOMAIN_MONITORING;
-            else
-              m = PINSIGHT_DOMAIN_TRACING;
-            lexgion_default_trace_config->mode_after[d_idx] = m;
-          }
-        } else {
-          /* Shorthand: "MONITORING" -> apply to all registered domains */
-          if (strcasecmp(token, "OFF") == 0)
-            m = PINSIGHT_DOMAIN_OFF;
-          else if (strcasecmp(token, "MONITORING") == 0 ||
-                   strcasecmp(token, "MONITOR") == 0)
-            m = PINSIGHT_DOMAIN_MONITORING;
-          else
-            m = PINSIGHT_DOMAIN_TRACING;
-          for (int i = 0; i < num_domain; i++)
-            lexgion_default_trace_config->mode_after[i] = m;
-        }
-        token = strtok_r(NULL, ",", &saveptr);
-      }
+      parse_trace_mode_after(p, &lexgion_default_trace_config->mode_after);
     }
   }
 }
@@ -320,9 +278,8 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
       DEFAULT_TRACE_START; // start tracing from the first execution
   lexgion_default_trace_config->max_num_traces =
       DEFAULT_TRACE_MAX; // unlimited traces
-  for (int i = 0; i < num_domain; i++) {
-    lexgion_default_trace_config->mode_after[i] = PINSIGHT_DOMAIN_NONE;
-  }
+    memset(&lexgion_default_trace_config->mode_after, 0,
+           sizeof(lexgion_default_trace_config->mode_after));
 
   // Mark the default lexgion trace config for each domain as empty config
   // codeptr: NULL: empty config
@@ -556,29 +513,63 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
   fprintf(out, "    max_num_traces = %d\n", lg->max_num_traces);
   fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
   {
-    int has_mode_after = 0;
-    for (int d = 0; d < num_domain; d++) {
-      if (lg->mode_after[d] != PINSIGHT_DOMAIN_NONE) {
-        has_mode_after = 1;
-        break;
-      }
-    }
-    if (has_mode_after) {
-      fprintf(out, "    trace_mode_after =");
-      int first = 1;
+    trace_mode_after_t *ma = &lg->mode_after;
+    if (ma->pause) {
+      fprintf(out, "    trace_mode_after = PAUSE:%d:%s",
+              ma->pause_timeout,
+              ma->pause_script[0] ? ma->pause_script : "-");
+      // Print resume mode (use first domain's mode as representative)
+      int has_resume = 0;
       for (int d = 0; d < num_domain; d++) {
-        if (lg->mode_after[d] != PINSIGHT_DOMAIN_NONE) {
+        if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
+          has_resume = 1;
+          break;
+        }
+      }
+      if (has_resume) {
+        // Check if all domains have the same resume mode
+        pinsight_domain_mode_t common = ma->mode[0];
+        int all_same = 1;
+        for (int d = 1; d < num_domain; d++) {
+          if (ma->mode[d] != common) {
+            all_same = 0;
+            break;
+          }
+        }
+        if (all_same && common != PINSIGHT_DOMAIN_NONE) {
           const char *mode_str =
-              lg->mode_after[d] == PINSIGHT_DOMAIN_OFF          ? "OFF"
-              : lg->mode_after[d] == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
-                                                                : "TRACING";
-          if (!first)
-            fprintf(out, ",");
-          fprintf(out, " %s:%s", domain_info_table[d].name, mode_str);
-          first = 0;
+              common == PINSIGHT_DOMAIN_OFF          ? "OFF"
+              : common == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                    : "TRACING";
+          fprintf(out, ":%s", mode_str);
         }
       }
       fprintf(out, "\n");
+    } else {
+      int has_mode_after = 0;
+      for (int d = 0; d < num_domain; d++) {
+        if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
+          has_mode_after = 1;
+          break;
+        }
+      }
+      if (has_mode_after) {
+        fprintf(out, "    trace_mode_after =");
+        int first = 1;
+        for (int d = 0; d < num_domain; d++) {
+          if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
+            const char *mode_str =
+                ma->mode[d] == PINSIGHT_DOMAIN_OFF          ? "OFF"
+                : ma->mode[d] == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                            : "TRACING";
+            if (!first)
+              fprintf(out, ",");
+            fprintf(out, " %s:%s", domain_info_table[d].name, mode_str);
+            first = 0;
+          }
+        }
+        fprintf(out, "\n");
+      }
     }
   }
 

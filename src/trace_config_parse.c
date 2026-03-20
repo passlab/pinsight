@@ -65,6 +65,107 @@ static pinsight_domain_mode_t parse_mode_value(const char *val) {
   return PINSIGHT_DOMAIN_TRACING;
 }
 
+/**
+ * Unified parser for trace_mode_after values.
+ * Handles:
+ *   "MONITORING"                     -> mode[*]=MONITORING, pause=0
+ *   "OpenMP:OFF, MPI:MONITORING"     -> per-domain modes, pause=0
+ *   "PAUSE:60:script.sh"             -> pause=1, resume all MONITORING
+ *   "PAUSE:60:script.sh:TRACING"     -> pause=1, resume all TRACING
+ *   "PAUSE:0:-"                      -> pause indefinitely, no script
+ * Returns 0 on success, -1 on error.
+ */
+int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
+  memset(out, 0, sizeof(*out));
+
+  if (strncasecmp(val, "PAUSE:", 6) == 0) {
+    // PAUSE:timeout:script[:resume_mode]
+    out->pause = 1;
+    const char *p = val + 6;
+
+    // Parse timeout
+    char *endptr;
+    long timeout = strtol(p, &endptr, 10);
+    out->pause_timeout = (timeout > 0) ? (int)timeout : 0;
+
+    // Expect ':' after timeout
+    if (*endptr != ':') {
+      fprintf(stderr, "PInsight config: invalid PAUSE syntax '%s', "
+                      "expected PAUSE:timeout:script[:mode]\n", val);
+      return -1;
+    }
+    p = endptr + 1;
+
+    // Parse script (up to next ':' or end of string)
+    const char *colon = strchr(p, ':');
+    if (colon) {
+      size_t len = colon - p;
+      if (len >= sizeof(out->pause_script))
+        len = sizeof(out->pause_script) - 1;
+      strncpy(out->pause_script, p, len);
+      out->pause_script[len] = '\0';
+
+      // Parse optional resume_mode
+      pinsight_domain_mode_t resume = parse_mode_value(colon + 1);
+      for (int i = 0; i < MAX_NUM_DOMAINS; i++)
+        out->mode[i] = resume;
+    } else {
+      strncpy(out->pause_script, p, sizeof(out->pause_script) - 1);
+      out->pause_script[sizeof(out->pause_script) - 1] = '\0';
+
+      // Default resume mode: MONITORING for all domains
+      for (int i = 0; i < MAX_NUM_DOMAINS; i++)
+        out->mode[i] = PINSIGHT_DOMAIN_MONITORING;
+    }
+    return 0;
+  }
+
+  // Non-PAUSE: existing comma-separated mode parsing
+  // "MONITORING" or "OpenMP:OFF, MPI:MONITORING"
+  char val_copy[MAX_LINE_LENGTH];
+  strncpy(val_copy, val, sizeof(val_copy) - 1);
+  val_copy[sizeof(val_copy) - 1] = '\0';
+
+  char *saveptr;
+  char *token = strtok_r(val_copy, ",", &saveptr);
+  while (token) {
+    char *trimmed = token;
+    while (*trimmed == ' ') trimmed++;
+
+    char *colon = strchr(trimmed, ':');
+    if (colon) {
+      // Explicit: "OpenMP:MONITORING"
+      *colon = '\0';
+      char *domain_name = trimmed;
+      // Trim trailing spaces from domain name
+      char *end = domain_name + strlen(domain_name) - 1;
+      while (end > domain_name && *end == ' ') *end-- = '\0';
+
+      char *mode_str = colon + 1;
+      while (*mode_str == ' ') mode_str++;
+
+      int d_idx = find_domain_index(domain_name);
+      if (d_idx >= 0) {
+        out->mode[d_idx] = parse_mode_value(mode_str);
+      } else {
+        fprintf(stderr, "PInsight config: unknown domain '%s' in "
+                        "trace_mode_after\n", domain_name);
+      }
+    } else {
+      // Shorthand: "MONITORING" -> apply to all registered domains
+      // Trim trailing spaces
+      char *end = trimmed + strlen(trimmed) - 1;
+      while (end > trimmed && *end == ' ') *end-- = '\0';
+
+      pinsight_domain_mode_t m = parse_mode_value(trimmed);
+      for (int i = 0; i < num_domain; i++)
+        out->mode[i] = m;
+    }
+    token = strtok_r(NULL, ",", &saveptr);
+  }
+  return 0;
+}
+
 static char *trim_whitespace(char *str) {
   char *end;
   while (isspace((unsigned char)*str))
@@ -597,48 +698,11 @@ static void parse_key_value(char *line) {
       for (int ci = 0; ci < cfg_count; ci++)
         cfgs[ci]->tracing_rate = v;
     } else if (strcmp(key, "trace_mode_after") == 0) {
-      // Parse: "MONITORING" or "OpenMP:MONITORING, MPI:OFF"
-      char val_copy[MAX_LINE_LENGTH];
-      strncpy(val_copy, val, sizeof(val_copy) - 1);
-      val_copy[sizeof(val_copy) - 1] = '\0';
-
-      /* Build mode_after into a temporary array, then apply to all cfgs.
-       * Zero-init gives PINSIGHT_DOMAIN_NONE (== 0) for all slots. */
-      pinsight_domain_mode_t mode_after_tmp[MAX_NUM_DOMAINS] = {0};
-
-      char *saveptr;
-      char *token = strtok_r(val_copy, ",", &saveptr);
-      while (token) {
-        char *trimmed = trim_whitespace(token);
-        char *colon = strchr(trimmed, ':');
-        if (colon) {
-          // Explicit: "OpenMP:MONITORING"
-          *colon = '\0';
-          char *domain_name = trim_whitespace(trimmed);
-          char *mode_str = trim_whitespace(colon + 1);
-          int d_idx = find_domain_index(domain_name);
-          if (d_idx >= 0) {
-            mode_after_tmp[d_idx] = parse_mode_value(mode_str);
-          } else {
-            fprintf(stderr,
-                    "PInsight config: unknown domain '%s' in "
-                    "trace_mode_after\n",
-                    domain_name);
-          }
-        } else {
-          // Shorthand: "MONITORING" -> apply to all registered domains
-          pinsight_domain_mode_t m = parse_mode_value(trimmed);
-          for (int i = 0; i < num_domain; i++)
-            mode_after_tmp[i] = m;
-        }
-        token = strtok_r(NULL, ",", &saveptr);
-      }
-
-      // Apply to all target configs
-      for (int ci = 0; ci < cfg_count; ci++) {
-        for (int d = 0; d < MAX_NUM_DOMAINS; d++)
-          cfgs[ci]->mode_after[d] = mode_after_tmp[d];
-      }
+      // Unified parsing for all trace_mode_after values (including PAUSE)
+      trace_mode_after_t parsed;
+      parse_trace_mode_after(val, &parsed);
+      for (int ci = 0; ci < cfg_count; ci++)
+        cfgs[ci]->mode_after = parsed;
     } else {
       // Check for Domain.Event override
       char *dot = strchr(key, '.');
@@ -1059,7 +1123,7 @@ static lexgion_trace_config_t *get_or_create_lexgion_config(void *codeptr) {
     lexgion_trace_config_t *lg =
         &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
     // Initialize from Lexgion.default so new entries inherit default rate,
-    // max_num_traces, trace_starts_at, mode_after[], etc.
+    // max_num_traces, trace_starts_at, mode_after, etc.
     *lg = *lexgion_default_trace_config;
     lg->codeptr = codeptr;
     lg->removed = 0;

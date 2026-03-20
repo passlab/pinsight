@@ -1,21 +1,187 @@
 #include "pinsight.h"
 #include "trace_config.h"
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 __thread pinsight_thread_data_t pinsight_thread_data;
 
 volatile sig_atomic_t mode_change_requested = 0;
 
+/* Flag for SIGALRM during PAUSE timeout */
+static volatile sig_atomic_t pause_alarm_fired = 0;
+
+static void pinsight_alarm_handler(int sig) {
+  (void)sig;
+  pause_alarm_fired = 1;
+}
+
+/**
+ * Execute a PAUSE action: lttng rotate, optional script, timed wait.
+ * Called from pinsight_fire_mode_triggers() when mode_after.pause == 1.
+ * Blocks the master thread until SIGUSR1 arrives or timeout expires.
+ */
+void pinsight_execute_pause(trace_mode_after_t *ma) {
+  char chunk_path[512] = "";
+
+  fprintf(stderr, "PInsight: PAUSED (timeout=%ds, script=%s)\n",
+          ma->pause_timeout,
+          (ma->pause_script[0] && strcmp(ma->pause_script, "-") != 0)
+              ? ma->pause_script
+              : "none");
+
+  /* 1. Run lttng rotate to flush traces to a completed chunk */
+  FILE *fp = popen("lttng rotate 2>&1", "r");
+  if (fp) {
+    char line[512];
+    while (fgets(line, sizeof(line), fp)) {
+      /* LTTng v2.13 output format:
+       * "Trace chunk archive for session <name> is now readable at /path"
+       * Parse: look for "readable at " and extract the path after it. */
+      char *readable = strstr(line, "readable at ");
+      if (readable) {
+        char *path = readable + strlen("readable at ");
+        while (*path == ' ')
+          path++;
+        /* trim newline */
+        char *nl = strchr(path, '\n');
+        if (nl)
+          *nl = '\0';
+        strncpy(chunk_path, path, sizeof(chunk_path) - 1);
+        chunk_path[sizeof(chunk_path) - 1] = '\0';
+      }
+    }
+    pclose(fp);
+    if (chunk_path[0])
+      fprintf(stderr, "PInsight: Rotated traces to: %s\n", chunk_path);
+    else
+      fprintf(stderr, "PInsight: lttng rotate completed (no chunk path parsed)\n");
+  } else {
+    fprintf(stderr,
+            "PInsight WARNING: lttng rotate failed (lttng not available?)\n");
+  }
+
+  /* 2. Set up signal handling BEFORE launching script to avoid race.
+   *    The script may send SIGUSR1 before we call pause(), so we block
+   *    SIGUSR1 first, then launch the script, then sigwait/sigsuspend. */
+  sigset_t wait_mask, old_mask, usr1_set;
+  sigemptyset(&usr1_set);
+  sigaddset(&usr1_set, SIGUSR1);
+
+  if (ma->pause_timeout > 0) {
+    /* Install temporary SIGALRM handler */
+    struct sigaction sa_new, sa_old;
+    sa_new.sa_handler = pinsight_alarm_handler;
+    sigemptyset(&sa_new.sa_mask);
+    sa_new.sa_flags = 0; /* Do NOT set SA_RESTART — we want sigsuspend to return */
+    sigaction(SIGALRM, &sa_new, &sa_old);
+
+    /* Block SIGUSR1 so it's queued if script sends it before we wait */
+    sigprocmask(SIG_BLOCK, &usr1_set, &old_mask);
+
+    /* 3. Fork + exec user script AFTER blocking SIGUSR1 */
+    if (ma->pause_script[0] && strcmp(ma->pause_script, "-") != 0) {
+      pid_t pid = fork();
+      if (pid == 0) {
+        /* Child: restore signal mask and exec */
+        sigprocmask(SIG_SETMASK, &old_mask, NULL);
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", getppid());
+        char *config_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+        if (!config_file)
+          config_file = "pinsight_trace_config.txt";
+        execlp(ma->pause_script, ma->pause_script, chunk_path, pid_str,
+               config_file, (char *)NULL);
+        fprintf(stderr, "PInsight WARNING: Failed to exec '%s'\n",
+                ma->pause_script);
+        _exit(1);
+      } else if (pid > 0) {
+        fprintf(stderr, "PInsight: Launched analysis script '%s' (pid %d)\n",
+                ma->pause_script, pid);
+      } else {
+        fprintf(stderr, "PInsight WARNING: fork() failed for script '%s'\n",
+                ma->pause_script);
+      }
+    }
+
+    pause_alarm_fired = 0;
+    alarm(ma->pause_timeout);
+
+    /* Atomically unblock SIGUSR1 and wait for any signal */
+    wait_mask = old_mask;
+    sigdelset(&wait_mask, SIGUSR1);
+    sigdelset(&wait_mask, SIGALRM);
+    sigsuspend(&wait_mask); /* Returns when SIGUSR1 or SIGALRM arrives */
+    alarm(0); /* Cancel if woken by SIGUSR1 */
+
+    /* Restore signal mask and SIGALRM handler */
+    sigprocmask(SIG_SETMASK, &old_mask, NULL);
+    sigaction(SIGALRM, &sa_old, NULL);
+
+    if (pause_alarm_fired) {
+      fprintf(stderr, "PInsight: PAUSE timeout (%ds), auto-resuming\n",
+              ma->pause_timeout);
+    } else {
+      fprintf(stderr, "PInsight: PAUSE woken by SIGUSR1, resuming\n");
+    }
+  } else {
+    /* Indefinite wait — only SIGUSR1 will resume */
+    sigprocmask(SIG_BLOCK, &usr1_set, &old_mask);
+
+    /* Launch script AFTER blocking */
+    if (ma->pause_script[0] && strcmp(ma->pause_script, "-") != 0) {
+      pid_t pid = fork();
+      if (pid == 0) {
+        sigprocmask(SIG_SETMASK, &old_mask, NULL);
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", getppid());
+        char *config_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+        if (!config_file)
+          config_file = "pinsight_trace_config.txt";
+        execlp(ma->pause_script, ma->pause_script, chunk_path, pid_str,
+               config_file, (char *)NULL);
+        fprintf(stderr, "PInsight WARNING: Failed to exec '%s'\n",
+                ma->pause_script);
+        _exit(1);
+      } else if (pid > 0) {
+        fprintf(stderr, "PInsight: Launched analysis script '%s' (pid %d)\n",
+                ma->pause_script, pid);
+      }
+    }
+
+    fprintf(stderr, "PInsight: Waiting indefinitely for SIGUSR1 to resume\n");
+    wait_mask = old_mask;
+    sigdelset(&wait_mask, SIGUSR1);
+    sigsuspend(&wait_mask);
+    sigprocmask(SIG_SETMASK, &old_mask, NULL);
+    fprintf(stderr, "PInsight: PAUSE woken by SIGUSR1, resuming\n");
+  }
+
+  /* 4. Reload config if SIGUSR1 triggered a reload */
+  if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
+    pinsight_load_trace_config(NULL);
+  }
+}
+
 /**
  * Fire auto-trigger mode changes when a lexgion reaches max_num_traces.
- * Iterates over mode_after[] for all domains; PINSIGHT_DOMAIN_NONE means
- * no change requested for that domain.
+ * Uses the unified trace_mode_after_t struct.
+ * If PAUSE is configured, blocks execution before switching modes.
  * Sets mode_change_requested flag to defer callback re-registration.
  */
 void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
+  trace_mode_after_t *ma = &tc->mode_after;
+
+  /* Execute PAUSE if configured (blocks until timeout or SIGUSR1) */
+  if (ma->pause)
+    pinsight_execute_pause(ma);
+
+  /* Apply mode switches */
   for (int d = 0; d < num_domain; d++) {
-    pinsight_domain_mode_t new_mode = tc->mode_after[d];
+    pinsight_domain_mode_t new_mode = ma->mode[d];
     if (new_mode == PINSIGHT_DOMAIN_NONE)
       continue;
     if (!domain_default_trace_config[d].mode_change_fired) {
