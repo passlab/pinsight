@@ -130,7 +130,7 @@ void setup_trace_config_env() {
   // PINSIGHT_TRACE_RATE=start:max:rate[:mode_after_string]
   // mode_after_string can be:
   //   MONITORING | OpenMP:MONITORING | OpenMP:MONITORING,MPI:OFF
-  //   PAUSE:60:script.sh[:TRACING]
+  //   INTROSPECT:60:script.sh[:TRACING]
   char *rate_env = getenv("PINSIGHT_TRACE_RATE");
   if (rate_env) {
     // Parse first 3 numeric fields separated by ':'
@@ -514,10 +514,10 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
   fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
   {
     trace_mode_after_t *ma = &lg->mode_after;
-    if (ma->pause) {
-      fprintf(out, "    trace_mode_after = PAUSE:%d:%s",
-              ma->pause_timeout,
-              ma->pause_script[0] ? ma->pause_script : "-");
+    if (ma->introspect) {
+      fprintf(out, "    trace_mode_after = INTROSPECT:%d:%s",
+              ma->introspect_timeout,
+              ma->introspect_script[0] ? ma->introspect_script : "-");
       // Print resume mode (use first domain's mode as representative)
       int has_resume = 0;
       for (int d = 0; d < num_domain; d++) {

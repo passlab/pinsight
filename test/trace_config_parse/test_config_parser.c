@@ -1754,8 +1754,8 @@ void test_trace_mode_after_env() {
   }
 }
 
-void test_pause_config() {
-  printf("\n===== PAUSE Config Tests =====\n");
+void test_introspect_config() {
+  printf("\n===== INTROSPECT Config Tests =====\n");
 
   int omp_idx = -1, mpi_idx = -1;
   for (int i = 0; i < num_domain; i++) {
@@ -1769,33 +1769,33 @@ void test_pause_config() {
     return;
   }
 
-  // --- TMA9: PAUSE:60:analyze.sh:TRACING ---
-  printf("\n  -- TMA9: trace_mode_after = PAUSE:60:analyze.sh:TRACING --\n");
+  // --- TMA9: INTROSPECT:60:analyze.sh:TRACING ---
+  printf("\n  -- TMA9: trace_mode_after = INTROSPECT:60:analyze.sh:TRACING --\n");
   {
-    FILE *fp = fopen("test_pause.txt", "w");
+    FILE *fp = fopen("test_introspect.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
     fprintf(fp, "    max_num_traces = 100\n");
-    fprintf(fp, "    trace_mode_after = PAUSE:60:analyze.sh:TRACING\n");
+    fprintf(fp, "    trace_mode_after = INTROSPECT:60:analyze.sh:TRACING\n");
     fclose(fp);
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
-    parse_trace_config_file("test_pause.txt");
+    parse_trace_config_file("test_introspect.txt");
 
     trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
     int pass = 1;
 
-    if (ma->pause != 1) {
-      printf("[FAIL] TMA9: pause=%d (expected 1)\n", ma->pause);
+    if (ma->introspect != 1) {
+      printf("[FAIL] TMA9: introspect=%d (expected 1)\n", ma->introspect);
       pass = 0;
     }
-    if (ma->pause_timeout != 60) {
-      printf("[FAIL] TMA9: pause_timeout=%d (expected 60)\n",
-             ma->pause_timeout);
+    if (ma->introspect_timeout != 60) {
+      printf("[FAIL] TMA9: introspect_timeout=%d (expected 60)\n",
+             ma->introspect_timeout);
       pass = 0;
     }
-    if (strcmp(ma->pause_script, "analyze.sh") != 0) {
-      printf("[FAIL] TMA9: pause_script='%s' (expected 'analyze.sh')\n",
-             ma->pause_script);
+    if (strcmp(ma->introspect_script, "analyze.sh") != 0) {
+      printf("[FAIL] TMA9: introspect_script='%s' (expected 'analyze.sh')\n",
+             ma->introspect_script);
       pass = 0;
     }
     // All domains should resume to TRACING
@@ -1808,35 +1808,35 @@ void test_pause_config() {
       }
     }
     if (pass)
-      printf("[PASS] TMA9: PAUSE:60:analyze.sh:TRACING parsed correctly\n");
+      printf("[PASS] TMA9: INTROSPECT:60:analyze.sh:TRACING parsed correctly\n");
   }
 
-  // --- TMA10: PAUSE:0:- (indefinite, no script, default resume) ---
-  printf("\n  -- TMA10: trace_mode_after = PAUSE:0:- --\n");
+  // --- TMA10: INTROSPECT:0:- (indefinite, no script, default resume) ---
+  printf("\n  -- TMA10: trace_mode_after = INTROSPECT:0:- --\n");
   {
-    FILE *fp = fopen("test_pause.txt", "w");
+    FILE *fp = fopen("test_introspect.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
-    fprintf(fp, "    trace_mode_after = PAUSE:0:-\n");
+    fprintf(fp, "    trace_mode_after = INTROSPECT:0:-\n");
     fclose(fp);
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
-    parse_trace_config_file("test_pause.txt");
+    parse_trace_config_file("test_introspect.txt");
 
     trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
     int pass = 1;
 
-    if (ma->pause != 1) {
-      printf("[FAIL] TMA10: pause=%d (expected 1)\n", ma->pause);
+    if (ma->introspect != 1) {
+      printf("[FAIL] TMA10: introspect=%d (expected 1)\n", ma->introspect);
       pass = 0;
     }
-    if (ma->pause_timeout != 0) {
-      printf("[FAIL] TMA10: pause_timeout=%d (expected 0)\n",
-             ma->pause_timeout);
+    if (ma->introspect_timeout != 0) {
+      printf("[FAIL] TMA10: introspect_timeout=%d (expected 0)\n",
+             ma->introspect_timeout);
       pass = 0;
     }
-    if (strcmp(ma->pause_script, "-") != 0) {
-      printf("[FAIL] TMA10: pause_script='%s' (expected '-')\n",
-             ma->pause_script);
+    if (strcmp(ma->introspect_script, "-") != 0) {
+      printf("[FAIL] TMA10: introspect_script='%s' (expected '-')\n",
+             ma->introspect_script);
       pass = 0;
     }
     // Default resume mode: MONITORING
@@ -1849,32 +1849,32 @@ void test_pause_config() {
       }
     }
     if (pass)
-      printf("[PASS] TMA10: PAUSE:0:- with default MONITORING resume\n");
+      printf("[PASS] TMA10: INTROSPECT:0:- with default MONITORING resume\n");
   }
 
-  // --- TMA11: PAUSE:30:my_analysis.sh (no explicit resume mode) ---
+  // --- TMA11: INTROSPECT:30:my_analysis.sh (no explicit resume mode) ---
   printf(
-      "\n  -- TMA11: trace_mode_after = PAUSE:30:my_analysis.sh --\n");
+      "\n  -- TMA11: trace_mode_after = INTROSPECT:30:my_analysis.sh --\n");
   {
-    FILE *fp = fopen("test_pause.txt", "w");
+    FILE *fp = fopen("test_introspect.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
-    fprintf(fp, "    trace_mode_after = PAUSE:30:my_analysis.sh\n");
+    fprintf(fp, "    trace_mode_after = INTROSPECT:30:my_analysis.sh\n");
     fclose(fp);
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
-    parse_trace_config_file("test_pause.txt");
+    parse_trace_config_file("test_introspect.txt");
 
     trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
     int pass = 1;
 
-    if (ma->pause_timeout != 30) {
+    if (ma->introspect_timeout != 30) {
       printf("[FAIL] TMA11: timeout=%d (expected 30)\n",
-             ma->pause_timeout);
+             ma->introspect_timeout);
       pass = 0;
     }
-    if (strcmp(ma->pause_script, "my_analysis.sh") != 0) {
+    if (strcmp(ma->introspect_script, "my_analysis.sh") != 0) {
       printf("[FAIL] TMA11: script='%s' (expected 'my_analysis.sh')\n",
-             ma->pause_script);
+             ma->introspect_script);
       pass = 0;
     }
     // Default resume: MONITORING
@@ -1884,17 +1884,17 @@ void test_pause_config() {
       pass = 0;
     }
     if (pass)
-      printf("[PASS] TMA11: PAUSE:30:my_analysis.sh default resume=MONITORING\n");
+      printf("[PASS] TMA11: INTROSPECT:30:my_analysis.sh default resume=MONITORING\n");
   }
 
-  // --- TMA12: PAUSE via env var ---
-  printf("\n  -- TMA12: PINSIGHT_TRACE_RATE=0:100:10:PAUSE:60:analyze.sh:TRACING --\n");
+  // --- TMA12: INTROSPECT via env var ---
+  printf("\n  -- TMA12: PINSIGHT_TRACE_RATE=0:100:10:INTROSPECT:60:analyze.sh:TRACING --\n");
   {
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
 
     setenv("PINSIGHT_TRACE_RATE",
-           "0:100:10:PAUSE:60:analyze.sh:TRACING", 1);
+           "0:100:10:INTROSPECT:60:analyze.sh:TRACING", 1);
     setup_trace_config_env();
     unsetenv("PINSIGHT_TRACE_RATE");
 
@@ -1906,18 +1906,18 @@ void test_pause_config() {
              lexgion_default_trace_config->max_num_traces);
       pass = 0;
     }
-    if (ma->pause != 1) {
-      printf("[FAIL] TMA12: pause=%d (expected 1)\n", ma->pause);
+    if (ma->introspect != 1) {
+      printf("[FAIL] TMA12: introspect=%d (expected 1)\n", ma->introspect);
       pass = 0;
     }
-    if (ma->pause_timeout != 60) {
+    if (ma->introspect_timeout != 60) {
       printf("[FAIL] TMA12: timeout=%d (expected 60)\n",
-             ma->pause_timeout);
+             ma->introspect_timeout);
       pass = 0;
     }
-    if (strcmp(ma->pause_script, "analyze.sh") != 0) {
+    if (strcmp(ma->introspect_script, "analyze.sh") != 0) {
       printf("[FAIL] TMA12: script='%s' (expected 'analyze.sh')\n",
-             ma->pause_script);
+             ma->introspect_script);
       pass = 0;
     }
     if (ma->mode[0] != PINSIGHT_DOMAIN_TRACING) {
@@ -1926,32 +1926,32 @@ void test_pause_config() {
       pass = 0;
     }
     if (pass)
-      printf("[PASS] TMA12: PAUSE via env var parsed correctly\n");
+      printf("[PASS] TMA12: INTROSPECT via env var parsed correctly\n");
   }
 
-  // --- TMA13: Serialization round-trip for PAUSE ---
-  printf("\n  -- TMA13: PAUSE serialization output --\n");
+  // --- TMA13: Serialization round-trip for INTROSPECT ---
+  printf("\n  -- TMA13: INTROSPECT serialization output --\n");
   {
-    // Set up a PAUSE config
+    // Set up an INTROSPECT config
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
-    lexgion_default_trace_config->mode_after.pause = 1;
-    lexgion_default_trace_config->mode_after.pause_timeout = 45;
-    strncpy(lexgion_default_trace_config->mode_after.pause_script,
+    lexgion_default_trace_config->mode_after.introspect = 1;
+    lexgion_default_trace_config->mode_after.introspect_timeout = 45;
+    strncpy(lexgion_default_trace_config->mode_after.introspect_script,
             "test_script.sh",
-            sizeof(lexgion_default_trace_config->mode_after.pause_script) - 1);
+            sizeof(lexgion_default_trace_config->mode_after.introspect_script) - 1);
     for (int i = 0; i < num_domain; i++)
       lexgion_default_trace_config->mode_after.mode[i] =
           PINSIGHT_DOMAIN_TRACING;
 
     // Print to capture output (uses public API which prints all lexgion configs)
-    printf("  [Expected output to contain: trace_mode_after = PAUSE:45:test_script.sh:TRACING]\n");
+    printf("  [Expected output to contain: trace_mode_after = INTROSPECT:45:test_script.sh:TRACING]\n");
     printf("  [Actual output:]\n");
     print_lexgion_trace_config(stdout);
     printf("[PASS] TMA13: Serialization output generated (verify visually)\n");
   }
 
-  remove("test_pause.txt");
+  remove("test_introspect.txt");
 }
 
 void test_knob_config() {
@@ -2082,7 +2082,7 @@ int main() {
   test_trace_mode_after();
   test_trace_mode_after_runtime();
   test_trace_mode_after_env();
-  test_pause_config();
+  test_introspect_config();
   test_knob_config();
 
   return 0;

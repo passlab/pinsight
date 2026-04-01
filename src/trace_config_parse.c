@@ -68,30 +68,30 @@ static pinsight_domain_mode_t parse_mode_value(const char *val) {
 /**
  * Unified parser for trace_mode_after values.
  * Handles:
- *   "MONITORING"                     -> mode[*]=MONITORING, pause=0
- *   "OpenMP:OFF, MPI:MONITORING"     -> per-domain modes, pause=0
- *   "PAUSE:60:script.sh"             -> pause=1, resume all MONITORING
- *   "PAUSE:60:script.sh:TRACING"     -> pause=1, resume all TRACING
- *   "PAUSE:0:-"                      -> pause indefinitely, no script
+ *   "MONITORING"                     -> mode[*]=MONITORING, introspect=0
+ *   "OpenMP:OFF, MPI:MONITORING"     -> per-domain modes, introspect=0
+ *   "INTROSPECT:60:script.sh"        -> introspect=1, resume all MONITORING
+ *   "INTROSPECT:60:script.sh:TRACING"-> introspect=1, resume all TRACING
+ *   "INTROSPECT:0:-"                 -> introspect indefinitely, no script
  * Returns 0 on success, -1 on error.
  */
 int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
   memset(out, 0, sizeof(*out));
 
-  if (strncasecmp(val, "PAUSE:", 6) == 0) {
-    // PAUSE:timeout:script[:resume_mode]
-    out->pause = 1;
-    const char *p = val + 6;
+  if (strncasecmp(val, "INTROSPECT:", 11) == 0) {
+    // INTROSPECT:timeout:script[:resume_mode]
+    out->introspect = 1;
+    const char *p = val + 11;
 
     // Parse timeout
     char *endptr;
     long timeout = strtol(p, &endptr, 10);
-    out->pause_timeout = (timeout > 0) ? (int)timeout : 0;
+    out->introspect_timeout = (timeout > 0) ? (int)timeout : 0;
 
     // Expect ':' after timeout
     if (*endptr != ':') {
-      fprintf(stderr, "PInsight config: invalid PAUSE syntax '%s', "
-                      "expected PAUSE:timeout:script[:mode]\n", val);
+      fprintf(stderr, "PInsight config: invalid INTROSPECT syntax '%s', "
+                      "expected INTROSPECT:timeout:script[:mode]\n", val);
       return -1;
     }
     p = endptr + 1;
@@ -100,18 +100,18 @@ int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
     const char *colon = strchr(p, ':');
     if (colon) {
       size_t len = colon - p;
-      if (len >= sizeof(out->pause_script))
-        len = sizeof(out->pause_script) - 1;
-      strncpy(out->pause_script, p, len);
-      out->pause_script[len] = '\0';
+      if (len >= sizeof(out->introspect_script))
+        len = sizeof(out->introspect_script) - 1;
+      strncpy(out->introspect_script, p, len);
+      out->introspect_script[len] = '\0';
 
       // Parse optional resume_mode
       pinsight_domain_mode_t resume = parse_mode_value(colon + 1);
       for (int i = 0; i < MAX_NUM_DOMAINS; i++)
         out->mode[i] = resume;
     } else {
-      strncpy(out->pause_script, p, sizeof(out->pause_script) - 1);
-      out->pause_script[sizeof(out->pause_script) - 1] = '\0';
+      strncpy(out->introspect_script, p, sizeof(out->introspect_script) - 1);
+      out->introspect_script[sizeof(out->introspect_script) - 1] = '\0';
 
       // Default resume mode: MONITORING for all domains
       for (int i = 0; i < MAX_NUM_DOMAINS; i++)
@@ -120,7 +120,7 @@ int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
     return 0;
   }
 
-  // Non-PAUSE: existing comma-separated mode parsing
+  // Non-INTROSPECT: existing comma-separated mode parsing
   // "MONITORING" or "OpenMP:OFF, MPI:MONITORING"
   char val_copy[MAX_LINE_LENGTH];
   strncpy(val_copy, val, sizeof(val_copy) - 1);
@@ -698,7 +698,7 @@ static void parse_key_value(char *line) {
       for (int ci = 0; ci < cfg_count; ci++)
         cfgs[ci]->tracing_rate = v;
     } else if (strcmp(key, "trace_mode_after") == 0) {
-      // Unified parsing for all trace_mode_after values (including PAUSE)
+      // Unified parsing for all trace_mode_after values (including INTROSPECT)
       trace_mode_after_t parsed;
       parse_trace_mode_after(val, &parsed);
       for (int ci = 0; ci < cfg_count; ci++)

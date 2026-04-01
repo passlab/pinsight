@@ -231,17 +231,17 @@ When a lexgion reaches its `max_num_traces` limit, PInsight can automatically sw
 
 Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:1:MONITORING`
 
-### PAUSE Action
+### INTROSPECT Action
 
-The `trace_mode_after` key supports a special **PAUSE** action for pause-analyze-resume workflows.
-When triggered, PInsight pauses application execution, rotates current LTTng traces to a completed
+The `trace_mode_after` key supports a special **INTROSPECT** action for pause-analyze-resume workflows.
+When triggered, PInsight introspects application execution, rotates current LTTng traces to a completed
 archive chunk, optionally launches an analysis script, and blocks until a timeout or SIGUSR1 signal
 resumes the application.
 
 #### Syntax
 
 ```
-trace_mode_after = PAUSE:timeout:script[:resume_mode]
+trace_mode_after = INTROSPECT:timeout:script[:resume_mode]
 ```
 
 | Field | Description | Default |
@@ -252,7 +252,7 @@ trace_mode_after = PAUSE:timeout:script[:resume_mode]
 
 #### Execution Flow
 
-When `max_num_traces` is reached and PAUSE is configured:
+When `max_num_traces` is reached and INTROSPECT is configured:
 
 ```
 ┌─ Application running (TRACING mode) ─────────────┐
@@ -294,7 +294,7 @@ The analysis script is executed via `fork()` + `execlp()` and receives three pos
 | Argument | Description |
 |----------|-------------|
 | `$1` — chunk_path | Path to the rotated trace chunk (e.g., `/tmp/traces/archives/2026...`) |
-| `$2` — app_pid | PID of the paused application (send SIGUSR1 here to resume early) |
+| `$2` — app_pid | PID of the introspecting application (send SIGUSR1 here to resume early) |
 | `$3` — config_file | Path to the PInsight config file (script can modify and signal reload) |
 
 Example analysis script:
@@ -306,43 +306,43 @@ cp new_config.txt "$CONFIG"
 kill -USR1 $PID  # resume app with updated config
 ```
 
-#### Post-PAUSE Resume Modes
+#### Post-INTROSPECT Resume Modes
 
-The `resume_mode` field controls application behavior after the pause ends.
+The `resume_mode` field controls application behavior after the introspection ends.
 
-##### `MONITORING` (default) — One-shot pause
+##### `MONITORING` (default) — One-shot introspect
 
-After PAUSE, domains switch to MONITORING. No more traces are emitted, so `max_num_traces` is never re-reached. The PAUSE fires exactly **once**.
+After INTROSPECT, domains switch to MONITORING. No more traces are emitted, so `max_num_traces` is never re-reached. The INTROSPECT fires exactly **once**.
 
 ```ini
-trace_mode_after = PAUSE:60:analyze.sh:MONITORING
+trace_mode_after = INTROSPECT:60:analyze.sh:MONITORING
 ```
 ```
-TRACING (10 traces) → PAUSE → MONITORING (no more traces, no more pauses)
+TRACING (10 traces) → INTROSPECT → MONITORING (no more traces, no more introspections)
 ```
 
-##### `OFF` — One-shot pause, zero overhead after
+##### `OFF` — One-shot introspect, zero overhead after
 
 Same as MONITORING but callbacks are fully deregistered. Zero per-event overhead after resume.
 
 ```ini
-trace_mode_after = PAUSE:60:analyze.sh:OFF
+trace_mode_after = INTROSPECT:60:analyze.sh:OFF
 ```
 
-##### `TRACING` — Cyclic pause-analyze-resume
+##### `TRACING` — Cyclic introspect-analyze-resume
 
 > [!IMPORTANT]
-> When `resume_mode` is `TRACING`, the PAUSE action fires **repeatedly**. After each pause, the
-> application resumes tracing. When `max_num_traces` is reached again, PAUSE triggers again.
+> When `resume_mode` is `TRACING`, the INTROSPECT action fires **repeatedly**. After each pause, the
+> application resumes tracing. When `max_num_traces` is reached again, INTROSPECT triggers again.
 > This creates a **cyclic** pattern:
 > ```
-> TRACE 10 → PAUSE 5s → rotate → TRACE 10 → PAUSE 5s → rotate → ...
+> TRACE 10 → INTROSPECT 5s → rotate → TRACE 10 → INTROSPECT 5s → rotate → ...
 > ```
 > Each cycle produces a separate LTTng archive chunk, enabling **continuous windowed analysis**.
-> The application's elapsed time will include all accumulated pause durations.
+> The application's elapsed time will include all accumulated introspection durations.
 
 ```ini
-trace_mode_after = PAUSE:5:-:TRACING
+trace_mode_after = INTROSPECT:5:-:TRACING
 ```
 
 This mode is powerful for:
@@ -352,11 +352,11 @@ This mode is powerful for:
 
 #### Environment Variable
 
-PAUSE is also configurable via `PINSIGHT_TRACE_RATE`:
+INTROSPECT is also configurable via `PINSIGHT_TRACE_RATE`:
 
 ```bash
-# Format: trace_starts_at:max_num_traces:tracing_rate:PAUSE:timeout:script:resume_mode
-PINSIGHT_TRACE_RATE=0:100:10:PAUSE:60:analyze.sh:TRACING
+# Format: trace_starts_at:max_num_traces:tracing_rate:INTROSPECT:timeout:script:resume_mode
+PINSIGHT_TRACE_RATE=0:100:10:INTROSPECT:60:analyze.sh:TRACING
 ```
 
 #### Requirements
@@ -365,24 +365,24 @@ PINSIGHT_TRACE_RATE=0:100:10:PAUSE:60:analyze.sh:TRACING
 - An active LTTng session must be running for `lttng rotate` to produce archive chunks
 - Script must be executable and in `$PATH` or specified as relative/absolute path
 
-### PAUSE Evaluation — LULESH
+### INTROSPECT Evaluation — LULESH
 
 Evaluation was performed using LULESH 2.0 with 4 threads on a 48-core machine.
 
-#### Test 1: `PAUSE:5:-:MONITORING` (one-shot)
+#### Test 1: `INTROSPECT:5:-:MONITORING` (one-shot)
 
 ```ini
 [Lexgion.default]
     max_num_traces = 10
-    trace_mode_after = PAUSE:5:-:MONITORING
+    trace_mode_after = INTROSPECT:5:-:MONITORING
 ```
 
 | Metric | Value |
 |--------|-------|
 | Events in rotated chunk (babeltrace2) | **792** |
-| Events after PAUSE (MONITORING) | **0** |
-| Elapsed time | 15s (10s computation + 5s pause) |
-| PAUSE triggers | 1 |
+| Events after INTROSPECT (MONITORING) | **0** |
+| Elapsed time | 15s (10s computation + 5s introspection) |
+| INTROSPECT triggers | 1 |
 
 Key events captured in rotated chunk:
 
@@ -395,60 +395,60 @@ Key events captured in rotated chunk:
 | 25 | `parallel_end` |
 | 4 | `thread_begin` |
 
-#### Test 2: `PAUSE:5:-:TRACING` (cyclic)
+#### Test 2: `INTROSPECT:5:-:TRACING` (cyclic)
 
 ```ini
 [Lexgion.default]
     max_num_traces = 10
-    trace_mode_after = PAUSE:5:-:TRACING
+    trace_mode_after = INTROSPECT:5:-:TRACING
 ```
 
 | Metric | Value |
 |--------|-------|
-| PAUSE triggers | **33** |
+| INTROSPECT triggers | **33** |
 | Archive chunks produced | **34** |
-| Events per chunk (post-PAUSE) | ~30 |
+| Events per chunk (post-INTROSPECT) | ~30 |
 | Total elapsed time | ~200s (33 × 5s pauses + computation) |
 
 Console output (abbreviated):
 ```
 PInsight: Auto-trigger: OpenMP mode -> TRACING
-PInsight: PAUSED (timeout=5s, script=none)
+PInsight: INTROSPECTING (timeout=5s, script=none)
 PInsight: Rotated traces to: .../archives/...-0
-PInsight: PAUSE timeout (5s), auto-resuming
-PInsight: PAUSED (timeout=5s, script=none)       ← re-triggers
+PInsight: INTROSPECT timeout (5s), auto-resuming
+PInsight: INTROSPECTING (timeout=5s, script=none)       ← re-triggers
 PInsight: Rotated traces to: .../archives/...-1
-PInsight: PAUSE timeout (5s), auto-resuming
+PInsight: INTROSPECT timeout (5s), auto-resuming
 ...  (31 more cycles)
-PInsight: PAUSED (timeout=5s, script=none)
+PInsight: INTROSPECTING (timeout=5s, script=none)
 PInsight: Rotated traces to: .../archives/...-33
-PInsight: PAUSE timeout (5s), auto-resuming
+PInsight: INTROSPECT timeout (5s), auto-resuming
 Elapsed time = 200 (s)
 ```
 
-Each post-PAUSE chunk contains ~30 PInsight events (`work_begin`, `parallel_join_sync_*`,
+Each post-INTROSPECT chunk contains ~30 PInsight events (`work_begin`, `parallel_join_sync_*`,
 `implicit_task_*`), verifying that TRACING mode continues to emit events after each resume.
 The final chunk (chunk 34) contains `thread_end` and `parallel_end` events from application shutdown.
 
-#### Test 3: `PAUSE:5:./analyze_pause_test.sh:MONITORING` (with script)
+#### Test 3: `INTROSPECT:5:./analyze_introspect_test.sh:MONITORING` (with script)
 
 ```ini
 [Lexgion.default]
     max_num_traces = 10
-    trace_mode_after = PAUSE:5:./analyze_pause_test.sh:MONITORING
+    trace_mode_after = INTROSPECT:5:./analyze_introspect_test.sh:MONITORING
 ```
 
 ```
-PInsight: PAUSED (timeout=5s, script=./analyze_pause_test.sh)
+PInsight: INTROSPECTING (timeout=5s, script=./analyze_introspect_test.sh)
 PInsight: Rotated traces to: .../archives/...-0
-PInsight: Launched analysis script './analyze_pause_test.sh' (pid 497477)
-PInsight: PAUSE timeout (5s), auto-resuming
+PInsight: Launched analysis script './analyze_introspect_test.sh' (pid 497477)
+PInsight: INTROSPECT timeout (5s), auto-resuming
 PInsight: Auto-trigger: OpenMP mode -> MONITORING
 ```
 
 The analysis script receives the chunk path as `$1` and can use `babeltrace2` to verify
 the rotated traces contain real event data. Test script at
-[`eva/LULESH/analyze_pause_test.sh`](../eva/LULESH/analyze_pause_test.sh).
+[`eva/LULESH/analyze_introspect_test.sh`](../eva/LULESH/analyze_introspect_test.sh).
 
 ---
 

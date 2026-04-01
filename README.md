@@ -12,7 +12,7 @@ callbacks for tracing OpenMP and CUDA application, and MPI [PMPI][pmpi] wrapper 
 The OMPT/CUPTI callbacks and PMPI wrappers redirect tracing to [LTTng][lttng] UST for processing tracing asynchronously. The library also
 implements flexible runtime configuration of tracing options such as tracing rate, allowing 1) for optimizing dynamic tracing 
 to reduce unnecessnary and redundant tracing, 2) for runtime reconfiguration for both tracing and application for runtime performance optimization, and 3)
-for performance debugging such that the application execution can be paused for performance analysis and optimization, and then resumed with optimized execution. 
+for performance debugging such that the application can introspect its own performance during execution, and resume with optimized configuration. 
 
    [lttng]: https://lttng.org
    [ompt]: https://www.openmp.org/wp-content/uploads/ompt-tr.pdf
@@ -405,7 +405,7 @@ Domain modes and tracing options can be changed at runtime by editing the config
 This enables workflows such as:
 - Start with **OFF** mode for warm-up, switch to **TRACING** for the region of interest
 - Start with **TRACING** to capture initial behavior, switch to **MONITORING** to reduce overhead
-- Runtime performance debugging: pause tracing, analyze, reconfigure, resume
+- Runtime performance introspection: trace, analyze, reconfigure, resume
 
 ---------------------------------------------------------------------------
 

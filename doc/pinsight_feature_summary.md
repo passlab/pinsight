@@ -152,24 +152,24 @@ When `max_num_traces` is reached, domains can be automatically switched to a low
 
 Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:1:MONITORING`
 
-### PAUSE Action
+### INTROSPECT Action
 
-The `trace_mode_after` key also supports a **PAUSE** action for pause-analyze-resume workflows:
+The `trace_mode_after` key also supports an **INTROSPECT** action for introspect-analyze-resume workflows:
 
 ```ini
 [Lexgion.default]
     max_num_traces = 100
-    trace_mode_after = PAUSE:60:analyze_traces.sh:TRACING
+    trace_mode_after = INTROSPECT:60:analyze_traces.sh:TRACING
 ```
 
 | Field | Description |
 |-------|-------------|
-| `PAUSE` | Action keyword |
+| `INTROSPECT` | Action keyword |
 | `60` | Timeout in seconds (0 = wait indefinitely for SIGUSR1) |
 | `analyze_traces.sh` | Script to launch (`-` = none) |
-| `TRACING` | Resume mode after pause (default: MONITORING) |
+| `TRACING` | Resume mode after introspection (default: MONITORING) |
 
-When PAUSE fires:
+When INTROSPECT fires:
 1. **`lttng rotate`** is executed automatically to flush traces to a completed chunk
 2. The **user script** is launched with arguments: `<chunk_path> <app_pid> <config_file>`
 3. Execution **blocks** until SIGUSR1 or timeout
@@ -177,7 +177,7 @@ When PAUSE fires:
 
 The script can analyze traces and send `SIGUSR1` back to resume the app early with optimized settings.
 
-Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:10:PAUSE:60:analyze_traces.sh:TRACING`
+Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:10:INTROSPECT:60:analyze_traces.sh:TRACING`
 
 ## 8. Runtime Reconfiguration (SIGUSR1)
 

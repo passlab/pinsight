@@ -80,11 +80,11 @@ Additional punit constraints from other domains, separated by commas. **Only app
 - **Auto Mode Switch**: `trace_mode_after = MODE` — Automatically switch domain trace modes when `max_num_traces` is reached. Supports:
   - Shorthand: `trace_mode_after = MONITORING` (applies to all domains with events in the lexgion)
   - Explicit per-domain: `trace_mode_after = OpenMP:MONITORING, MPI:OFF`
-  - **PAUSE action**: `trace_mode_after = PAUSE:timeout:script[:resume_mode]`
+  - **INTROSPECT action**: `trace_mode_after = INTROSPECT:timeout:script[:resume_mode]`
     - `timeout` — seconds to wait before auto-resuming (0 = wait indefinitely for SIGUSR1)
     - `script` — analysis script to launch (`-` = none). Receives `<chunk_path> <app_pid> <config_file>` as arguments.
     - `resume_mode` — domain mode after resume (default: `MONITORING`). Accepts `OFF`, `MONITORING`, or `TRACING`.
-    - When PAUSE fires, PInsight automatically runs `lttng rotate` to flush traces, then optionally launches the script, then blocks until timeout or SIGUSR1.
+    - When INTROSPECT fires, PInsight automatically runs `lttng rotate` to flush traces, then optionally launches the script, then blocks until timeout or SIGUSR1.
 - **Event Control**: `EventName = on|off`
 
 ---
@@ -200,25 +200,25 @@ Trace 50 executions of a specific region, then set OpenMP to MONITORING and MPI 
     trace_mode_after = OpenMP:MONITORING, MPI:OFF
 ```
 
-### 16. Pause-Analyze-Resume Workflow
-Trace 100 executions, then pause for 60 seconds while running an analysis script. The app resumes in TRACING mode after the script sends SIGUSR1 or the timeout expires. PInsight automatically runs `lttng rotate` before launching the script.
+### 16. Introspect-Analyze-Resume Workflow
+Trace 100 executions, then introspect for 60 seconds while running an analysis script. The app resumes in TRACING mode after the script sends SIGUSR1 or the timeout expires. PInsight automatically runs `lttng rotate` before launching the script.
 ```ini
 [Lexgion.default]
     max_num_traces = 100
     tracing_rate = 10
-    trace_mode_after = PAUSE:60:analyze_traces.sh:TRACING
+    trace_mode_after = INTROSPECT:60:analyze_traces.sh:TRACING
 ```
 
-### 17. PAUSE via Environment Variable
+### 17. INTROSPECT via Environment Variable
 Same as above, configured entirely via env var:
 ```bash
-PINSIGHT_TRACE_RATE=0:100:10:PAUSE:60:analyze_traces.sh:TRACING
+PINSIGHT_TRACE_RATE=0:100:10:INTROSPECT:60:analyze_traces.sh:TRACING
 ```
 
-### 18. Indefinite PAUSE (Interactive Debugging)
-Pause indefinitely with no script — only SIGUSR1 resumes the app.
+### 18. Indefinite INTROSPECT (Interactive Debugging)
+Introspect indefinitely with no script — only SIGUSR1 resumes the app.
 ```ini
 [Lexgion.default]
     max_num_traces = 50
-    trace_mode_after = PAUSE:0:-
+    trace_mode_after = INTROSPECT:0:-
 ```

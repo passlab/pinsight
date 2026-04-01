@@ -193,18 +193,18 @@ extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
 
 /**
  * Unified trace_mode_after action: handles both regular mode switching
- * (e.g. MONITORING, OpenMP:OFF) and PAUSE with timeout/script.
+ * (e.g. MONITORING, OpenMP:OFF) and INTROSPECT with timeout/script.
  *
- * For non-PAUSE: mode[] specifies per-domain target modes, pause == 0.
- * For PAUSE:     pause == 1, pause_timeout/pause_script set,
- *                mode[] specifies per-domain resume modes after pause.
+ * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect == 0.
+ * For INTROSPECT:     introspect == 1, introspect_timeout/introspect_script set,
+ *                     mode[] specifies per-domain resume modes after introspection.
  */
 typedef struct trace_mode_after {
   pinsight_domain_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
                                                 // (NONE = no change)
-  int pause;             // 1 = pause execution before switching modes
-  int pause_timeout;     // seconds to wait (0 = wait indefinitely for SIGUSR1)
-  char pause_script[256]; // script to invoke ("-" or "" = none)
+  int introspect;             // 1 = introspect before switching modes
+  int introspect_timeout;     // seconds to wait (0 = wait indefinitely for SIGUSR1)
+  char introspect_script[256]; // script to invoke ("-" or "" = none)
 } trace_mode_after_t;
 
 /**
@@ -263,7 +263,7 @@ void parse_trace_config_file(char *filename);
 extern int find_domain_index(const char *name);
 
 // Unified parser for trace_mode_after values:
-// "MONITORING", "OpenMP:OFF,MPI:MONITORING", "PAUSE:60:script.sh[:TRACING]"
+// "MONITORING", "OpenMP:OFF,MPI:MONITORING", "INTROSPECT:60:script.sh[:TRACING]"
 extern int parse_trace_mode_after(const char *val, trace_mode_after_t *out);
 
 // Check whether the current execution punit id's match the domain_punit_set

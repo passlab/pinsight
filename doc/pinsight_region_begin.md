@@ -220,7 +220,7 @@ sections in addition to address-based sections:
 [Lexgion(User).solver_phase]
     max_num_traces = 500
     tracing_rate = 1
-    trace_mode_after = PAUSE:30:analyze_solver.sh:MONITORING
+    trace_mode_after = INTROSPECT:30:analyze_solver.sh:MONITORING
 
 [Lexgion(User).matrix_multiply]
     max_num_traces = 50
@@ -257,7 +257,7 @@ config that matches `lgp->name`, and if so, override the default config.
 |---------|---------------------------|
 | **Rate-limiting** (`max_num_traces`, `tracing_rate`) | Works — same `trace_bit` mechanism |
 | **Mode switching** (`trace_mode_after`) | Works — triggers when user region hits `max_num_traces` |
-| **PAUSE action** | Works — pauses, rotates, runs script when user region limit reached |
+| **INTROSPECT action** | Works — introspects, rotates, runs script when user region limit reached |
 | **Event filtering** | Not applicable (User domain has only begin/end events) |
 | **SIGUSR1 reload** | Works — `[User.global]` trace_mode changes take effect on reload |
 | **Domain OFF** | `PINSIGHT_TRACE_USER=OFF` → `pinsight_region_begin()` returns early |

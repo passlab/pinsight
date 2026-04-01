@@ -1,0 +1,10 @@
+{
+    "clangd.path": "/usr/bin/clangd-21",
+    "clangd.arguments": [
+        "--background-index",
+        "--clang-tidy",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu"
+    ],
+    "C_Cpp.intelliSenseEngine": "disabled"
+}
