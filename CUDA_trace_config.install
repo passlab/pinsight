@@ -7,12 +7,12 @@
     CUDA_context_destroy = off
     CUDA_device_init = off
     CUDA_device_reset = off
-    CUDA_device_synchronize = off
+    CUDA_device_synchronize = on
 
 [CUDA(streamevent).default]
     CUDA_stream_create = off
     CUDA_stream_destroy = off
-    CUDA_stream_synchronize = off
+    CUDA_stream_synchronize = on
     CUDA_event_create = off
     CUDA_event_record = off
     CUDA_event_synchronize = off
