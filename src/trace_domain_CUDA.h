@@ -14,7 +14,24 @@ extern int CUDA_domain_index;
 extern domain_info_t *CUDA_domain_info;
 extern domain_trace_config_t *CUDA_trace_config;
 
-/* --- 1. DSL BLOCK: CUDA domain definition (data only) --- */
+/* --- 1. DSL BLOCK: CUDA domain definition (data only) ---
+ *
+ * Implementation status:
+ *   ✓ CB  = CUPTI Callback API wrapper implemented in cupti_callback.c
+ *   ✓ ACT = CUPTI Activity API record emitted from bufferCompleted callback
+ *           (GPU-side start/end timestamps; correlated to CB events via
+ *            correlationId; NOT a TRACE_EVENT in this DSL)
+ *   -     = event listed in DSL/config but no callback registered yet
+ *
+ * Activity API records (not in this DSL, they are separate LTTng tracepoints):
+ *   cudaMemcpyActivity  — actual GPU transfer window for all memcpy variants
+ *   cudaKernelActivity  — actual GPU kernel execution window
+ *   cuda_clock_calibration — one-shot CLOCK_MONOTONIC vs cuptiGetTimestamp()
+ *
+ * The native_id in TRACE_EVENT(..., native_id, ...) maps to CUDA_EVENT_*
+ * constants defined at the top of cupti_callback.c.
+ */
+
 #define CUDA_DOMAIN_DEFINITION                                                 \
   TRACE_DOMAIN_BEGIN("CUDA", TRACE_EVENT_ID_INTERNAL)                          \
                                                                                \
@@ -23,81 +40,74 @@ extern domain_trace_config_t *CUDA_trace_config;
                                                                                \
   /* [CUDA(contextdevice)] */                                                  \
   TRACE_SUBDOMAIN_BEGIN("contextdevice")                                       \
-  TRACE_EVENT("CUDA_context_create", 0, 0, NULL)                               \
-  TRACE_EVENT("CUDA_context_destroy", 0, 1, NULL)                              \
-                                                                               \
-  TRACE_EVENT("CUDA_device_init", 0, 2, NULL)                                  \
-  TRACE_EVENT("CUDA_device_reset", 0, 3, NULL)                                 \
-  TRACE_EVENT("CUDA_device_synchronize", 0, 4, NULL)                           \
+  TRACE_EVENT("CUDA_context_create",     0,  0, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_context_destroy",    0,  1, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_device_init",        0,  2, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_device_reset",       0,  3, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_device_synchronize", 0,  4, NULL)  /* ✓ CB: begin+end  */ \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [CUDA(streamevent)] */                                                    \
   TRACE_SUBDOMAIN_BEGIN("streamevent")                                         \
-  TRACE_EVENT("CUDA_stream_create", 0, 5, NULL)                                \
-  TRACE_EVENT("CUDA_stream_destroy", 0, 6, NULL)                               \
-  TRACE_EVENT("CUDA_stream_synchronize", 0, 7, NULL)                           \
-                                                                               \
-  TRACE_EVENT("CUDA_event_create", 0, 8, NULL)                                 \
-  TRACE_EVENT("CUDA_event_record", 0, 9, NULL)                                 \
-  TRACE_EVENT("CUDA_event_synchronize", 0, 10, NULL)                           \
-  TRACE_EVENT("CUDA_event_destroy", 0, 11, NULL)                               \
+  TRACE_EVENT("CUDA_stream_create",      0,  5, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_stream_destroy",     0,  6, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_stream_synchronize", 0,  7, NULL)  /* ✓ CB: begin+end  */ \
+  TRACE_EVENT("CUDA_event_create",       0,  8, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_event_record",       0,  9, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_event_synchronize",  0, 10, NULL)  /* - not registered */ \
+  TRACE_EVENT("CUDA_event_destroy",      0, 11, NULL)  /* - not registered */ \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [CUDA(memcpy)] */                                                         \
+  /* [CUDA(memcpy)] — each CB pair has a matching cudaMemcpyActivity record */ \
   TRACE_SUBDOMAIN_BEGIN("memcpy")                                              \
-  TRACE_EVENT("CUDA_memcpy_HtoD", 1, 12, NULL)                                 \
-  TRACE_EVENT("CUDA_memcpy_DtoH", 1, 13, NULL)                                 \
-  TRACE_EVENT("CUDA_memcpy_DtoD", 1, 14, NULL)                                 \
-  TRACE_EVENT("CUDA_memcpy_HtoH", 1, 15, NULL)                                 \
-  TRACE_EVENT("CUDA_memcpy_async", 1, 16, NULL)                                \
+  TRACE_EVENT("CUDA_memcpy_HtoD",  1, 12, NULL)  /* ✓ CB + ✓ ACT */          \
+  TRACE_EVENT("CUDA_memcpy_DtoH",  1, 13, NULL)  /* ✓ CB + ✓ ACT */          \
+  TRACE_EVENT("CUDA_memcpy_DtoD",  1, 14, NULL)  /* ✓ CB + ✓ ACT */          \
+  TRACE_EVENT("CUDA_memcpy_HtoH",  1, 15, NULL)  /* ✓ CB + ✓ ACT */          \
+  TRACE_EVENT("CUDA_memcpy_async", 1, 16, NULL)  /* ✓ CB + ✓ ACT */          \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [CUDA(malloc)] */                                                         \
   TRACE_SUBDOMAIN_BEGIN("malloc")                                              \
-  TRACE_EVENT("CUDA_memset", 0, 17, NULL)                                      \
-  TRACE_EVENT("CUDA_malloc", 0, 18, NULL)                                      \
-  TRACE_EVENT("CUDA_free", 0, 19, NULL)                                        \
-  TRACE_EVENT("CUDA_malloc_host", 0, 20, NULL)                                 \
-  TRACE_EVENT("CUDA_free_host", 0, 21, NULL)                                   \
-  TRACE_EVENT("CUDA_malloc_managed", 0, 22, NULL)                              \
+  TRACE_EVENT("CUDA_memset",        0, 17, NULL)  /* - not registered */      \
+  TRACE_EVENT("CUDA_malloc",        0, 18, NULL)  /* - not registered */      \
+  TRACE_EVENT("CUDA_free",          0, 19, NULL)  /* - not registered */      \
+  TRACE_EVENT("CUDA_malloc_host",   0, 20, NULL)  /* - not registered */      \
+  TRACE_EVENT("CUDA_free_host",     0, 21, NULL)  /* - not registered */      \
+  TRACE_EVENT("CUDA_malloc_managed",0, 22, NULL)  /* - not registered */      \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [CUDA(kernel)] */                                                         \
+  /* [CUDA(kernel)] — CB records call site; ACT records GPU execution window */\
   TRACE_SUBDOMAIN_BEGIN("kernel")                                              \
-  TRACE_EVENT("CUDA_kernel_launch", 1, 23, NULL)                               \
-  TRACE_EVENT("CUDA_kernel_complete", 0, 24, NULL)                             \
-  TRACE_EVENT("CUDA_kernel_enqueue", 0, 25, NULL)                              \
+  TRACE_EVENT("CUDA_kernel_launch",   1, 23, NULL)  /* ✓ CB + ✓ ACT */        \
+  TRACE_EVENT("CUDA_kernel_complete", 0, 24, NULL)  /* - not registered */    \
+  TRACE_EVENT("CUDA_kernel_enqueue",  0, 25, NULL)  /* - not registered */    \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [CUDA(others)] */                                                         \
+  /* [CUDA(others)] — misc driver/runtime events; off by default */            \
   TRACE_SUBDOMAIN_BEGIN("others")                                              \
-  TRACE_EVENT("CUDA_api_enter", 0, 26, NULL)                                   \
-  TRACE_EVENT("CUDA_api_exit", 0, 27, NULL)                                    \
-                                                                               \
-  TRACE_EVENT("CUDA_driver_call", 0, 28, NULL)                                 \
-  TRACE_EVENT("CUDA_runtime_call", 0, 29, NULL)                                \
-                                                                               \
-  TRACE_EVENT("CUDA_synchronize", 0, 30, NULL)                                 \
-  TRACE_EVENT("CUDA_context_push", 0, 31, NULL)                                \
-  TRACE_EVENT("CUDA_context_pop", 0, 32, NULL)                                 \
-                                                                               \
-  TRACE_EVENT("CUDA_module_load", 0, 33, NULL)                                 \
-  TRACE_EVENT("CUDA_module_unload", 0, 34, NULL)                               \
-  TRACE_EVENT("CUDA_function_load", 0, 35, NULL)                               \
-                                                                               \
-  TRACE_EVENT("CUDA_graph_create", 0, 36, NULL)                                \
-  TRACE_EVENT("CUDA_graph_launch", 0, 37, NULL)                                \
-  TRACE_EVENT("CUDA_graph_destroy", 0, 38, NULL)                               \
-                                                                               \
-  TRACE_EVENT("CUDA_unified_memory_migrate", 0, 39, NULL)                      \
-  TRACE_EVENT("CUDA_unified_memory_prefetch", 0, 40, NULL)                     \
-                                                                               \
-  TRACE_EVENT("CUDA_nvtx_range_push", 0, 41, NULL)                             \
-  TRACE_EVENT("CUDA_nvtx_range_pop", 0, 42, NULL)                              \
-  TRACE_EVENT("CUDA_nvtx_mark", 0, 43, NULL)                                   \
+  TRACE_EVENT("CUDA_api_enter",   0, 26, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_api_exit",    0, 27, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_driver_call", 0, 28, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_runtime_call",0, 29, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_synchronize", 0, 30, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_context_push",0, 31, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_context_pop", 0, 32, NULL)  /* - not registered */        \
+  TRACE_EVENT("CUDA_module_load",    0, 33, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_module_unload",  0, 34, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_function_load",  0, 35, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_graph_create",   0, 36, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_graph_launch",   0, 37, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_graph_destroy",  0, 38, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_unified_memory_migrate", 0, 39, NULL)  /* - */            \
+  TRACE_EVENT("CUDA_unified_memory_prefetch",0, 40, NULL)  /* - */            \
+  TRACE_EVENT("CUDA_nvtx_range_push",0, 41, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_nvtx_range_pop", 0, 42, NULL)  /* - not registered */     \
+  TRACE_EVENT("CUDA_nvtx_mark",      0, 43, NULL)  /* - not registered */     \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   TRACE_DOMAIN_END()
+
 
 /* --- 2. Registration function (returns pointer to this CUDA domain) --- */
 

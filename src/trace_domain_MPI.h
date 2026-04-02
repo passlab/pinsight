@@ -14,7 +14,16 @@ extern int MPI_domain_index;
 extern domain_info_t *MPI_domain_info;
 extern domain_trace_config_t *MPI_trace_config;
 
-/* --- 1. DSL BLOCK: MPI domain definition (data only) --- */
+/* --- 1. DSL BLOCK: MPI domain definition (data only) ---
+ *
+ * Implementation status:
+ *   ✓ = PMPI wrapper + LTTng tracepoint implemented in pmpi_mpi.c
+ *   - = event listed in config/DSL but no PMPI wrapper yet
+ *
+ * The native_id in TRACE_EVENT(..., native_id, ...) is a stable integer key
+ * used by the rate-control and config subsystems only; it does NOT correspond
+ * to any CUPTI or MPI enum value.
+ */
 
 #define MPI_DOMAIN_DEFINITION                                                  \
   TRACE_DOMAIN_BEGIN("MPI", TRACE_EVENT_ID_NATIVE)                             \
@@ -22,75 +31,76 @@ extern domain_trace_config_t *MPI_trace_config;
   /* [MPI.rank(0-127)] */                                                      \
   TRACE_PUNIT("rank", 0, 127, MPI_get_rank)                                    \
                                                                                \
-  /* [MPI(init)] */                                                            \
+  /* [MPI(init)] — lifecycle, always on by default */                          \
   TRACE_SUBDOMAIN_BEGIN("init")                                                \
-  TRACE_EVENT("MPI_Init", 1, 0, NULL)                                          \
-  TRACE_EVENT("MPI_Init_thread", 1, 1, NULL)                                   \
-  TRACE_EVENT("MPI_Finalize", 1, 2, NULL)                                      \
+  TRACE_EVENT("MPI_Init",        1, 0, NULL)  /* ✓ implemented */             \
+  TRACE_EVENT("MPI_Init_thread", 1, 1, NULL)  /* ✓ implemented */             \
+  TRACE_EVENT("MPI_Finalize",    1, 2, NULL)  /* ✓ implemented */             \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [MPI(p2p)] */                                                             \
+  /* [MPI(p2p)] — blocking point-to-point */                                   \
   TRACE_SUBDOMAIN_BEGIN("p2p")                                                 \
-  TRACE_EVENT("MPI_Send", 1, 3, NULL)                                          \
-  TRACE_EVENT("MPI_Recv", 1, 4, NULL)                                          \
-  TRACE_EVENT("MPI_Sendrecv", 0, 5, NULL)                                      \
+  TRACE_EVENT("MPI_Send",    1, 3, NULL)  /* ✓ implemented */                 \
+  TRACE_EVENT("MPI_Recv",    1, 4, NULL)  /* ✓ implemented */                 \
+  TRACE_EVENT("MPI_Sendrecv",0, 5, NULL)  /* ✓ implemented */                 \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [MPI(asyncp2p)] */                                                        \
+  /* [MPI(asyncp2p)] — non-blocking p2p; AMReX halo exchange pattern */       \
   TRACE_SUBDOMAIN_BEGIN("asyncp2p")                                            \
-  TRACE_EVENT("MPI_Isend", 0, 6, NULL)                                         \
-  TRACE_EVENT("MPI_Irecv", 0, 7, NULL)                                         \
-  TRACE_EVENT("MPI_Wait", 0, 8, NULL)                                          \
-  TRACE_EVENT("MPI_Waitall", 0, 9, NULL)                                       \
-  TRACE_EVENT("MPI_Test", 0, 10, NULL)                                         \
+  TRACE_EVENT("MPI_Isend",   0,  6, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Irecv",   0,  7, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Wait",    0,  8, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Waitall", 0,  9, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Test",    0, 10, NULL)  /* - no wrapper yet */             \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [MPI(collective)] */                                                      \
   TRACE_SUBDOMAIN_BEGIN("collective")                                          \
-  TRACE_EVENT("MPI_Bcast", 0, 11, NULL)                                        \
-  TRACE_EVENT("MPI_Barrier", 1, 12, NULL)                                      \
-  TRACE_EVENT("MPI_Reduce", 0, 13, NULL)                                       \
-  TRACE_EVENT("MPI_Allreduce", 0, 14, NULL)                                    \
-  TRACE_EVENT("MPI_Scatter", 0, 15, NULL)                                      \
-  TRACE_EVENT("MPI_Gather", 0, 16, NULL)                                       \
-  TRACE_EVENT("MPI_Allgather", 0, 17, NULL)                                    \
-  TRACE_EVENT("MPI_Alltoall", 0, 18, NULL)                                     \
+  TRACE_EVENT("MPI_Bcast",     0, 11, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Barrier",   1, 12, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Reduce",    0, 13, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Allreduce", 0, 14, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Scatter",   0, 15, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Gather",    0, 16, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Allgather", 0, 17, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Alltoall",  0, 18, NULL)  /* ✓ implemented */              \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [MPI(others)] */                                                          \
+  /* [MPI(others)] — communicator/type utilities; off by default */            \
   TRACE_SUBDOMAIN_BEGIN("others")                                              \
-  TRACE_EVENT("MPI_Comm_rank", 0, 19, NULL)                                    \
-  TRACE_EVENT("MPI_Comm_size", 0, 20, NULL)                                    \
-  TRACE_EVENT("MPI_Comm_split", 0, 21, NULL)                                   \
-  TRACE_EVENT("MPI_Comm_create", 0, 22, NULL)                                  \
-  TRACE_EVENT("MPI_Comm_dup", 0, 23, NULL)                                     \
+  TRACE_EVENT("MPI_Comm_rank",  0, 19, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Comm_size",  0, 20, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Comm_split", 0, 21, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Comm_create",0, 22, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Comm_dup",   0, 23, NULL)  /* - no wrapper yet */          \
                                                                                \
-  TRACE_EVENT("MPI_Type_commit", 0, 24, NULL)                                  \
-  TRACE_EVENT("MPI_Type_free", 0, 25, NULL)                                    \
+  TRACE_EVENT("MPI_Type_commit",0, 24, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Type_free",  0, 25, NULL)  /* - no wrapper yet */          \
                                                                                \
-  TRACE_EVENT("MPI_Wtime", 0, 26, NULL)                                        \
-  TRACE_EVENT("MPI_Wtick", 0, 27, NULL)                                        \
+  TRACE_EVENT("MPI_Wtime",  0, 26, NULL)  /* - no wrapper yet */              \
+  TRACE_EVENT("MPI_Wtick",  0, 27, NULL)  /* - no wrapper yet */              \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [MPI(oneside)] */                                                         \
+  /* [MPI(oneside)] — one-sided RMA; off by default */                         \
   TRACE_SUBDOMAIN_BEGIN("oneside")                                             \
-  TRACE_EVENT("MPI_Win_create", 0, 28, NULL)                                   \
-  TRACE_EVENT("MPI_Win_lock", 0, 29, NULL)                                     \
-  TRACE_EVENT("MPI_Win_unlock", 0, 30, NULL)                                   \
-  TRACE_EVENT("MPI_Put", 0, 31, NULL)                                          \
-  TRACE_EVENT("MPI_Get", 0, 32, NULL)                                          \
-  TRACE_EVENT("MPI_Accumulate", 0, 33, NULL)                                   \
+  TRACE_EVENT("MPI_Win_create", 0, 28, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Win_lock",   0, 29, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Win_unlock", 0, 30, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Put",        0, 31, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Get",        0, 32, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_Accumulate", 0, 33, NULL)  /* - no wrapper yet */          \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
-  /* [MPI(io)] */                                                              \
+  /* [MPI(io)] — MPI-IO; off by default */                                     \
   TRACE_SUBDOMAIN_BEGIN("io")                                                  \
-  TRACE_EVENT("MPI_File_open", 0, 34, NULL)                                    \
-  TRACE_EVENT("MPI_File_close", 0, 35, NULL)                                   \
-  TRACE_EVENT("MPI_File_read", 0, 36, NULL)                                    \
-  TRACE_EVENT("MPI_File_write", 0, 37, NULL)                                   \
+  TRACE_EVENT("MPI_File_open",  0, 34, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_File_close", 0, 35, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_File_read",  0, 36, NULL)  /* - no wrapper yet */          \
+  TRACE_EVENT("MPI_File_write", 0, 37, NULL)  /* - no wrapper yet */          \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   TRACE_DOMAIN_END()
+
 
 /* --- 2. Registration function (returns pointer to this MPI domain) --- */
 
