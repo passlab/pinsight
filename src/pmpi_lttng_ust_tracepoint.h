@@ -311,6 +311,197 @@ LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(
         )
 )
 
+/* int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Bcast_begin,
+        LTTNG_UST_TP_ARGS(
+            void *,       buffer,
+            unsigned int, count,
+            unsigned int, root
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, buffer, buffer)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_integer(unsigned int, root, root)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Bcast_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Sendrecv(...) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Sendrecv_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            unsigned int, dest,
+            unsigned int, sendtag,
+            void *,       recvbuf,
+            unsigned int, recvcount,
+            unsigned int, source,
+            unsigned int, recvtag
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer(unsigned int, dest, dest)
+            lttng_ust_field_integer(unsigned int, sendtag, sendtag)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+            lttng_ust_field_integer(unsigned int, source, source)
+            lttng_ust_field_integer(unsigned int, recvtag, recvtag)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Sendrecv_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Isend(const void *buf, int count, MPI_Datatype, int dest, int tag, MPI_Comm, MPI_Request *) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Isend_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, buf,
+            unsigned int, count,
+            unsigned int, dest,
+            unsigned int, tag
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, buf, buf)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_integer(unsigned int, dest, dest)
+            lttng_ust_field_integer(unsigned int, tag, tag)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Isend_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Irecv(void *buf, int count, MPI_Datatype, int source, int tag, MPI_Comm, MPI_Request *) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Irecv_begin,
+        LTTNG_UST_TP_ARGS(
+            void *,       buf,
+            unsigned int, count,
+            unsigned int, source,
+            unsigned int, tag
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, buf, buf)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_integer(unsigned int, source, source)
+            lttng_ust_field_integer(unsigned int, tag, tag)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Irecv_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Wait(MPI_Request *, MPI_Status *) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Wait_begin,
+        LTTNG_UST_TP_ARGS(int, useless_but_needed),
+        LTTNG_UST_TP_FIELDS(COMMON_LTTNG_UST_TP_FIELDS_PMPI)
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Wait_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Waitall(int count, MPI_Request[], MPI_Status[]) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Waitall_begin,
+        LTTNG_UST_TP_ARGS(unsigned int, count),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer(unsigned int, count, count)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Waitall_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Scatter(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Scatter_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            void *,       recvbuf,
+            unsigned int, recvcount,
+            unsigned int, root
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+            lttng_ust_field_integer(unsigned int, root, root)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Scatter_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Gather(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Gather_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            void *,       recvbuf,
+            unsigned int, recvcount,
+            unsigned int, root
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+            lttng_ust_field_integer(unsigned int, root, root)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Gather_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Allgather(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Allgather_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            void *,       recvbuf,
+            unsigned int, recvcount
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Allgather_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Alltoall_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            void *,       recvbuf,
+            unsigned int, recvcount
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Alltoall_end, LTTNG_UST_TP_ARGS(int, return_value))
+
 #ifdef __cplusplus
 }
 #endif
