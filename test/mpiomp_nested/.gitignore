@@ -1,0 +1,6 @@
+# Compiled binaries
+test_mpi_full
+mpiomp_nested
+
+# Trace output directories
+traces/
