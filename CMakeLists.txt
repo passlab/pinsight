@@ -103,7 +103,7 @@ if (PINSIGHT_OPENMP)
 # ompt_callback.h resolves callback names to real extern declarations
 # rather than NULL stubs. The test binary omits this to avoid link errors.
     target_compile_definitions(pinsight PRIVATE PINSIGHT_OMPT_CALLBACKS)
-#	target_link_libraries(pinsight omp) # no need libomp.so for pinsight
+    target_link_libraries(pinsight omp) # no need libomp.so for pinsight
 endif()
 
 if (PINSIGHT_MPI)

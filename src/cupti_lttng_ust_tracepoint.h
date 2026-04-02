@@ -239,6 +239,139 @@ LTTNG_UST_TRACEPOINT_EVENT(
         )
 )
 
+/* for cudaDeviceSynchronize event */
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaDeviceSync_begin,
+        LTTNG_UST_TP_ARGS(
+            COMMON_CUDA_ARG
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+        )
+)
+
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaDeviceSync_end,
+        LTTNG_UST_TP_ARGS(
+            COMMON_CUDA_ARG,
+            int, return_val
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(int, return_val, return_val)
+        )
+)
+
+/* for cudaStreamSynchronize event */
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaStreamSync_begin,
+        LTTNG_UST_TP_ARGS(
+            COMMON_CUDA_ARG,
+            struct contextStreamId_t*, contextStreamId
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(unsigned int, contextId, contextStreamId->contextId)
+            lttng_ust_field_integer(unsigned int, streamId, contextStreamId->streamId)
+        )
+)
+
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaStreamSync_end,
+        LTTNG_UST_TP_ARGS(
+            COMMON_CUDA_ARG,
+            int, return_val
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_MPI_OMP
+            lttng_ust_field_integer(int, return_val, return_val)
+        )
+)
+
+/* =================================================================
+ * Activity API tracepoints — fired from activity_bufferCompleted().
+ *
+ * IMPORTANT: The LTTng event timestamp is the buffer delivery time,
+ * NOT the actual GPU operation time.  Use start_gpu / end_gpu fields
+ * for actual GPU timing.  Both are in CUPTI ns (same clock as the
+ * cupti_timeStamp field in callback tracepoints).  Use correlationId
+ * to link an activity record to its callback counterpart.
+ *
+ * Clock calibration: fired once at LTTNG_CUPTI_Init to record the
+ * offset between CUPTI's clock and CLOCK_MONOTONIC so analysis tools
+ * can align GPU and CPU timelines.
+ * ================================================================= */
+
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cuda_clock_calibration,
+        LTTNG_UST_TP_ARGS(
+            uint64_t, clock_monotonic_ns,
+            uint64_t, cupti_timestamp_ns
+        ),
+        LTTNG_UST_TP_FIELDS(
+            lttng_ust_field_integer(uint64_t, clock_monotonic_ns, clock_monotonic_ns)
+            lttng_ust_field_integer(uint64_t, cupti_timestamp_ns, cupti_timestamp_ns)
+        )
+)
+
+/* GPU-side memory transfer (CUpti_ActivityMemcpy6 on CUDA 13).
+ * copyKind uses the same enum as cudaMemcpy callbacks. */
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaMemcpyActivity,
+        LTTNG_UST_TP_ARGS(
+            uint32_t, devId,
+            uint32_t, correlationId,
+            uint64_t, start_gpu,
+            uint64_t, end_gpu,
+            uint64_t, bytes,
+            int,      copyKind,
+            uint32_t, contextId,
+            uint32_t, streamId
+        ),
+        LTTNG_UST_TP_FIELDS(
+            lttng_ust_field_integer(uint32_t, devId,          devId)
+            lttng_ust_field_integer(uint32_t, correlationId,  correlationId)
+            lttng_ust_field_integer(uint64_t, start_gpu,      start_gpu)
+            lttng_ust_field_integer(uint64_t, end_gpu,        end_gpu)
+            lttng_ust_field_integer(uint64_t, bytes,          bytes)
+            lttng_ust_field_enum(cupti_pinsight_lttng_ust, cudaMemcpyKind_enum,
+                                 int, cudaMemcpyKind, copyKind)
+            lttng_ust_field_integer(uint32_t, contextId,      contextId)
+            lttng_ust_field_integer(uint32_t, streamId,       streamId)
+        )
+)
+
+/* GPU-side kernel execution (CUpti_ActivityKernel10 on CUDA 13).
+ * Gives actual GPU execution window, not just the CPU-side launch time. */
+LTTNG_UST_TRACEPOINT_EVENT(
+        cupti_pinsight_lttng_ust,
+        cudaKernelActivity,
+        LTTNG_UST_TP_ARGS(
+            uint32_t,    devId,
+            uint32_t,    correlationId,
+            uint64_t,    start_gpu,
+            uint64_t,    end_gpu,
+            uint32_t,    contextId,
+            uint32_t,    streamId,
+            const char*, kernelName
+        ),
+        LTTNG_UST_TP_FIELDS(
+            lttng_ust_field_integer(uint32_t, devId,         devId)
+            lttng_ust_field_integer(uint32_t, correlationId, correlationId)
+            lttng_ust_field_integer(uint64_t, start_gpu,     start_gpu)
+            lttng_ust_field_integer(uint64_t, end_gpu,       end_gpu)
+            lttng_ust_field_integer(uint32_t, contextId,     contextId)
+            lttng_ust_field_integer(uint32_t, streamId,      streamId)
+            lttng_ust_field_string(kernelName, kernelName)
+        )
+)
+
 #ifdef __cplusplus
 }
 #endif

@@ -4,7 +4,9 @@
         "--background-index",
         "--clang-tidy",
         "--completion-style=detailed",
-        "--header-insertion=iwyu"
+        "--header-insertion=iwyu",
+        "--compile-commands-dir=${workspaceFolder}",
+        "--query-driver=/usr/bin/gcc,/usr/bin/cc,/usr/local/cuda/bin/nvcc"
     ],
     "C_Cpp.intelliSenseEngine": "disabled"
 }

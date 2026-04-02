@@ -1,11 +1,21 @@
-# SC26 Evaluation Plan: LULESH + Castro on 48-Core + 4×V100
+# SC26 Evaluation Plan: LULESH + Castro on cci-aries (48-Core + 4×A100)
 
-All evaluation data collected fresh on the new system.
+All evaluation data collected fresh on the cci-aries system.
 
-## System
-- **CPU**: 2× Intel Xeon, 48 cores total (HT disabled)
-- **GPU**: 4× NVIDIA V100
-- **Comparison tools**: Score-P, HPCToolkit (both need installation)
+## System: cci-aries
+
+- **CPU**: 2× AMD EPYC 7413 24-Core Processor (48 physical cores, 96 threads with SMT)
+  - Base clock: 2.65 GHz, Boost: 3.6 GHz
+  - L1d: 1.5 MiB (48 instances), L1i: 1.5 MiB (48 instances)
+  - L2: 24 MiB (48 instances), L3: 256 MiB (8 instances)
+  - 8 NUMA nodes, 6 cores per NUMA node per socket
+- **GPU**: 4× NVIDIA A100-PCIE-40GB (Compute Capability 8.0)
+  - Driver: 580.126.20
+- **Memory**: 503 GB DDR4
+- **OS**: Ubuntu 22.04.5 LTS, Kernel 6.8.0-106-generic
+- **Compiler**: Clang/LLVM 21.1.8 with LLVM OpenMP runtime (OMPT 5.0 support)
+- **LTTng**: 2.13.4 (Nordicité)
+- **Comparison tools**: Score-P (latest), HPCToolkit (latest, spack install)
 - **Benchmarks**: LULESH (OpenMP proxy-app), Castro (production AMR, OpenMP + multi-GPU)
 
 ---
@@ -33,7 +43,7 @@ spack load hpctoolkit
 
 ### PInsight
 ```bash
-cd /home/yyan7/work/tools/pinsight
+cd /home/yyan7/tools/pinsight
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j48
@@ -47,7 +57,7 @@ make -j48
 | Exp | Benchmark | Parallelism | Goal | Priority |
 |-----|-----------|-------------|------|----------|
 | E1 | LULESH | OpenMP 48T | Overhead & trace size vs Score-P, HPCToolkit | High |
-| E2 | Castro Sedov | **Multi-GPU (4×V100)** | Overhead & trace reduction on production AMR | **Highest** |
+| E2 | Castro Sedov | **Multi-GPU (4×A100)** | Overhead & trace reduction on production AMR | **Highest** |
 | E3 | Castro Sedov | Multi-GPU | GPU tracing with rate control + domain filtering | **Highest** |
 | E4 | Castro | Multi-GPU | Introspection + AMR adaptivity demo | **Killer** |
 | E5 | Castro Sedov | OpenMP 48T | OpenMP overhead on production code | Medium |
@@ -76,7 +86,7 @@ make -j48
 
 ---
 
-## E2: Castro Multi-GPU Overhead (4×V100, Sedov 3D)
+## E2: Castro Multi-GPU Overhead (4×A100, Sedov 3D)
 
 **Goal**: Show PInsight CUPTI tracing overhead is acceptable on multi-GPU production code.
 
@@ -133,7 +143,7 @@ make DIM=3 -j48
 **Goal**: Show introspection's unique value for AMR — as mesh evolves, performance shifts. Only continuous introspection captures this.
 
 **Scenario**:
-1. Castro Sedov 3D with AMR on 4×V100
+1. Castro Sedov 3D with AMR on 4×A100
 2. Configure cyclic introspection:
 ```ini
 [Lexgion.default]
@@ -147,7 +157,7 @@ make DIM=3 -j48
    - **Window 3** (propagation): Further refinement, GPU load imbalance emerges
 4. Analysis script (`analyze_castro.sh`) uses babeltrace2 to:
    - Compute per-kernel avg duration across GPUs
-   - Detect load imbalance across V100s
+   - Detect load imbalance across A100s
    - Output per-window performance summary
 
 **Why AMR + introspection is the killer demo**:
@@ -178,7 +188,7 @@ make DIM=3 -j48
 
 | Figure | Content | Purpose |
 |--------|---------|---------|
-| Fig A | Castro GPU kernel timeline (4×V100) | Show multi-device tracing capability |
+| Fig A | Castro GPU kernel timeline (4×A100) | Show multi-device tracing capability |
 | Fig B | Two introspection windows side-by-side | Show AMR performance evolution |
 | Fig C (optional) | LULESH CPU/thread view | Familiar OpenMP trace visualization |
 
@@ -189,7 +199,7 @@ make DIM=3 -j48
 ```
 5. Evaluation
    5.1 Experimental Setup
-       - System specs (48-core, 4×V100)
+       - System specs (48-core AMD EPYC, 4×A100)
        - Benchmarks (LULESH, Castro)
        - Comparison tools (Score-P, HPCToolkit)
    5.2 Measurement Overhead and Trace Volume (E1 + E2)
@@ -209,7 +219,7 @@ make DIM=3 -j48
 
 ## Execution Order
 
-1. Install Score-P and HPCToolkit on new system
+1. Install Score-P and HPCToolkit on cci-aries
 2. Build PInsight, LULESH, Castro (OpenMP + GPU)
 3. **E1**: LULESH overhead runs (straightforward, gets infrastructure working)
 4. **E2**: Castro multi-GPU overhead

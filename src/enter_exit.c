@@ -19,15 +19,9 @@ void exit_pinsight_func() __attribute__((destructor(102)));
 unsigned int pid;
 char hostname[48];
 
-#ifdef PINSIGHT_MPI
-#endif
-
-#ifdef PINSIGHT_OPENMP
-#endif
-
 #ifdef PINSIGHT_CUDA
-extern void LTTNG_CUPTI_Init(int rank);
-extern void LTTNG_CUPTI_Fini(int rank);
+extern void LTTNG_CUPTI_Init(void);
+extern void LTTNG_CUPTI_Fini(void);
 #endif
 
 /**
@@ -41,8 +35,7 @@ void enter_pinsight_func() {
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 
 #ifdef PINSIGHT_CUDA
-  LTTNG_CUPTI_Init(0); // TODO: rank argument should be MPI rank I think, need
-                       // to fix here when MPI is supported as well
+  LTTNG_CUPTI_Init();
 #endif
 #ifdef PINSIGHT_ENERGY
 #endif
@@ -54,7 +47,6 @@ void exit_pinsight_func() {
   // printf("exiting pinsight at host: %s by process: %d\n", hostname, pid);
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, exit_pinsight);
 #ifdef PINSIGHT_CUDA
-  // TODO: also need runtime check
-  LTTNG_CUPTI_Fini(0);
+  LTTNG_CUPTI_Fini();
 #endif
 }

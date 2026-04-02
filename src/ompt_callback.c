@@ -424,14 +424,16 @@ void on_ompt_callback_parallel_begin(
    * This also handles the SIGUSR1 wakeup path from OFF mode. */
   int need_reregister = 0;
 
-  if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
+  if (config_reload_requested &&
+      __atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
     pinsight_load_trace_config(NULL);
     domain_default_trace_config[OpenMP_domain_index].mode_change_fired = 0;
     need_reregister = 1;
   }
 
   // mode_change_requested is set when a lexgion reaches max_num_traces
-  if (__atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
+  if (mode_change_requested &&
+      __atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
     need_reregister = 1;
   }
 

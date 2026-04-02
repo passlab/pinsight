@@ -2,6 +2,7 @@
 #include "trace_config.h"
 #include "pinsight_config.h"
 #include <ctype.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -19,7 +20,6 @@
 
 #ifdef PINSIGHT_CUDA
 #include "trace_domain_CUDA.h"
-#include <dlfcn.h>
 #endif
 
 struct domain_info domain_info_table[MAX_NUM_DOMAINS];
@@ -176,6 +176,11 @@ static void pinsight_sigusr1_handler(int sig) {
       PINSIGHT_DOMAIN_OFF) {
     pinsight_wakeup_from_off_openmp();
   }
+#endif
+#ifdef PINSIGHT_CUDA
+  /* CUDA callbacks are always active — SIGUSR1 wakeup from OFF is automatic.
+   * The next CUDA API call picks up config_reload_requested (set above)
+   * and reloads config in the deferred handler. No explicit wakeup needed. */
 #endif
 }
 

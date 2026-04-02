@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
     int *d_A, *d_B, *d_C;
 
     cuInit(0);
-    cuCtxCreate(&context, 0, device);
+    cuCtxCreate(&context, NULL, 0, device);
 
     // Allocate input vectors h_A and h_B in host memory
     h_A = (int *) malloc(size);
