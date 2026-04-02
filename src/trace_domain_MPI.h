@@ -42,28 +42,28 @@ extern domain_trace_config_t *MPI_trace_config;
   TRACE_SUBDOMAIN_BEGIN("p2p")                                                 \
   TRACE_EVENT("MPI_Send",    1, 3, NULL)  /* ✓ implemented */                 \
   TRACE_EVENT("MPI_Recv",    1, 4, NULL)  /* ✓ implemented */                 \
-  TRACE_EVENT("MPI_Sendrecv",0, 5, NULL)  /* ✓ implemented */                 \
+  TRACE_EVENT("MPI_Sendrecv",1, 5, NULL)  /* ✓ implemented */                 \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [MPI(asyncp2p)] — non-blocking p2p; AMReX halo exchange pattern */       \
   TRACE_SUBDOMAIN_BEGIN("asyncp2p")                                            \
-  TRACE_EVENT("MPI_Isend",   0,  6, NULL)  /* ✓ implemented */                \
-  TRACE_EVENT("MPI_Irecv",   0,  7, NULL)  /* ✓ implemented */                \
-  TRACE_EVENT("MPI_Wait",    0,  8, NULL)  /* ✓ implemented */                \
-  TRACE_EVENT("MPI_Waitall", 0,  9, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Isend",   1,  6, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Irecv",   1,  7, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Wait",    1,  8, NULL)  /* ✓ implemented */                \
+  TRACE_EVENT("MPI_Waitall", 1,  9, NULL)  /* ✓ implemented */                \
   TRACE_EVENT("MPI_Test",    0, 10, NULL)  /* - no wrapper yet */             \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [MPI(collective)] */                                                      \
   TRACE_SUBDOMAIN_BEGIN("collective")                                          \
-  TRACE_EVENT("MPI_Bcast",     0, 11, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Bcast",     1, 11, NULL)  /* ✓ implemented */              \
   TRACE_EVENT("MPI_Barrier",   1, 12, NULL)  /* ✓ implemented */              \
-  TRACE_EVENT("MPI_Reduce",    0, 13, NULL)  /* ✓ implemented */              \
-  TRACE_EVENT("MPI_Allreduce", 0, 14, NULL)  /* ✓ implemented */              \
-  TRACE_EVENT("MPI_Scatter",   0, 15, NULL)  /* ✓ implemented */              \
-  TRACE_EVENT("MPI_Gather",    0, 16, NULL)  /* ✓ implemented */              \
-  TRACE_EVENT("MPI_Allgather", 0, 17, NULL)  /* ✓ implemented */              \
-  TRACE_EVENT("MPI_Alltoall",  0, 18, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Reduce",    1, 13, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Allreduce", 1, 14, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Scatter",   1, 15, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Gather",    1, 16, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Allgather", 1, 17, NULL)  /* ✓ implemented */              \
+  TRACE_EVENT("MPI_Alltoall",  1, 18, NULL)  /* ✓ implemented */              \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [MPI(others)] — communicator/type utilities; off by default */            \

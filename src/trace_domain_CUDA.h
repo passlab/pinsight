@@ -44,14 +44,14 @@ extern domain_trace_config_t *CUDA_trace_config;
   TRACE_EVENT("CUDA_context_destroy",    0,  1, NULL)  /* - not registered */ \
   TRACE_EVENT("CUDA_device_init",        0,  2, NULL)  /* - not registered */ \
   TRACE_EVENT("CUDA_device_reset",       0,  3, NULL)  /* - not registered */ \
-  TRACE_EVENT("CUDA_device_synchronize", 0,  4, NULL)  /* ✓ CB: begin+end  */ \
+  TRACE_EVENT("CUDA_device_synchronize", 1,  4, NULL)  /* ✓ CB: begin+end  */ \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [CUDA(streamevent)] */                                                    \
   TRACE_SUBDOMAIN_BEGIN("streamevent")                                         \
   TRACE_EVENT("CUDA_stream_create",      0,  5, NULL)  /* - not registered */ \
   TRACE_EVENT("CUDA_stream_destroy",     0,  6, NULL)  /* - not registered */ \
-  TRACE_EVENT("CUDA_stream_synchronize", 0,  7, NULL)  /* ✓ CB: begin+end  */ \
+  TRACE_EVENT("CUDA_stream_synchronize", 1,  7, NULL)  /* ✓ CB: begin+end  */ \
   TRACE_EVENT("CUDA_event_create",       0,  8, NULL)  /* - not registered */ \
   TRACE_EVENT("CUDA_event_record",       0,  9, NULL)  /* - not registered */ \
   TRACE_EVENT("CUDA_event_synchronize",  0, 10, NULL)  /* - not registered */ \
