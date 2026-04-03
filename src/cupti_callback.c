@@ -96,6 +96,26 @@ static inline void cuda_ensure_thread_init(void) {
 
 static CUpti_SubscriberHandle subscriber;
 
+/* Forward declarations for activity buffer callbacks (defined below) */
+static void CUPTIAPI activity_bufferRequested(uint8_t **buffer, size_t *size,
+                                               size_t *maxNumRecords);
+static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
+                                               uint8_t *buffer, size_t size,
+                                               size_t validSize);
+
+static _Atomic int activity_init_done = 0;
+
+static void cupti_activity_init_once(void) {
+    if (!activity_init_done &&
+        __atomic_exchange_n(&activity_init_done, 1, __ATOMIC_SEQ_CST) == 0) {
+        cuptiActivityRegisterCallbacks(activity_bufferRequested,
+                                       activity_bufferCompleted);
+        cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
+        cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
+        cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+    }
+}
+
 /* Fired exactly once on the first CUDA API call, guaranteeing LTTng probes
  * are registered and the session is active.  Records both CLOCK_MONOTONIC
  * and cuptiGetTimestamp() at the same instant so analysis tools can compute
@@ -132,6 +152,15 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                                    CUpti_CallbackDomain domain,
                                    CUpti_CallbackId cbid,
                                    const CUpti_CallbackData *cbInfo) {
+    /* ----------------------------------------------------------
+     * 0. Guard against internal CUDA init callbacks.
+     *    CUPTI 12+ fires callbacks with NULL or invalid cbInfo during CUDA
+     *    module/kernel registration at startup (before any user CUDA call).
+     *    These have no valid callbackSite, context, or function name.
+     *    Skip them immediately to prevent crashes in multi-GPU MPI runs.
+     * ---------------------------------------------------------- */
+    if (!cbInfo || !cbInfo->context) return;
+
     /* ----------------------------------------------------------
      * 1. Deferred reconfig handler — mirrors OpenMP parallel_begin.
      *    Fires on the next CUDA API call after SIGUSR1 or auto-trigger.
@@ -175,14 +204,19 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
     if (domain != CUPTI_CB_DOMAIN_RUNTIME_API)
         return;
 
-    /* 4. Ensure thread data initialized + one-shot clock calibration */
+    /* 4. Ensure thread data initialized + deferred Activity API init +
+     *    one-shot clock calibration.
+     *    cupti_activity_init_once() is safe here: a CUDA context exists
+     *    (this is a CUDA API callback), making cuptiActivityEnable valid. */
     cuda_ensure_thread_init();
+    cupti_activity_init_once();
     cuda_emit_clock_calibration_once();
 
     /* ----------------------------------------------------------
      * 5. Extract common callback info
      * ---------------------------------------------------------- */
     const CUcontext context = cbInfo->context;
+
     unsigned int cxtId;
     cuptiGetContextId(context, &cxtId);
     unsigned int devId;
@@ -196,25 +230,22 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
     /* ========== Kernel Launch ========== */
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
         cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
-        /* __builtin_return_address(N): N is the call depth from user code
-         * to this CUPTI callback through the CUDA runtime/driver stack.
+
+        /* Skip internal CUDA module registration callbacks that CUPTI
+         * may fire with a kernel-launch cbid during CUDA init.
+         * These have no valid symbolName or functionName. */
+        if (!cbInfo->symbolName && !cbInfo->functionName) return;
+
+        /* Use the kernel symbol name pointer as the lexgion code pointer.
+         * Each unique kernel name maps to a unique lexgion, which is the
+         * desired behavior for tracking per-kernel statistics.
          *
-         * WARNING: This depth is driver-version-dependent and fragile.
-         * NVIDIA does not officially support stack walking inside CUPTI
-         * callbacks — internal inlining and dispatch changes across
-         * driver versions can shift frame counts.  Must re-verify with
-         * addr2line after any CUDA toolkit/driver upgrade.
-         *
-         * Verified on A100 + driver 580.126 + CUDA 13.0:
-         *   cudaLaunchKernel call chain adds 3 stub frames:
-         *     depth 8: __cudaLaunchKernel_helper (device_functions.h)
-         *     depth 9: __device_stub__KernelName  (cudafe1.stub.c)
-         *     depth 10: KernelName host stub      (user .cu file)
-         *     depth 11: actual user call site      ← THIS ONE
-         *   If depth is wrong, all lexgions collapse into one.
-         *   The correlationId from CUPTI can serve as a fallback key.
-         */
-        const void *codeptr = __builtin_return_address(11);
+         * NOTE: __builtin_return_address(N) for large N (e.g., 11) is
+         * UNSAFE in CUPTI callbacks — the call stack depth varies with
+         * CUDA driver version and context (module registration vs actual
+         * kernel launch).  Walking too deep segfaults.  Using symbolName
+         * is robust, always valid, and gives better lexgion granularity. */
+        const void *codeptr = (const void *)cbInfo->symbolName;
         const char *kernelName = cbInfo->symbolName;
 
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
@@ -265,8 +296,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
 
     /* ========== cudaMemcpy (synchronous) ========== */
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020) {
-        /* Verified on A100 + driver 580.126 + CUDA 13.0: depth 8 = user code */
-        const void *codeptr = __builtin_return_address(8);
+        const void *codeptr = (const void *)cbInfo->functionName;
         cudaMemcpy_v3020_params *funcParams =
             (cudaMemcpy_v3020_params *)cbInfo->functionParams;
         int kind = funcParams->kind;
@@ -313,8 +343,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
 
     /* ========== cudaMemcpyAsync ========== */
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020) {
-        /* Verified on A100 + driver 580.126 + CUDA 13.0: depth 8 = user code */
-        const void *codeptr = __builtin_return_address(8);
+        const void *codeptr = (const void *)cbInfo->functionName;
         cudaMemcpyAsync_v3020_params *p =
             (cudaMemcpyAsync_v3020_params *)cbInfo->functionParams;
 
@@ -368,8 +397,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
 
     /* ========== cudaDeviceSynchronize ========== */
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaDeviceSynchronize_v3020) {
-        /* Verified on A100 + driver 580.126 + CUDA 13.0: depth 8 = user code */
-        const void *codeptr = __builtin_return_address(8);
+        const void *codeptr = (const void *)cbInfo->functionName;
         const char *funName = cbInfo->functionName;
 
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
@@ -408,8 +436,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
 
     /* ========== cudaStreamSynchronize ========== */
     if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaStreamSynchronize_v3020) {
-        /* Verified on A100 + driver 580.126 + CUDA 13.0: depth 8 = user code */
-        const void *codeptr = __builtin_return_address(8);
+        const void *codeptr = (const void *)cbInfo->functionName;
         const char *funName = cbInfo->functionName;
 
         if (cbInfo->callbackSite == CUPTI_API_ENTER) {
@@ -554,7 +581,8 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
  * ================================================================ */
 
 void LTTNG_CUPTI_Init(void) {
-    /* Create subscriber — lives for the entire program lifetime */
+    /* Register the CUPTI subscriber (safe before any CUDA context exists —
+     * it only registers a function pointer with the CUPTI library). */
     cuptiSubscribe(&subscriber,
                    (CUpti_CallbackFunc)CUPTI_callback_lttng, NULL);
 
@@ -582,19 +610,11 @@ void LTTNG_CUPTI_Init(void) {
     cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                         CUPTI_RUNTIME_TRACE_CBID_cudaThreadExit_v3020);
 
-    /* All selected callbacks are always active for the program lifetime.
-     * Mode control uses the killswitch at the top of CUPTI_callback_lttng.
-     * No need to call pinsight_register_cuda_callbacks — it is removed. */
-
-    /* --- Activity API: GPU-side timestamps for async operations --- */
-    cuptiActivityRegisterCallbacks(activity_bufferRequested,
-                                   activity_bufferCompleted);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
-
-    /* Clock calibration fires on the first CUDA API callback — see
-     * cuda_emit_clock_calibration_once() near the top of this file. */
+    /* NOTE: Activity API (cuptiActivityEnable) requires an active CUDA
+     * context and MUST NOT be called at library load time in multi-GPU
+     * MPI runs where no context exists yet.  It is deferred to
+     * cupti_activity_init_once(), called from the first CUPTI callback.
+     * Clock calibration similarly deferred — see cuda_emit_clock_calibration_once(). */
 }
 
 void LTTNG_CUPTI_Fini(void) {
