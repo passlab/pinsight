@@ -1,0 +1,6 @@
+[CUDA.global]
+    trace_mode = OFF
+[MPI.global]
+    trace_mode = OFF
+[OpenMP.global]
+    trace_mode = OFF

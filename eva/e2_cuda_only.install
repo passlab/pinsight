@@ -1,0 +1,9 @@
+[CUDA.global]
+    trace_mode = TRACING
+[MPI.global]
+    trace_mode = OFF
+[OpenMP.global]
+    trace_mode = OFF
+[Lexgion.default]
+    max_num_traces = -1
+    tracing_rate = 1
