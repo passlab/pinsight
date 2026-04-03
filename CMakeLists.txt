@@ -22,6 +22,8 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
 set(SOURCE_FILES
         src/pinsight.h
         src/pinsight.c
+        src/pinsight_control_thread.h
+        src/pinsight_control_thread.c
         src/backtrace.c
         src/backtrace.h
         src/bitset.c
@@ -96,7 +98,7 @@ endif()
 
 add_library(pinsight SHARED ${SOURCE_FILES})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(pinsight m dl lttng-ust)
+target_link_libraries(pinsight m dl lttng-ust pthread)
 
 if (PINSIGHT_OPENMP)
 # Define PINSIGHT_OMPT_CALLBACKS for all pinsight source files so that

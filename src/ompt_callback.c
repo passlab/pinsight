@@ -418,57 +418,10 @@ void on_ompt_callback_parallel_begin(
     const ompt_frame_t *parent_task_frame, /* frame data of encountering task */
     ompt_data_t *parallel_data, unsigned int requested_team_size, int flag,
     const void *codeptr_ra) {
-  /* Deferred handlers at the pre-fork sequential point — check before
-   * starting the region so that config/mode changes take effect for the
-   * upcoming parallel region and workers spawn with correct callbacks.
-   * This also handles the SIGUSR1 wakeup path from OFF mode. */
-  int need_reregister = 0;
-
-  if (config_reload_requested &&
-      __atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
-    pinsight_load_trace_config(NULL);
-    domain_default_trace_config[OpenMP_domain_index].mode_change_fired = 0;
-    need_reregister = 1;
-  }
-
-  // mode_change_requested is set when a lexgion reaches max_num_traces
-  if (mode_change_requested &&
-      __atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST)) {
-    need_reregister = 1;
-  }
-
-  if (need_reregister) {
-    pinsight_register_openmp_callbacks();
-
-    /* When switching to TRACING, reconnect the initial implicit task. */
-    if (domain_default_trace_config[OpenMP_domain_index].mode ==
-            PINSIGHT_DOMAIN_TRACING &&
-        pinsight_thread_data.initial_thread) {
-      ompt_data_t *task_data;
-      ompt_get_task_info(0, NULL, &task_data, NULL, NULL, NULL);
-
-      if (initial_task_lexgion_record == NULL) {
-        enclosing_parallel_lexgion_record = initial_parallel_lexgion_record;
-        parallel_codeptr = (void *)INITIAL_PARALLEL_CODEPTR;
-        parallel_record_id = initial_parallel_lexgion_record->record_id;
-
-        initial_task_lexgion_record = lexgion_begin(
-            OPENMP_LEXGION, ompt_callback_implicit_task, parallel_codeptr);
-        enclosing_task_lexgion_record = initial_task_lexgion_record;
-        task_data->ptr = (void *)initial_task_lexgion_record;
-        task_codeptr = parallel_codeptr;
-        task_record_id = initial_task_lexgion_record->record_id;
-      } else {
-        enclosing_task_lexgion_record = initial_task_lexgion_record;
-        task_data->ptr = (void *)initial_task_lexgion_record;
-        task_codeptr = initial_task_lexgion_record->lgp->codeptr_ra;
-        task_record_id = initial_task_lexgion_record->record_id;
-        enclosing_parallel_lexgion_record = initial_parallel_lexgion_record;
-        parallel_codeptr = (void *)INITIAL_PARALLEL_CODEPTR;
-        parallel_record_id = initial_parallel_lexgion_record->record_id;
-      }
-    }
-  }
+  /* Configuration reloading and mode switching are now handled by the
+   * dedicated control thread (pinsight_control_thread.c). No deferred
+   * reconfig checks needed here — mode flags are volatile and read
+   * directly by the callbacks. */
 
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
@@ -1783,8 +1736,8 @@ static int on_ompt_callback_control_tocol(uint64_t command, uint64_t modifier,
  *   OFF        — deregister all except thread lifecycle (needed for
  *                stack cleanup at shutdown)
  *
- * Called from ompt_initialize (initial setup), from the SIGUSR1 config
- * reload path, and from the mode_change_requested handler in parallel_end.
+ * Called from ompt_initialize (initial setup) and from the control
+ * thread when a mode change is applied.
  */
 void pinsight_register_openmp_callbacks(void) {
   pinsight_domain_mode_t mode =
@@ -1803,9 +1756,7 @@ void pinsight_register_openmp_callbacks(void) {
       /* TRACING: register everything */
       ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
     } else if (mode == PINSIGHT_DOMAIN_MONITORING) {
-      /* MONITORING: keep only thread lifecycle + parallel begin/end.
-       * implicit_task is deregistered — workers get no callbacks,
-       * reducing overhead by eliminating N×R callbacks per iteration. */
+      /* MONITORING: keep only thread lifecycle + parallel begin/end. */
       if (is_lifecycle || ev->native_id == ompt_callback_parallel_begin ||
           ev->native_id == ompt_callback_parallel_end) {
         ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
@@ -1813,9 +1764,7 @@ void pinsight_register_openmp_callbacks(void) {
         ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
       }
     } else {
-      /* OFF: deregister everything except thread lifecycle (zero overhead).
-       * SIGUSR1 wakeup from OFF is handled by pinsight_wakeup_from_off()
-       * which temporarily re-registers parallel_begin/end. */
+      /* OFF: deregister everything except thread lifecycle (zero overhead). */
       if (is_lifecycle)
         continue;
       ompt_set_callback(ev->native_id, (ompt_callback_t)NULL);
@@ -1824,26 +1773,11 @@ void pinsight_register_openmp_callbacks(void) {
 }
 
 /**
- * Re-register parallel_begin/end to wake up from OFF mode after SIGUSR1.
- * Called from signal handler — safe because OFF mode has no callbacks in
- * flight.  The next parallel_begin will consume config_reload_requested
- * and perform the full re-registration.
- *
- * Named with _openmp suffix for future extensibility: MPI and CUDA
- * domains will need their own wakeup mechanisms when mode switching
- * is implemented for those domains.
+ * Called by the control thread to apply OpenMP domain mode changes.
+ * Tested safe from non-OpenMP pthread on LLVM libomp.
  */
-void pinsight_wakeup_from_off_openmp(void) {
-  domain_info_t *di = OpenMP_domain_info;
-  for (int i = 0; i < di->event_id_upper; i++) {
-    struct event *ev = &di->event_table[i];
-    if (!ev->valid || ev->callback == NULL)
-      continue;
-    if (ev->native_id == ompt_callback_parallel_begin ||
-        ev->native_id == ompt_callback_parallel_end) {
-      ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
-    }
-  }
+void pinsight_control_openmp_apply_mode(void) {
+  pinsight_register_openmp_callbacks();
 }
 
 int ompt_initialize(ompt_function_lookup_t lookup, int initial_device_num,

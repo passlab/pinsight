@@ -11,7 +11,8 @@
 #include <cuda_runtime.h>
 #include <cuda.h>
 #include "pinsight.h"
-#include "trace_domain_CUDA.h"
+#include "trace_config.h"
+#include "pinsight_control_thread.h"
 
 int CUDA_domain_index;
 domain_info_t *CUDA_domain_info;
@@ -61,26 +62,63 @@ static inline int cuda_memcpy_event_id(int kind) {
 
 /* Atomic counter for assigning unique IDs to non-OpenMP threads
  * (pure CUDA host threads, CUDA driver internal threads).
- * Starts at 1000 to avoid colliding with OpenMP thread IDs (0..N-1).
+ * Starts at 2000 to avoid colliding with OpenMP thread IDs (0..N-1).
  * Each OS thread has its own TLS copy of pinsight_thread_data, so
  * the only shared state is this counter — hence the atomic. */
 static _Atomic int cuda_thread_id_counter = 2000;
 
+/* ================================================================
+ * Per-thread CUDA context/device cache (Level 2 optimization)
+ *
+ * In multi-GPU MPI apps like Castro, each rank uses a single GPU.
+ * cuptiGetContextId/DeviceId cost ~200ns each per call, adding up
+ * to ~0.5s over 1M CUPTI callbacks.  Cache the mapping in TLS so
+ * the expensive CUPTI queries are done only once per thread.
+ * ================================================================ */
+static __thread int      cuda_tls_cached = 0;
+static __thread unsigned int cuda_tls_cxtId = 0;
+static __thread unsigned int cuda_tls_devId = 0;
+static __thread CUcontext    cuda_tls_context = NULL;
+
+static inline void cuda_cache_context_device(CUcontext ctx,
+                                              unsigned int *cxtId,
+                                              unsigned int *devId) {
+    if (__builtin_expect(cuda_tls_cached && cuda_tls_context == ctx, 1)) {
+        *cxtId = cuda_tls_cxtId;
+        *devId = cuda_tls_devId;
+        return;
+    }
+    cuptiGetContextId(ctx, cxtId);
+    cuptiGetDeviceId(ctx, devId);
+    cuda_tls_cxtId   = *cxtId;
+    cuda_tls_devId   = *devId;
+    cuda_tls_context = ctx;
+    cuda_tls_cached  = 1;
+}
+
+/* ================================================================
+ * Fast timestamp (Level 2 optimization)
+ *
+ * cuptiGetTimestamp() costs ~300ns (CUPTI driver call).
+ * clock_gettime(CLOCK_MONOTONIC) costs ~25ns (vDSO, no syscall).
+ * We record the offset between the two clocks once during clock
+ * calibration, then use clock_gettime + offset for all subsequent
+ * timestamps.  The clocks are both monotonic and tick at the same
+ * rate, so the offset is constant for the process lifetime.
+ * ================================================================ */
+static int64_t cupti_clock_offset_ns = 0;  /* cupti_ts - monotonic_ns */
+static _Atomic int fast_timestamp_ready = 0;
+
+static inline uint64_t cuda_fast_timestamp(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t monotonic_ns = (uint64_t)ts.tv_sec * 1000000000ULL
+                          + (uint64_t)ts.tv_nsec;
+    return (uint64_t)((int64_t)monotonic_ns + cupti_clock_offset_ns);
+}
+
 /**
  * Ensure pinsight_thread_data is initialized for the calling thread.
- *
- * WHY here, not in LTTNG_CUPTI_Init:
- *   LTTNG_CUPTI_Init runs on one thread. pinsight_thread_data is TLS —
- *   each OS thread has its own copy. Worker threads and CUDA driver
- *   threads don't exist at init time; the first CUPTI callback on
- *   each thread is the earliest safe initialization point.
- *
- * WHY not always 0:
- *   Multiple host threads can each own a device/context and issue
- *   CUDA calls concurrently. Lexgion bookkeeping (stack, counters)
- *   is per-thread so colliding IDs cause diagnostic confusion.
- *   OpenMP threads get IDs 0..N-1 via on_ompt_callback_thread_begin.
- *   Non-OpenMP threads get IDs 2000+ from the atomic counter here.
  */
 static inline void cuda_ensure_thread_init(void) {
     if (!pinsight_thread_data.initialized) {
@@ -119,7 +157,8 @@ static void cupti_activity_init_once(void) {
 /* Fired exactly once on the first CUDA API call, guaranteeing LTTng probes
  * are registered and the session is active.  Records both CLOCK_MONOTONIC
  * and cuptiGetTimestamp() at the same instant so analysis tools can compute
- * the constant clock offset and align GPU activity records with CPU events. */
+ * the constant clock offset and align GPU activity records with CPU events.
+ * Also caches the offset for fast_timestamp use. */
 static _Atomic int clock_calibration_done = 0;
 
 static inline void cuda_emit_clock_calibration_once(void) {
@@ -131,6 +170,9 @@ static inline void cuda_emit_clock_calibration_once(void) {
                               + (uint64_t)ts.tv_nsec;
         uint64_t cupti_ts;
         cuptiGetTimestamp(&cupti_ts);
+        /* Cache offset for cuda_fast_timestamp() */
+        cupti_clock_offset_ns = (int64_t)cupti_ts - (int64_t)monotonic_ns;
+        __atomic_store_n(&fast_timestamp_ready, 1, __ATOMIC_RELEASE);
         lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cuda_clock_calibration,
                              monotonic_ns, cupti_ts);
     }
@@ -162,39 +204,13 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
     if (!cbInfo || !cbInfo->context) return;
 
     /* ----------------------------------------------------------
-     * 1. Deferred reconfig handler — mirrors OpenMP parallel_begin.
-     *    Fires on the next CUDA API call after SIGUSR1 or auto-trigger.
-     *    Only run at ENTER to avoid duplicate reloads per call.
-     *
-     *    Optimistic fast-path: plain volatile read first; atomic exchange
-     *    only when the flag appears set.  A rare missed read just defers
-     *    reconfig by one CUDA call — acceptable.
+     * 1. Check for app pause (introspection support)
      * ---------------------------------------------------------- */
-    if (cbInfo->callbackSite == CUPTI_API_ENTER) {
-        int need_reregister = 0;
-
-        if (config_reload_requested &&
-            __atomic_exchange_n(&config_reload_requested, 0,
-                                __ATOMIC_SEQ_CST)) {
-            pinsight_load_trace_config(NULL);
-            domain_default_trace_config[CUDA_domain_index].mode_change_fired = 0;
-            need_reregister = 1;
-        }
-
-        if (mode_change_requested &&
-            __atomic_exchange_n(&mode_change_requested, 0,
-                                __ATOMIC_SEQ_CST)) {
-            need_reregister = 1;
-        }
-
-        if (need_reregister) {
-            /* For CUDA, callbacks are always active — nothing to re-register.
-             * Config was already reloaded above; killswitch picks up new mode. */
-        }
-    }
+    pinsight_check_pause();
 
     /* ----------------------------------------------------------
      * 2. Domain mode check — OFF → skip everything
+     *    Reads volatile field — control thread updates it.
      * ---------------------------------------------------------- */
     if (!PINSIGHT_DOMAIN_ACTIVE(
             domain_default_trace_config[CUDA_domain_index].mode))
@@ -214,13 +230,11 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
 
     /* ----------------------------------------------------------
      * 5. Extract common callback info
+     *    Level 2: cached context/device IDs avoid 2 CUPTI calls/event
      * ---------------------------------------------------------- */
     const CUcontext context = cbInfo->context;
-
-    unsigned int cxtId;
-    cuptiGetContextId(context, &cxtId);
-    unsigned int devId;
-    cuptiGetDeviceId(context, &devId);
+    unsigned int cxtId, devId;
+    cuda_cache_context_device(context, &cxtId, &devId);
     unsigned int correlationId = cbInfo->correlationId;
 
     /* ----------------------------------------------------------
@@ -265,8 +279,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 struct contextStreamId_t ctxStreamId;
                 ctxStreamId.contextId = cxtId;
                 ctxStreamId.streamId = streamId;
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
                 dim3 grid = p->gridDim;
                 dim3 block = p->blockDim;
                 struct dimension_t dim;
@@ -283,8 +296,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
             lexgion_t *lgp = lexgion_end(NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) &&
                 lgp->trace_bit) {
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
                 lttng_ust_tracepoint(cupti_pinsight_lttng_ust,
                     cudaKernelLaunch_end, devId, correlationId, timeStamp,
                     codeptr, kernelName);
@@ -315,8 +327,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 void *dst = funcParams->dst;
                 const void *src = funcParams->src;
                 unsigned int count = funcParams->count;
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
 #ifdef PINSIGHT_BACKTRACE
                 retrieve_backtrace();
 #endif
@@ -330,8 +341,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 lgp->trace_bit) {
                 int return_val = *((int *)cbInfo->functionReturnValue);
                 const char *funName = cbInfo->functionName;
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
                 lttng_ust_tracepoint(cupti_pinsight_lttng_ust,
                     cudaMemcpy_end, devId, correlationId, timeStamp,
                     codeptr, funName, return_val);
@@ -369,8 +379,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 struct contextStreamId_t ctxStreamId;
                 ctxStreamId.contextId = cxtId;
                 ctxStreamId.streamId = streamId;
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
 #ifdef PINSIGHT_BACKTRACE
                 retrieve_backtrace();
 #endif
@@ -384,8 +393,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 lgp->trace_bit) {
                 int return_val = *((int *)cbInfo->functionReturnValue);
                 const char *funName = cbInfo->functionName;
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
                 lttng_ust_tracepoint(cupti_pinsight_lttng_ust,
                     cudaMemcpyAsync_end, devId, correlationId, timeStamp,
                     codeptr, funName, return_val);
@@ -409,8 +417,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 lgp, CUDA_domain_index, CUDA_EVENT_DEVICE_SYNCHRONIZE);
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
 #ifdef PINSIGHT_BACKTRACE
                 retrieve_backtrace();
 #endif
@@ -423,8 +430,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
             if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) &&
                 lgp->trace_bit) {
                 int return_val = *((int *)cbInfo->functionReturnValue);
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
                 lttng_ust_tracepoint(cupti_pinsight_lttng_ust,
                     cudaDeviceSync_end, devId, correlationId, timeStamp,
                     codeptr, funName, return_val);
@@ -457,8 +463,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 lgp, CUDA_domain_index, CUDA_EVENT_STREAM_SYNCHRONIZE);
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
 #ifdef PINSIGHT_BACKTRACE
                 retrieve_backtrace();
 #endif
@@ -471,8 +476,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
             if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) &&
                 lgp->trace_bit) {
                 int return_val = *((int *)cbInfo->functionReturnValue);
-                uint64_t timeStamp;
-                cuptiGetTimestamp(&timeStamp);
+                uint64_t timeStamp = cuda_fast_timestamp();
                 lttng_ust_tracepoint(cupti_pinsight_lttng_ust,
                     cudaStreamSync_end, devId, correlationId, timeStamp,
                     codeptr, funName, return_val);
@@ -580,35 +584,56 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
  * Initialization and finalization
  * ================================================================ */
 
+/* ================================================================
+ * Helper: enable/disable all CUPTI callbacks.
+ * Called by control thread and LTTNG_CUPTI_Init.
+ * cuptiEnableCallback is process-global and thread-safe.
+ * ================================================================ */
+static void cupti_set_all_callbacks(int enable) {
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaConfigureCall_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaThreadSynchronize_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaStreamCreate_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaStreamSynchronize_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaDeviceSynchronize_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaDeviceReset_v3020);
+    cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                        CUPTI_RUNTIME_TRACE_CBID_cudaThreadExit_v3020);
+}
+
+/**
+ * Called by the control thread to apply CUDA domain mode changes.
+ * Enables callbacks when TRACING/MONITORING, disables when OFF.
+ */
+void pinsight_control_cuda_apply_mode(void) {
+    int mode = domain_default_trace_config[CUDA_domain_index].mode;
+    int enable = PINSIGHT_DOMAIN_ACTIVE(mode) ? 1 : 0;
+    cupti_set_all_callbacks(enable);
+}
+
 void LTTNG_CUPTI_Init(void) {
     /* Register the CUPTI subscriber (safe before any CUDA context exists —
      * it only registers a function pointer with the CUPTI library). */
     cuptiSubscribe(&subscriber,
                    (CUpti_CallbackFunc)CUPTI_callback_lttng, NULL);
 
-    /* Enable callbacks for the CUDA runtime API events we handle */
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaConfigureCall_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaThreadSynchronize_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaStreamCreate_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaStreamSynchronize_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaDeviceSynchronize_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaDeviceReset_v3020);
-    cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                        CUPTI_RUNTIME_TRACE_CBID_cudaThreadExit_v3020);
+    /* Enable callbacks based on initial CUDA domain mode.
+     * When starting in OFF mode, no callbacks are enabled — zero overhead.
+     * Control thread will re-enable them on mode change. */
+    pinsight_control_cuda_apply_mode();
 
     /* NOTE: Activity API (cuptiActivityEnable) requires an active CUDA
      * context and MUST NOT be called at library load time in multi-GPU

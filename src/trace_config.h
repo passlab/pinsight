@@ -184,9 +184,9 @@ typedef enum {
  * domain
  */
 typedef struct domain_trace_config { // The trace config for a domain
-  pinsight_domain_mode_t mode; // Domain operating mode (OFF/MONITORING/TRACING)
-  unsigned long int events;    // The default event config for the domain
-  int mode_change_fired; // Once-per-domain latch: set when mode_after fires, reset on config reload
+  volatile pinsight_domain_mode_t mode; // Domain operating mode (OFF/MONITORING/TRACING)
+  volatile unsigned long int events;    // The default event config for the domain
+  volatile int mode_change_fired; // Once-per-domain latch: set when mode_after fires, reset on config reload
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
@@ -253,11 +253,6 @@ extern int num_lexgion_address_trace_configs;
 extern unsigned int
     trace_config_change_counter; /* bumped on every reconfig to invalidate
                                 cached trace_config in lexgions */
-extern volatile sig_atomic_t
-    config_reload_requested; /* set by SIGUSR1 handler */
-extern volatile sig_atomic_t
-    mode_change_requested; /* set by auto-trigger, deferred re-registration */
-extern void pinsight_install_signal_handler(void);
 extern void pinsight_load_trace_config(char *filepath);
 void parse_trace_config_file(char *filename);
 extern int find_domain_index(const char *name);

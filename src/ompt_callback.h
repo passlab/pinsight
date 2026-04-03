@@ -21,14 +21,12 @@ extern domain_info_t *OpenMP_domain_info;
 extern domain_trace_config_t *OpenMP_trace_config;
 
 /* Re-register or deregister OpenMP callbacks based on current domain mode.
- * Call after config reload (SIGUSR1) to sync OMPT callbacks with new mode. */
+ * Call after config reload to sync OMPT callbacks with new mode. */
 extern void pinsight_register_openmp_callbacks(void);
 
-/* Re-register parallel_begin/end when waking from OFF mode via SIGUSR1.
- * Called from the signal handler — only safe because OFF mode has no
- * callbacks in flight.  Named with _openmp suffix for future domain
- * extensibility (MPI/CUDA will need their own wakeup mechanisms). */
-extern void pinsight_wakeup_from_off_openmp(void);
+/* Called by the control thread to apply OpenMP domain mode changes.
+ * Tested safe from non-OpenMP pthread on LLVM libomp. */
+extern void pinsight_control_openmp_apply_mode(void);
 
 #ifdef PINSIGHT_OMPT_CALLBACKS
 

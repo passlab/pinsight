@@ -3,6 +3,7 @@
 //
 
 #include <pinsight.h>
+#include "pinsight_control_thread.h"
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -34,6 +35,11 @@ void enter_pinsight_func() {
   // printf("entering pinsight at host: %s by process: %d\n", hostname, pid);
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 
+  /* Start the control thread — installs SIGUSR1 handler and begins
+   * listening for config reload / mode change requests. */
+  pinsight_control_thread_start();
+  pinsight_install_signal_handler();
+
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Init();
 #endif
@@ -49,4 +55,6 @@ void exit_pinsight_func() {
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Fini();
 #endif
+  /* Stop the control thread after domain finalization */
+  pinsight_control_thread_stop();
 }

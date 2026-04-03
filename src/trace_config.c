@@ -159,43 +159,10 @@ void setup_trace_config_env() {
 }
 
 static time_t last_config_mtime = 0;
-volatile sig_atomic_t config_reload_requested = 0;
 
-#ifndef PINSIGHT_RELOAD_SIGNAL
-#define PINSIGHT_RELOAD_SIGNAL SIGUSR1
-#endif
-
-static void pinsight_sigusr1_handler(int sig) {
-  (void)sig;
-  config_reload_requested = 1; // Only safe operation in a signal handler
-  /* In OFF mode, parallel_begin/end are deregistered so the deferred
-   * handler in parallel_begin would never run.  Re-register them now so
-   * the next parallel_begin can consume config_reload_requested. */
-#ifdef PINSIGHT_OMPT_CALLBACKS
-  if (domain_default_trace_config[OpenMP_domain_index].mode ==
-      PINSIGHT_DOMAIN_OFF) {
-    pinsight_wakeup_from_off_openmp();
-  }
-#endif
-#ifdef PINSIGHT_CUDA
-  /* CUDA callbacks are always active — SIGUSR1 wakeup from OFF is automatic.
-   * The next CUDA API call picks up config_reload_requested (set above)
-   * and reloads config in the deferred handler. No explicit wakeup needed. */
-#endif
-}
-
-void pinsight_install_signal_handler() {
-  struct sigaction sa;
-  sa.sa_handler = pinsight_sigusr1_handler;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART; // Don't interrupt syscalls
-  if (sigaction(PINSIGHT_RELOAD_SIGNAL, &sa, NULL) != 0) {
-    fprintf(stderr,
-            "WARNING: Failed to install signal handler (signal %d) for config "
-            "reload: %s\n",
-            PINSIGHT_RELOAD_SIGNAL, strerror(errno));
-  }
-}
+/* Signal handler and config_reload_requested have been moved to
+ * pinsight_control_thread.c. The control thread now handles all
+ * config reloading and mode switching centrally. */
 
 void pinsight_load_trace_config(char *filepath) {
   if (!filepath) {
@@ -298,7 +265,8 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
 
   pinsight_load_trace_config(NULL);
   setup_trace_config_env();
-  pinsight_install_signal_handler();
+  /* Signal handler is now installed by pinsight_control_thread_start()
+   * in enter_exit.c — no need to call pinsight_install_signal_handler() here. */
 
   // Print domain info
   for (int di = 0; di < num_domain; di++) {

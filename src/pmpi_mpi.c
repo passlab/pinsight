@@ -139,21 +139,17 @@ int MPI_get_rank(void) {
  * PMPI_CALL_PROLOGUE / PMPI_CALL_EPILOGUE
  *
  * Pattern mirrors the OMPT and CUDA callback designs:
- *   1. Deferred reconfig: consume SIGUSR1 / auto-trigger flags atomically
- *      on the next MPI call after they are set.
- *   2. Domain killswitch: if MPI domain is OFF, skip lexgion and tracepoint
+ *   1. Domain killswitch: if MPI domain is OFF, skip lexgion and tracepoint
  *      entirely (lgp stays NULL; epilogue guards on lgp).
- *   3. Rate control: lexgion_set_top_trace_bit_domain_event decides whether
+ *   2. Rate control: lexgion_set_top_trace_bit_domain_event decides whether
  *      to fire the tracepoint for this invocation.
+ *
+ * Configuration reloading and mode switching are handled by the dedicated
+ * control thread (pinsight_control_thread.c). Mode flags are volatile —
+ * reads here see the latest value written by the control thread.
  * ================================================================ */
 #define PMPI_CALL_PROLOGUE(MPI_FUNC, ...)                                      \
   mpi_codeptr = __builtin_return_address(0);                                   \
-  /* Deferred reconfig: optimistic volatile read, atomic exchange only if set */ \
-  if (config_reload_requested &&                                               \
-      __atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST))      \
-      pinsight_load_trace_config(NULL);                                        \
-  if (mode_change_requested)                                                   \
-      __atomic_exchange_n(&mode_change_requested, 0, __ATOMIC_SEQ_CST);        \
   /* OFF-mode killswitch: lgp = NULL signals epilogue to skip entirely */       \
   lexgion_t *lgp = NULL;                                                       \
   if (PINSIGHT_DOMAIN_ACTIVE(                                                  \

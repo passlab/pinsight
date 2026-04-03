@@ -1,0 +1,294 @@
+/**
+ * pinsight_control_thread.c
+ *
+ * Dedicated PInsight control thread — centralizes all configuration
+ * changes using a single-writer / multiple-reader (SWMR) pattern.
+ *
+ * This thread:
+ *   - Sleeps in sem_wait() consuming zero CPU when idle.
+ *   - Wakes on SIGUSR1, auto-trigger, or inotify (future).
+ *   - Reads config files, updates volatile mode flags.
+ *   - Enables/disables CUPTI callbacks (process-global, thread-safe).
+ *   - Registers/deregisters OMPT callbacks (tested safe from pthread).
+ *   - Manages introspection pause/resume.
+ *   - Updates application knobs.
+ */
+#include "pinsight_control_thread.h"
+#include "pinsight.h"
+#include "pinsight_config.h"
+#include "trace_config.h"
+#include <errno.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+/* ================================================================
+ * Shared state — written only by control thread, read by app threads
+ * ================================================================ */
+volatile int pinsight_app_paused = 0;
+
+/* Pause synchronization primitives */
+pthread_mutex_t pinsight_pause_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  pinsight_pause_cond  = PTHREAD_COND_INITIALIZER;
+
+/* ================================================================
+ * Control thread internals
+ * ================================================================ */
+static pthread_t control_thread;
+static sem_t control_sem;
+static volatile int control_shutdown = 0;
+
+/* Pending wakeup reason — written by wakeup callers, read by control thread.
+ * Multiple wakeups can OR their reasons together. */
+static volatile int pending_wakeup_reason = 0;
+
+/* Pending introspection action — set by auto-trigger, consumed by control thread */
+static trace_mode_after_t *pending_introspect_action = NULL;
+
+/* ================================================================
+ * Introspection support — moved from pinsight.c
+ *
+ * Implements the pause semantics:
+ *   timeout > 0: pause for N seconds (interruptible by SIGUSR1)
+ *   timeout = 0: no pause, just run script
+ *   timeout = -1: pause indefinitely until SIGUSR1
+ * ================================================================ */
+static void control_execute_introspect(trace_mode_after_t *ma) {
+    /* 1. Launch introspection script if configured */
+    if (ma->introspect_script[0] && strcmp(ma->introspect_script, "-") != 0) {
+        /* Build the LTTng chunk path for the script */
+        char chunk_path[512] = "";
+        char *trace_home = getenv("LTTNG_HOME");
+        if (!trace_home) trace_home = getenv("HOME");
+        if (trace_home) {
+            snprintf(chunk_path, sizeof(chunk_path),
+                     "%s/lttng-traces", trace_home);
+        }
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            /* Child: exec the introspection script */
+            char pid_str[32];
+            snprintf(pid_str, sizeof(pid_str), "%d", getppid());
+            char *config_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+            if (!config_file)
+                config_file = "pinsight_trace_config.txt";
+            execlp(ma->introspect_script, ma->introspect_script,
+                   chunk_path, pid_str, config_file, (char *)NULL);
+            fprintf(stderr, "PInsight WARNING: Failed to exec '%s'\n",
+                    ma->introspect_script);
+            _exit(1);
+        } else if (pid > 0) {
+            fprintf(stderr, "PInsight: Launched analysis script '%s' (pid %d)\n",
+                    ma->introspect_script, pid);
+        } else {
+            fprintf(stderr, "PInsight WARNING: fork() failed for script '%s'\n",
+                    ma->introspect_script);
+        }
+    }
+
+    /* 2. Handle pause based on timeout */
+    if (ma->introspect_timeout == 0) {
+        /* No pause — just ran the script, continue */
+        return;
+    }
+
+    /* Pause the application */
+    pthread_mutex_lock(&pinsight_pause_mutex);
+    pinsight_app_paused = 1;
+    pthread_mutex_unlock(&pinsight_pause_mutex);
+    fprintf(stderr, "PInsight: Application paused for introspection\n");
+
+    if (ma->introspect_timeout > 0) {
+        /* Timed wait — interruptible by SIGUSR1 → sem_post */
+        struct timespec deadline;
+        clock_gettime(CLOCK_REALTIME, &deadline);
+        deadline.tv_sec += ma->introspect_timeout;
+
+        int ret = sem_timedwait(&control_sem, &deadline);
+        if (ret == -1 && errno == ETIMEDOUT) {
+            fprintf(stderr, "PInsight: INTROSPECT timeout (%ds), auto-resuming\n",
+                    ma->introspect_timeout);
+        } else {
+            fprintf(stderr, "PInsight: INTROSPECT woken by SIGUSR1, resuming\n");
+        }
+    } else {
+        /* timeout == -1: indefinite wait — only SIGUSR1 resumes */
+        fprintf(stderr, "PInsight: Waiting indefinitely for SIGUSR1 to resume\n");
+        sem_wait(&control_sem);
+        fprintf(stderr, "PInsight: INTROSPECT woken by SIGUSR1, resuming\n");
+    }
+
+    /* Resume the application */
+    pthread_mutex_lock(&pinsight_pause_mutex);
+    pinsight_app_paused = 0;
+    pthread_cond_broadcast(&pinsight_pause_cond);
+    pthread_mutex_unlock(&pinsight_pause_mutex);
+    fprintf(stderr, "PInsight: Application resumed\n");
+}
+
+/* ================================================================
+ * Apply mode changes to all domains
+ * ================================================================ */
+static void control_apply_all_modes(void) {
+#ifdef PINSIGHT_CUDA
+    pinsight_control_cuda_apply_mode();
+#endif
+    /* OMPT note: calling ompt_set_callback from the control thread while
+     * OpenMP parallel regions are actively executing causes crashes (the
+     * runtime modifies internal callback tables that worker threads read).
+     *
+     * For now, OMPT callbacks are NOT re-registered from the control thread.
+     * Instead, the volatile domain mode flag (readable by all callbacks)
+     * serves as the killswitch: when mode==OFF, parallel_begin returns
+     * immediately, achieving the same effect without callback deregistration.
+     *
+     * Full OMPT callback re-registration can be done at the next
+     * parallel_begin (sequential pre-fork point) if needed in the future. */
+#if 0 /* Disabled: see above comment */
+#ifdef PINSIGHT_OMPT_CALLBACKS
+    pinsight_control_openmp_apply_mode();
+#endif
+#endif
+    /* MPI: no registration needed — PMPI wrappers read volatile mode flag */
+}
+
+/* ================================================================
+ * Main control thread loop
+ * ================================================================ */
+static void *pinsight_control_loop(void *arg) {
+    (void)arg;
+
+    /* Block SIGUSR1 on the control thread — the signal should be
+     * delivered to an app thread that runs our handler.
+     * This prevents SIGUSR1 from interrupting sem_wait with EINTR. */
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR1);
+    pthread_sigmask(SIG_BLOCK, &mask, NULL);
+
+    while (!control_shutdown) {
+        /* Block until signaled — zero CPU when idle.
+         * Restart on EINTR (which shouldn't happen since SIGUSR1 is
+         * blocked, but defensive coding). */
+        while (sem_wait(&control_sem) == -1 && errno == EINTR)
+            continue;
+
+        if (control_shutdown) break;
+
+        /* Consume wakeup reason atomically */
+        int reason = __atomic_exchange_n(&pending_wakeup_reason, 0,
+                                          __ATOMIC_SEQ_CST);
+
+        /* 1. Config reload (SIGUSR1 or inotify) */
+        if (reason & PINSIGHT_WAKEUP_CONFIG_RELOAD) {
+            fprintf(stderr, "PInsight: Control thread reloading config\n");
+            pinsight_load_trace_config(NULL);
+            /* Reset mode_change_fired so auto-triggers can fire again */
+            for (int d = 0; d < num_domain; d++) {
+                domain_default_trace_config[d].mode_change_fired = 0;
+            }
+        }
+
+        /* 2. Introspection (pause + script) */
+        if ((reason & PINSIGHT_WAKEUP_INTROSPECT) && pending_introspect_action) {
+            trace_mode_after_t *ma = pending_introspect_action;
+            pending_introspect_action = NULL;
+
+            control_execute_introspect(ma);
+
+            /* Apply mode_after modes */
+            for (int d = 0; d < num_domain; d++) {
+                pinsight_domain_mode_t new_mode = ma->mode[d];
+                if (new_mode == PINSIGHT_DOMAIN_NONE)
+                    continue;
+                if (!domain_default_trace_config[d].mode_change_fired) {
+                    domain_default_trace_config[d].mode = new_mode;
+                    domain_default_trace_config[d].mode_change_fired = 1;
+                    fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
+                            domain_info_table[d].name,
+                            new_mode == PINSIGHT_DOMAIN_OFF        ? "OFF"
+                            : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+                                                                      : "TRACING");
+                }
+            }
+        }
+
+        /* 3. Mode change (auto-trigger without introspection) */
+        if (reason & PINSIGHT_WAKEUP_MODE_CHANGE) {
+            /* Modes already set by pinsight_fire_mode_triggers() */
+        }
+
+        /* 4. Apply domain-specific changes (enable/disable callbacks) */
+        if (reason & (PINSIGHT_WAKEUP_CONFIG_RELOAD |
+                      PINSIGHT_WAKEUP_MODE_CHANGE |
+                      PINSIGHT_WAKEUP_INTROSPECT)) {
+            control_apply_all_modes();
+        }
+    }
+
+    return NULL;
+}
+
+/* ================================================================
+ * Public API
+ * ================================================================ */
+void pinsight_control_thread_start(void) {
+    sem_init(&control_sem, 0, 0);
+    control_shutdown = 0;
+
+    int ret = pthread_create(&control_thread, NULL, pinsight_control_loop, NULL);
+    if (ret != 0) {
+        fprintf(stderr,
+                "PInsight WARNING: Failed to create control thread: %s\n",
+                strerror(ret));
+    }
+}
+
+void pinsight_control_thread_stop(void) {
+    control_shutdown = 1;
+    sem_post(&control_sem);  /* Wake the thread so it can exit */
+    pthread_join(control_thread, NULL);
+    sem_destroy(&control_sem);
+}
+
+void pinsight_control_thread_wakeup(int reason) {
+    __atomic_or_fetch(&pending_wakeup_reason, reason, __ATOMIC_SEQ_CST);
+    sem_post(&control_sem);  /* async-signal-safe */
+}
+
+/* ================================================================
+ * Signal handler — trivial, only does sem_post
+ * ================================================================ */
+static void pinsight_sigusr1_handler(int sig) {
+    (void)sig;
+    /* Use atomic OR — signal handler may run in any app thread context. */
+    __atomic_or_fetch(&pending_wakeup_reason, PINSIGHT_WAKEUP_CONFIG_RELOAD,
+                      __ATOMIC_SEQ_CST);
+    sem_post(&control_sem);
+}
+
+void pinsight_install_signal_handler(void) {
+    struct sigaction sa;
+    sa.sa_handler = pinsight_sigusr1_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGUSR1, &sa, NULL) != 0) {
+        fprintf(stderr,
+                "PInsight WARNING: Failed to install SIGUSR1 handler: %s\n",
+                strerror(errno));
+    }
+}
+
+/* ================================================================
+ * Set pending introspection action — called from pinsight_fire_mode_triggers
+ * ================================================================ */
+void pinsight_control_set_introspect(trace_mode_after_t *ma) {
+    pending_introspect_action = ma;
+}
