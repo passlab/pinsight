@@ -1,14 +1,27 @@
 # Fine-Grained Domain Trace Modes
 
-PInsight provides three operating modes per domain to control overhead-vs-detail tradeoffs at runtime.
+PInsight provides four operating modes per domain to control overhead-vs-detail tradeoffs at runtime.
+See [four_mode_trace_design.md](four_mode_trace_design.md) for the detailed design rationale.
 
 ## Modes
 
-| Mode | Description | Overhead |
-|------|-------------|----------|
-| **OFF** | Callbacks deregistered; zero per-event overhead | None |
-| **MONITORING** | Bookkeeping active (lexgion creation, counters); no LTTng output | Low |
-| **TRACING** | Full tracing with LTTng tracepoint emission (default) | Normal |
+| Mode | Description | Overhead | Reversible |
+|------|-------------|----------|------------|
+| **OFF** | Permanent teardown (finalize OMPT, unsubscribe CUPTI) | Zero | ❌ No |
+| **STANDBY** | Callbacks deregistered but tool infrastructure alive; ready for fast re-activation | Near-zero | ✅ Yes |
+| **MONITORING** | LRU lexgion lookup + counter increment; no config lookup, no LTTng output | Low | ✅ Yes |
+| **TRACING** | Full tracing: config lookup, rate decision, LTTng tracepoint emission (default) | Normal | ✅ Yes |
+
+### Per-Mode Callback Behavior
+
+| Operation | OFF | STANDBY | MONITOR | TRACE |
+|-----------|-----|---------|---------|-------|
+| Callback dispatch | ❌ | ✅ → return | ✅ | ✅ |
+| LRU lexgion lookup | ❌ | ❌ | ✅ | ✅ |
+| `count++` | ❌ | ❌ | ✅ | ✅ |
+| Config resolution | ❌ | ❌ | ❌ | ✅ |
+| Rate decision | ❌ | ❌ | ❌ | ✅ |
+| LTTng emission | ❌ | ❌ | ❌ | ✅ |
 
 Note: TRACING mode has two sub-configurations:
 - **TRACING (no session)**: LTTng-UST tracepoints fire but hit the fast-path no-op when no LTTng session is consuming traces
@@ -119,6 +132,7 @@ PINSIGHT_TRACE_<DOMAIN>=<MODE>
 | Mode | Accepted Values |
 |------|----------------|
 | OFF | `OFF`, `FALSE`, `0` |
+| STANDBY | `STANDBY` |
 | MONITORING | `MONITORING`, `MONITOR` |
 | TRACING | `ON`, `TRACING`, `TRUE`, `1` (default) |
 
@@ -128,14 +142,17 @@ PINSIGHT_TRACE_<DOMAIN>=<MODE>
 # Full tracing (default behavior)
 ./myapp
 
+# Standby — callbacks ready, near-zero overhead, activate later via SIGUSR1
+PINSIGHT_TRACE_OPENMP=STANDBY ./myapp
+
 # Monitor OpenMP regions without trace output
 PINSIGHT_TRACE_OPENMP=MONITORING ./myapp
 
-# Completely disable OpenMP tracing (zero overhead)
+# Completely disable OpenMP tracing (permanent, zero overhead)
 PINSIGHT_TRACE_OPENMP=OFF ./myapp
 
-# Mix: trace MPI, monitor OpenMP, disable CUDA
-PINSIGHT_TRACE_MPI=TRUE PINSIGHT_TRACE_OPENMP=MONITORING PINSIGHT_TRACE_CUDA=OFF ./myapp
+# Mix: trace MPI, standby OpenMP, disable CUDA
+PINSIGHT_TRACE_MPI=TRUE PINSIGHT_TRACE_OPENMP=STANDBY PINSIGHT_TRACE_CUDA=OFF ./myapp
 ```
 
 ## Composition with Per-Region Config
@@ -144,9 +161,9 @@ Domain mode is the **coarsest** control level. Within MONITORING/TRACING modes, 
 
 | Domain Mode | Per-Region trace_bit | Result |
 |---|---|---|
-| OFF | (ignored) | No callback dispatched |
-| MONITORING | trace_bit=1 | Bookkeeping runs, counters updated |
-| MONITORING | trace_bit=0 | Callback fires, skips quickly |
+| OFF | (ignored) | No callback dispatched (permanent) |
+| STANDBY | (ignored) | Callback fires → immediate return |
+| MONITORING | (not evaluated) | LRU lookup + count only; no config/rate decision |
 | TRACING | trace_bit=1 | Full LTTng tracepoint emission |
 | TRACING | trace_bit=0 | Bookkeeping only for this region |
 
@@ -157,31 +174,47 @@ Modes can be changed at runtime via the config file and SIGUSR1 signal:
 1. Edit the config file to set `trace_mode` in a `[Domain.global]` section:
    ```ini
    [OpenMP.global]
-       trace_mode = OFF
+       trace_mode = STANDBY
    ```
 2. Send `kill -USR1 <pid>`
 3. PInsight re-reads the config and calls `pinsight_register_openmp_callbacks()` to register/deregister callbacks dynamically by iterating the DSL-populated `event_table`
 
 > **Note:** Environment variables (`PINSIGHT_TRACE_OPENMP`, etc.) are read at process launch only. For runtime reconfiguration, use the config file.
 
+> [!WARNING]
+> OFF mode is **permanent**. Once a domain enters OFF, it cannot be reactivated via SIGUSR1. Use STANDBY for recoverable near-zero overhead.
+
 ## Per-Domain Mechanisms
 
 ### OpenMP (OMPT)
 
-- **OFF**: `ompt_set_callback(event, NULL)` — the OpenMP runtime stops dispatching the event entirely
-- **Re-registration**: `ompt_set_callback(event, fn)` — restores callback dispatch
+| Mode | Mechanism |
+|------|-----------|
+| **OFF** | `ompt_finalize_tool()` — permanent OMPT shutdown |
+| **STANDBY** | `ompt_set_callback(event, NULL)` — deregistered but tool active |
+| **MONITOR/TRACE** | `ompt_set_callback(event, fn)` — registered |
+
 - **Function**: `pinsight_register_openmp_callbacks()` — iterates `domain_info_t.event_table[]`, declared in `ompt_callback.h`, defined in `ompt_callback.c`
 
 ### CUDA (CUPTI)
 
-- **OFF**: `cuptiEnableCallback(0, subscriber, domain, cbid)` — native CUPTI enable/disable
-- **Re-registration**: `cuptiEnableCallback(1, ...)` — re-enables callback
+| Mode | Mechanism |
+|------|-----------|
+| **OFF** | `cuptiUnsubscribe(subscriber)` — permanent teardown |
+| **STANDBY** | `cuptiEnableCallback(0, subscriber, domain, cbid)` — dispatch off, subscriber alive |
+| **MONITOR/TRACE** | `cuptiEnableCallback(1, ...)` — dispatch on |
+
 - **Function**: `pinsight_sync_cuda_callbacks()` in `cupti_callback.c`
 
 ### MPI (PMPI)
 
-- **OFF**: Early-return guard in `PMPI_CALL_PROLOGUE` macro — PMPI wrappers are resolved at link time and cannot be deregistered. The overhead is one branch per MPI call, negligible relative to MPI communication latency.
-- **Note**: MPI interception cannot be fully deregistered because `MPI_Send()` always calls PInsight's wrapper function via the PMPI interface.
+| Mode | Mechanism |
+|------|-----------|
+| **OFF** | Permanent killswitch flag — early return, cannot reactivate |
+| **STANDBY** | `PINSIGHT_DOMAIN_ALIVE` check → early return |
+| **MONITOR/TRACE** | Full wrapper execution |
+
+- **Note**: MPI interception cannot be fully deregistered because `MPI_Send()` always calls PInsight's wrapper function via the PMPI interface. The overhead is one branch per MPI call, negligible relative to MPI communication latency.
 
 ## Implementation
 
@@ -190,14 +223,19 @@ Modes can be changed at runtime via the config file and SIGUSR1 signal:
 ```c
 // trace_config.h
 typedef enum {
-  PINSIGHT_DOMAIN_OFF = 0,
-  PINSIGHT_DOMAIN_MONITORING = 1,
-  PINSIGHT_DOMAIN_TRACING = 2
+  PINSIGHT_DOMAIN_OFF = 0,        // Permanent teardown
+  PINSIGHT_DOMAIN_STANDBY = 1,    // Callback-ready, no lexgion work
+  PINSIGHT_DOMAIN_MONITORING = 2, // LRU lookup + count, no LTTng
+  PINSIGHT_DOMAIN_TRACING = 3     // Full tracing
 } pinsight_domain_mode_t;
 
+// True for MONITORING and TRACING (modes that do lexgion work)
 #define PINSIGHT_DOMAIN_ACTIVE(mode) ((mode) >= PINSIGHT_DOMAIN_MONITORING)
+// True only for TRACING
 #define PINSIGHT_SHOULD_TRACE(domain) \
     (domain_default_trace_config[domain].mode == PINSIGHT_DOMAIN_TRACING)
+// True for STANDBY, MONITORING, and TRACING (tool alive, can be activated)
+#define PINSIGHT_DOMAIN_ALIVE(mode) ((mode) >= PINSIGHT_DOMAIN_STANDBY)
 
 typedef struct domain_trace_config {
   pinsight_domain_mode_t mode;  // Domain operating mode
@@ -248,7 +286,7 @@ trace_mode_after = INTROSPECT:timeout:script[:resume_mode]
 |-------|-------------|---------|
 | `timeout` | Seconds to wait before auto-resuming. `0` = wait indefinitely for SIGUSR1. | (required) |
 | `script` | Path to analysis script to launch. `-` = no script. | (required) |
-| `resume_mode` | Domain mode after resume: `OFF`, `MONITORING`, or `TRACING`. | `MONITORING` |
+| `resume_mode` | Domain mode after resume: `OFF`, `STANDBY`, `MONITORING`, or `TRACING`. | `MONITORING` |
 
 #### Execution Flow
 
