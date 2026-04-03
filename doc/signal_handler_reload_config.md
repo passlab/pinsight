@@ -1,38 +1,43 @@
-Approach 1: Flag-based (recommended)
-Signal handlers have strict restrictions — only async-signal-safe functions are allowed (stat() is safe, but fprintf, malloc, fopen used in parsing are not). So the handler should only set a flag, and the actual re-read happens at the next safe point:
+# Signal-Based Config Reload: Design History
 
-c
-// trace_config.c
-#include <signal.h>
+> [!NOTE]
+> This document describes the **original design** for signal-based config reload.
+> This approach has been **superseded** by the dedicated PInsight Control Thread.
+> See [control_thread_design.md](control_thread_design.md) for the current architecture.
+
+## Original Approach: Flag-Based Deferred Reconfig
+
+Signal handlers have strict restrictions — only async-signal-safe functions are allowed.
+The handler sets a flag, and the actual config re-read happens at the next callback safe point:
+
+```c
 static volatile sig_atomic_t config_reload_requested = 0;
 static void pinsight_signal_handler(int sig) {
     config_reload_requested = 1;  // Only safe operation in a signal handler
 }
-// Call this during constructor to install the handler
-void pinsight_install_signal_handler() {
-    struct sigaction sa;
-    sa.sa_handler = pinsight_signal_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;  // Don't interrupt syscalls
-    sigaction(SIGUSR1, &sa, NULL);
+```
+
+Then check the flag at `parallel_begin` (or similar callback):
+```c
+if (__atomic_exchange_n(&config_reload_requested, 0, __ATOMIC_SEQ_CST)) {
+    pinsight_load_trace_config(NULL);
 }
-Then check the flag at a natural callback point, e.g., in 
+```
 
-lexgion_set_top_trace_bit_domain_event
-:
+**Problems**: Every callback checked this flag (wasted cycles), each domain had its own
+deferred-reconfig block (~106 lines of duplicated logic), and the OFF→TRACING transition
+required calling non-signal-safe OMPT functions from the signal handler.
 
-c
-if (config_reload_requested) {
-    config_reload_requested = 0;
-    pinsight_load_trace_config(NULL);  // Safe here — not in signal context
+## Current Approach: Control Thread
+
+The signal handler is now trivial:
+```c
+static void pinsight_sigusr1_handler(int sig) {
+    __atomic_or_fetch(&pending_wakeup_reason, PINSIGHT_WAKEUP_CONFIG_RELOAD, __ATOMIC_SEQ_CST);
+    sem_post(&control_sem);  // async-signal-safe
 }
-Approach 2: Direct handler (simpler but unsafe)
-Call 
+```
 
-pinsight_load_trace_config
- directly from the signal handler. Works in practice on Linux but technically violates POSIX signal safety rules.
-
-Recommendation: Approach 1 (flag-based). The check in 
-
-lexgion_set_top_trace_bit_domain_event
- is essentially free — just reading one volatile variable. Only one thread needs to act on it.
+The dedicated control thread wakes from `sem_wait()`, performs the config reload, and
+applies mode changes. No flags are checked in the callback hot path. See
+[control_thread_design.md](control_thread_design.md) for details.

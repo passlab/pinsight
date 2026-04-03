@@ -267,8 +267,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 CUDA_LEXGION, CUDA_EVENT_KERNEL_LAUNCH, codeptr);
             lexgion_t *lgp = record->lgp;
 
-            lexgion_set_top_trace_bit_domain_event(
+            /* MONITOR mode: skip config resolution + rate decision.
+             * Only lexgion_begin above (LRU + count) runs. */
+            if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+              lexgion_set_top_trace_bit_domain_event(
                 lgp, CUDA_domain_index, CUDA_EVENT_KERNEL_LAUNCH);
+            }
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
                 cudaLaunchKernel_v7000_params *p =
@@ -319,8 +323,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 CUDA_LEXGION, event_id, codeptr);
             lexgion_t *lgp = record->lgp;
 
-            lexgion_set_top_trace_bit_domain_event(
+            if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+              lexgion_set_top_trace_bit_domain_event(
                 lgp, CUDA_domain_index, event_id);
+            }
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
                 const char *funName = cbInfo->functionName;
@@ -365,8 +371,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 CUDA_LEXGION, event_id, codeptr);
             lexgion_t *lgp = record->lgp;
 
-            lexgion_set_top_trace_bit_domain_event(
+            if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+              lexgion_set_top_trace_bit_domain_event(
                 lgp, CUDA_domain_index, event_id);
+            }
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
                 const char *funName = cbInfo->functionName;
@@ -413,8 +421,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 CUDA_LEXGION, CUDA_EVENT_DEVICE_SYNCHRONIZE, codeptr);
             lexgion_t *lgp = record->lgp;
 
-            lexgion_set_top_trace_bit_domain_event(
+            if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+              lexgion_set_top_trace_bit_domain_event(
                 lgp, CUDA_domain_index, CUDA_EVENT_DEVICE_SYNCHRONIZE);
+            }
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
                 uint64_t timeStamp = cuda_fast_timestamp();
@@ -459,8 +469,10 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata,
                 CUDA_LEXGION, CUDA_EVENT_STREAM_SYNCHRONIZE, codeptr);
             lexgion_t *lgp = record->lgp;
 
-            lexgion_set_top_trace_bit_domain_event(
+            if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+              lexgion_set_top_trace_bit_domain_event(
                 lgp, CUDA_domain_index, CUDA_EVENT_STREAM_SYNCHRONIZE);
+            }
 
             if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
                 uint64_t timeStamp = cuda_fast_timestamp();
@@ -616,12 +628,34 @@ static void cupti_set_all_callbacks(int enable) {
 
 /**
  * Called by the control thread to apply CUDA domain mode changes.
- * Enables callbacks when TRACING/MONITORING, disables when OFF.
+ * 4-mode semantics:
+ *   OFF:        cuptiUnsubscribe() — permanent teardown, irreversible.
+ *   STANDBY:    cuptiEnableCallback(0) — dispatch off, subscriber alive.
+ *   MONITORING: cuptiEnableCallback(1) — dispatch on, LRU+count only.
+ *   TRACING:    cuptiEnableCallback(1) — dispatch on, full tracing.
  */
+static int cuda_permanently_off = 0;  /* Once set, never apply again */
+
 void pinsight_control_cuda_apply_mode(void) {
-    int mode = domain_default_trace_config[CUDA_domain_index].mode;
-    int enable = PINSIGHT_DOMAIN_ACTIVE(mode) ? 1 : 0;
-    cupti_set_all_callbacks(enable);
+    if (cuda_permanently_off) return;  /* Already torn down */
+
+    pinsight_domain_mode_t mode =
+        domain_default_trace_config[CUDA_domain_index].mode;
+
+    if (mode == PINSIGHT_DOMAIN_OFF) {
+        /* Permanent teardown — flush and unsubscribe */
+        cuptiActivityFlushAll(1);
+        cuptiUnsubscribe(subscriber);
+        cuda_permanently_off = 1;
+        fprintf(stderr, "PInsight: CUDA domain permanently OFF "
+                        "(cuptiUnsubscribe)\n");
+    } else if (mode == PINSIGHT_DOMAIN_STANDBY) {
+        /* Dispatch off, subscriber alive — fast re-activation */
+        cupti_set_all_callbacks(0);
+    } else {
+        /* MONITORING or TRACING — enable dispatch */
+        cupti_set_all_callbacks(1);
+    }
 }
 
 void LTTNG_CUPTI_Init(void) {
@@ -643,6 +677,7 @@ void LTTNG_CUPTI_Init(void) {
 }
 
 void LTTNG_CUPTI_Fini(void) {
+    if (cuda_permanently_off) return;  /* Already unsubscribed by OFF mode */
     /* Flush all pending activity records before unsubscribing.
      * Flag 1 = blocking: waits for all bufferCompleted callbacks to finish
      * before returning.  Critical for AMReX/Castro which does not call

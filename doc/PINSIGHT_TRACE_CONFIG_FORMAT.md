@@ -67,7 +67,7 @@ Additional punit constraints from other domains, separated by commas. **Only app
 ### Section Body (Key-Value Pairs)
 
 #### Domain Global Configuration (`Domain.global`)
-- **Trace Mode**: `trace_mode = OFF|MONITORING|TRACING`
+- **Trace Mode**: `trace_mode = OFF|STANDBY|MONITORING|TRACING`
 - **Punit Scope**: `Domain.PunitKind = (Range)` (e.g., `OpenMP.thread = (0-15)`)
 
 #### Domain Default Configuration (`Domain.default`)
@@ -81,10 +81,13 @@ Additional punit constraints from other domains, separated by commas. **Only app
   - Shorthand: `trace_mode_after = MONITORING` (applies to all domains with events in the lexgion)
   - Explicit per-domain: `trace_mode_after = OpenMP:MONITORING, MPI:OFF`
   - **INTROSPECT action**: `trace_mode_after = INTROSPECT:timeout:script[:resume_mode]`
-    - `timeout` — seconds to wait before auto-resuming (0 = wait indefinitely for SIGUSR1)
+    - `timeout` — seconds to pause before auto-resuming. Semantics:
+      - `> 0`: pause for N seconds (interruptible by SIGUSR1)
+      - `0`: no pause — run the script and immediately continue
+      - `-1`: pause indefinitely — only SIGUSR1 resumes the app
     - `script` — analysis script to launch (`-` = none). Receives `<chunk_path> <app_pid> <config_file>` as arguments.
-    - `resume_mode` — domain mode after resume (default: `MONITORING`). Accepts `OFF`, `MONITORING`, or `TRACING`.
-    - When INTROSPECT fires, PInsight automatically runs `lttng rotate` to flush traces, then optionally launches the script, then blocks until timeout or SIGUSR1.
+    - `resume_mode` — domain mode after resume (default: `MONITORING`). Accepts `OFF`, `STANDBY`, `MONITORING`, or `TRACING`.
+    - When INTROSPECT fires, PInsight automatically runs `lttng rotate` to flush traces, then optionally launches the script, then pauses ALL application threads (via the control thread) until timeout or SIGUSR1.
 - **Event Control**: `EventName = on|off`
 
 ---
@@ -105,6 +108,13 @@ Send `kill -USR1 <pid>` after editing the config file to disable OpenMP tracing 
 ```ini
 [OpenMP.global]
     trace_mode = OFF
+```
+
+### 2b. STANDBY Mode (Recoverable Low-Overhead)
+Callbacks remain registered but return immediately. Unlike OFF (permanent), STANDBY can be switched back to TRACING via `kill -USR1`.
+```ini
+[OpenMP.global]
+    trace_mode = STANDBY
 ```
 
 ### 3. Resetting Domain Mode to Install Default
@@ -220,5 +230,21 @@ Introspect indefinitely with no script — only SIGUSR1 resumes the app.
 ```ini
 [Lexgion.default]
     max_num_traces = 50
-    trace_mode_after = INTROSPECT:0:-
+    trace_mode_after = INTROSPECT:-1:-
+```
+
+### 19. Fire-and-Forget INTROSPECT (No Pause)
+Run the analysis script immediately without pausing the application. Useful for background analysis that doesn't need the app to stop.
+```ini
+[Lexgion.default]
+    max_num_traces = 100
+    trace_mode_after = INTROSPECT:0:analyze_traces.sh:TRACING
+```
+
+### 20. INTROSPECT with STANDBY Resume
+After introspection, resume in STANDBY mode (near-zero overhead, recoverable).
+```ini
+[Lexgion.default]
+    max_num_traces = 200
+    trace_mode_after = INTROSPECT:60:analyze.sh:STANDBY
 ```

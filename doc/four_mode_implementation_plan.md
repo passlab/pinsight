@@ -2,6 +2,12 @@
 
 Based on the design in [four_mode_trace_design.md](four_mode_trace_design.md).
 
+> [!NOTE]
+> This plan is designed to work with the **PInsight Control Thread** architecture
+> (see [control_thread_design.md](control_thread_design.md)). All mode transitions
+> and callback re-registration are performed by the dedicated control thread, not
+> in the application callback hot path.
+
 ---
 
 ## Phase 1: Enum and Macros
@@ -55,36 +61,39 @@ Based on the design in [four_mode_trace_design.md](four_mode_trace_design.md).
 
 ## Phase 3: OFF Mode — Make Permanent
 
-### Files: `src/pinsight.c`, `src/ompt_callback.c`, `src/cupti_callback.c`
+### Files: `src/pinsight_control_thread.c`, `src/ompt_callback.c`, `src/cupti_callback.c`
 
 This is the breaking behavioral change: OFF becomes **irreversible**.
 
-1. **OpenMP**: When mode switches to OFF, call `ompt_finalize_tool()` instead of individual `ompt_set_callback(event, NULL)`. After finalization, the OMPT tool is permanently shut down.
+1. **OpenMP**: When mode switches to OFF, call `ompt_finalize_tool()` instead of individual `ompt_set_callback(event, NULL)`. After finalization, the OMPT tool is permanently shut down. This is safe from the control thread because `ompt_finalize_tool()` is designed to be called once and does not race with active callbacks.
 
-2. **CUDA**: When mode switches to OFF, call `cuptiUnsubscribe(subscriber)` to permanently tear down the CUPTI subscriber. The current `cuptiEnableCallback(0, ...)` approach moves to STANDBY.
+2. **CUDA**: When mode switches to OFF, call `cuptiUnsubscribe(subscriber)` to permanently tear down the CUPTI subscriber. The current `cuptiEnableCallback(0, ...)` approach moves to STANDBY. This is called from `pinsight_control_cuda_apply_mode()` which already runs in the control thread.
 
 3. **MPI**: No change needed — the killswitch early-return already works. For permanent OFF, set a `mpi_permanently_off` flag that prevents any future re-activation.
 
-4. **Disable SIGUSR1 re-activation for OFF domains**: In the SIGUSR1 config reload handler, skip any domain whose mode is OFF. The current `pinsight_wakeup_from_off_openmp()` function is no longer needed — remove it and its call site.
+4. **Disable re-activation for OFF domains**: In `control_apply_all_modes()` (control thread), skip any domain whose mode is OFF. The old `pinsight_wakeup_from_off_openmp()` function has already been removed as part of the control thread refactoring.
 
 > [!WARNING]
-> This changes existing behavior. Currently, OFF → TRACING via SIGUSR1 is supported. After this change, switching to OFF is permanent. Users who want reversible zero-overhead should use STANDBY instead.
+> This changes existing behavior. Currently, OFF → TRACING via SIGUSR1 is supported (as STANDBY behavior). After this change, switching to OFF is permanent. Users who want reversible zero-overhead should use STANDBY instead.
 
 ---
 
 ## Phase 4: STANDBY Mode — New Implementation
 
-### Files: `src/pinsight.c`, `src/ompt_callback.c`, `src/cupti_callback.c`, `src/pmpi_mpi.c`
+### Files: `src/pinsight_control_thread.c`, `src/ompt_callback.c`, `src/cupti_callback.c`, `src/pmpi_mpi.c`
 
-STANDBY inherits the current OFF's **recoverable** behavior:
+STANDBY inherits the current OFF's **recoverable** behavior. All transitions are managed by the control thread.
 
-1. **OpenMP STANDBY**: `ompt_set_callback(event, NULL)` for all domain events. Tool remains registered with OMPT. Switch to MONITOR/TRACE: `ompt_set_callback(event, fn)`.
+1. **CUDA STANDBY**: `cuptiEnableCallback(0, subscriber, domain, cbid)` to disable dispatch. Subscriber alive. Switch to MONITOR/TRACE: `cuptiEnableCallback(1, ...)`. This is already implemented in `pinsight_control_cuda_apply_mode()` — extend it to distinguish STANDBY (disable dispatch) from OFF (unsubscribe).
 
-2. **CUDA STANDBY**: `cuptiEnableCallback(0, subscriber, domain, cbid)` to disable dispatch. Subscriber alive. Switch to MONITOR/TRACE: `cuptiEnableCallback(1, ...)`.
+2. **OpenMP STANDBY**: Uses the **volatile mode flag killswitch** — when mode is STANDBY, `parallel_begin` returns immediately (`PINSIGHT_DOMAIN_ACTIVE(STANDBY)` is false). This is functionally equivalent to deregistering callbacks but avoids the OMPT cross-thread crash issue (calling `ompt_set_callback` from the control thread during active parallel regions causes SIGSEGV — see [control_thread_design.md §OpenMP](control_thread_design.md#openmp-ompt)).
+
+   > [!IMPORTANT]
+   > For true zero-overhead STANDBY, OMPT callbacks could be deregistered at the next `parallel_begin` (a sequential pre-fork point). This is a future optimization. The current approach has ~10-20ns per-event overhead (function call + immediate return), which is acceptable.
 
 3. **MPI STANDBY**: Early-return after `PINSIGHT_DOMAIN_ALIVE(mode)` check. Functionally identical to current OFF behavior for MPI wrappers.
 
-4. **SIGUSR1 transitions from STANDBY**: Reuse existing `pinsight_register_openmp_callbacks()` and `pinsight_sync_cuda_callbacks()` which already handle re-registration. The current "wakeup from OFF" logic becomes "activate from STANDBY".
+4. **SIGUSR1 transitions from STANDBY**: The control thread handles all transitions. When SIGUSR1 triggers config reload, the control thread calls `pinsight_load_trace_config()` then `control_apply_all_modes()`, which enables CUPTI callbacks for domains that moved from STANDBY to MONITOR/TRACE.
 
 ---
 
@@ -112,12 +121,12 @@ Currently MONITOR does full lexgion bookkeeping including config lookup and rate
 
 ## Phase 6: Counter Reset on INTROSPECT Cycle
 
-### Files: `src/pinsight.c`
+### Files: `src/pinsight_control_thread.c`, `src/pinsight.c`
 
-When `auto_triggered` is reset (via SIGUSR1 config reload), also reset `trace_count` for all lexgions that had `auto_triggered = true`:
+When `auto_triggered` is reset (via SIGUSR1 config reload handled by control thread), also reset `trace_count` for all lexgions that had `auto_triggered = true`:
 
 ```c
-// In pinsight_load_trace_config() or the SIGUSR1 handler
+// In pinsight_control_loop() after pinsight_load_trace_config()
 for each lexgion {
     if (lexgion->auto_triggered) {
         lexgion->trace_count = 0;
@@ -126,7 +135,9 @@ for each lexgion {
 }
 ```
 
-This ensures cyclic INTROSPECT works correctly: each cycle starts with a fresh trace budget.
+This is safe because the control thread is the single writer — app threads only read `trace_count`
+and `auto_triggered` (SWMR pattern). The reset happens inside the control thread loop after
+config reload, ensuring cyclic INTROSPECT works correctly: each cycle starts with a fresh trace budget.
 
 ---
 
@@ -161,19 +172,26 @@ This ensures cyclic INTROSPECT works correctly: each cycle starts with a fresh t
 
 ## Implementation Order
 
-| Priority | Phase | Risk | Effort |
-|----------|-------|------|--------|
-| 1 | Phase 1: Enum + macros | Low | Small |
-| 2 | Phase 2: Mode parsing | Low | Small |
-| 3 | Phase 4: STANDBY implementation | Medium | Medium — moves current OFF logic |
-| 4 | Phase 3: OFF permanent | Medium | Medium — behavioral change |
-| 5 | Phase 5: MONITOR simplification | Low | Small — mostly removing code |
-| 6 | Phase 6: Counter reset | Low | Small |
-| 7 | Phase 7: Tests | Low | Medium |
-| 8 | Phase 8: Documentation | Low | Small |
+| Priority | Phase | Risk | Effort | Notes |
+|----------|-------|------|--------|-------|
+| 1 | Phase 1: Enum + macros | Low | Small | No interaction with control thread |
+| 2 | Phase 2: Mode parsing | Low | Small | Parser changes only |
+| 3 | Phase 4: STANDBY implementation | Low | Small | CUDA: extend `control_cuda_apply_mode()`; OpenMP: volatile killswitch already works; MPI: add `ALIVE` check |
+| 4 | Phase 3: OFF permanent | Medium | Medium | Add `ompt_finalize_tool()` and `cuptiUnsubscribe()` to `control_apply_all_modes()` |
+| 5 | Phase 5: MONITOR simplification | Low | Small | Mostly removing code from callbacks |
+| 6 | Phase 6: Counter reset | Low | Small | Add reset logic to control thread loop |
+| 7 | Phase 7: Tests | Low | Medium | |
+| 8 | Phase 8: Documentation | Low | Small | |
 
 > [!IMPORTANT]
 > Phase 3 (OFF permanent) and Phase 4 (STANDBY) should be implemented together — STANDBY takes over the current recoverable-OFF behavior before OFF becomes permanent.
+
+> [!NOTE]
+> **Control thread simplification**: The control thread architecture significantly reduces the
+> implementation effort for Phases 3 and 4. All mode transition logic is centralized in
+> `control_apply_all_modes()` — there is no scattered deferred-reconfig code in callbacks to update.
+> The CUDA path already works (CUPTI is thread-safe). The OpenMP path uses the volatile mode flag
+> killswitch, so STANDBY works "for free" without any callback re-registration changes.
 
 ---
 
@@ -186,12 +204,14 @@ cd build && cmake .. && make -j48
 ```
 
 ### Functional tests
-1. **STANDBY → TRACE via SIGUSR1**: start in STANDBY, send SIGUSR1 with TRACE config, verify trace output
-2. **OFF permanence**: start in TRACE, switch to OFF, verify SIGUSR1 cannot re-activate
+1. **STANDBY → TRACE via SIGUSR1**: start in STANDBY, send SIGUSR1 with TRACE config, verify trace output. The control thread should log "Control thread reloading config" and apply the new mode.
+2. **OFF permanence**: start in TRACE, switch to OFF via SIGUSR1, verify subsequent SIGUSR1 cannot re-activate. The control thread should skip `control_apply_all_modes()` for OFF domains.
 3. **MONITOR counter**: run in MONITOR, switch to TRACE, verify `trace_starts_at` is already advanced
-4. **INTROSPECT + STANDBY resume**: verify INTROSPECT can resume to STANDBY and re-activate via SIGUSR1
-5. **Counter reset on cyclic INTROSPECT**: verify `trace_count` resets after INTROSPECT with TRACE resume
+4. **INTROSPECT + STANDBY resume**: verify INTROSPECT can resume to STANDBY and re-activate via SIGUSR1. The control thread manages the all-thread pause/resume cycle.
+5. **Counter reset on cyclic INTROSPECT**: verify `trace_count` resets after INTROSPECT with TRACE resume — the reset happens in the control thread loop.
+6. **All-thread pause**: verify that during INTROSPECT, ALL app threads block at `pinsight_check_pause()`, not just the triggering thread.
 
 ### Benchmark
 - Rerun Jacobi 512×512 benchmark with all 4 modes
-- Expected: STANDBY ≈ current OFF (< 3%), MONITOR slightly lower than current MONITORING
+- Expected: STANDBY ≈ current OFF (<3%), MONITOR slightly lower than current MONITORING
+- For OpenMP STANDBY: ~10-20ns per-event overhead due to function call + immediate return (volatile killswitch, not full callback deregistration)

@@ -162,30 +162,48 @@ typedef struct punit_trace_config {
 
 /**
  * Domain operating modes for fine-grained overhead control.
- * OFF:        All callbacks deregistered (zero per-event overhead).
- * MONITORING: Only core callbacks active, bookkeeping runs, no LTTng
- * tracepoints. TRACING:    Full tracing with LTTng output (default).
+ *
+ * OFF:        Permanent teardown — callbacks deregistered/finalized,
+ *             zero per-event overhead, irreversible.
+ * STANDBY:    Callback-ready but immediate return — near-zero overhead,
+ *             reversible. Tool infrastructure stays alive.
+ * MONITORING: LRU lookup + count only — no config resolution, no LTTng.
+ * TRACING:    Full tracing with LTTng output (default).
  */
 typedef enum {
-  PINSIGHT_DOMAIN_NONE = 0,
-  PINSIGHT_DOMAIN_OFF = 1,
-  PINSIGHT_DOMAIN_MONITORING = 2,
-  PINSIGHT_DOMAIN_TRACING = 3,
+  PINSIGHT_DOMAIN_NONE = 0,       /* No mode specified (mode_after arrays) */
+  PINSIGHT_DOMAIN_OFF = 1,        /* Permanent teardown */
+  PINSIGHT_DOMAIN_STANDBY = 2,    /* Callback-ready, immediate return */
+  PINSIGHT_DOMAIN_MONITORING = 3, /* LRU lookup + count, no LTTng */
+  PINSIGHT_DOMAIN_TRACING = 4,    /* Full tracing (default) */
 } pinsight_domain_mode_t;
 
-/* True if domain is active (MONITORING or TRACING) */
+/* True if domain is active (MONITORING or TRACING — does lexgion work) */
 #define PINSIGHT_DOMAIN_ACTIVE(mode) ((mode) >= PINSIGHT_DOMAIN_MONITORING)
 /* True if domain should emit LTTng tracepoints */
 #define PINSIGHT_SHOULD_TRACE(domain)                                          \
   (domain_default_trace_config[domain].mode == PINSIGHT_DOMAIN_TRACING)
+/* True if tool is alive (STANDBY, MONITORING, or TRACING — can be activated) */
+#define PINSIGHT_DOMAIN_ALIVE(mode) ((mode) >= PINSIGHT_DOMAIN_STANDBY)
+
+/* Convert mode enum to string — eliminates scattered ternary chains */
+static inline const char *pinsight_mode_str(pinsight_domain_mode_t mode) {
+  switch (mode) {
+  case PINSIGHT_DOMAIN_OFF:        return "OFF";
+  case PINSIGHT_DOMAIN_STANDBY:    return "STANDBY";
+  case PINSIGHT_DOMAIN_MONITORING: return "MONITORING";
+  case PINSIGHT_DOMAIN_TRACING:    return "TRACING";
+  default:                         return "NONE";
+  }
+}
 
 /**
  * The default domain trace config that specifies the events on/off for the
  * domain
  */
 typedef struct domain_trace_config { // The trace config for a domain
-  volatile pinsight_domain_mode_t mode; // Domain operating mode (OFF/MONITORING/TRACING)
-  volatile unsigned long int events;    // The default event config for the domain
+  volatile pinsight_domain_mode_t mode; // Domain operating mode (OFF/STANDBY/MONITORING/TRACING)
+  volatile unsigned long int events;    // The default event config for the domain, initially copied from domain_info->events
   volatile int mode_change_fired; // Once-per-domain latch: set when mode_after fires, reset on config reload
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
@@ -203,7 +221,7 @@ typedef struct trace_mode_after {
   pinsight_domain_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
                                                 // (NONE = no change)
   int introspect;             // 1 = introspect before switching modes
-  int introspect_timeout;     // seconds to wait (0 = wait indefinitely for SIGUSR1)
+  int introspect_timeout;     // >0: pause N seconds, 0: no pause, <0: wait indefinitely for SIGUSR1
   char introspect_script[256]; // script to invoke ("-" or "" = none)
 } trace_mode_after_t;
 

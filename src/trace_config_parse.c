@@ -60,6 +60,8 @@ static int num_current_lexgion_configs = 0;
 static pinsight_domain_mode_t parse_mode_value(const char *val) {
   if (strcasecmp(val, "OFF") == 0)
     return PINSIGHT_DOMAIN_OFF;
+  if (strcasecmp(val, "STANDBY") == 0)
+    return PINSIGHT_DOMAIN_STANDBY;
   if (strcasecmp(val, "MONITORING") == 0 || strcasecmp(val, "MONITOR") == 0)
     return PINSIGHT_DOMAIN_MONITORING;
   return PINSIGHT_DOMAIN_TRACING;
@@ -86,7 +88,7 @@ int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
     // Parse timeout
     char *endptr;
     long timeout = strtol(p, &endptr, 10);
-    out->introspect_timeout = (timeout > 0) ? (int)timeout : 0;
+    out->introspect_timeout = (int)timeout; /* >0: timed, 0: no pause, <0: indefinite */
 
     // Expect ':' after timeout
     if (*endptr != ':') {
@@ -751,19 +753,8 @@ static void parse_key_value(char *line) {
     // --- Domain.global key-value parsing ---
     // Accepts: trace_mode, Domain.PunitKind = (Range)
     if (strcmp(key, "trace_mode") == 0) {
-      if (strcasecmp(val, "OFF") == 0 || strcasecmp(val, "FALSE") == 0 ||
-          strcmp(val, "0") == 0) {
-        domain_default_trace_config[current_domain_idx].mode =
-            PINSIGHT_DOMAIN_OFF;
-      } else if (strcasecmp(val, "MONITORING") == 0 ||
-                 strcasecmp(val, "MONITOR") == 0) {
-        domain_default_trace_config[current_domain_idx].mode =
-            PINSIGHT_DOMAIN_MONITORING;
-      } else {
-        /* ON, TRACING, TRUE, 1, or any unrecognized → full tracing */
-        domain_default_trace_config[current_domain_idx].mode =
-            PINSIGHT_DOMAIN_TRACING;
-      }
+      domain_default_trace_config[current_domain_idx].mode =
+          parse_mode_value(val);
     } else {
       // Check for Domain.PunitKind = (Range)
       // e.g. OpenMP.thread = (0-64)

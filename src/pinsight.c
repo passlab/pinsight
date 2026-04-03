@@ -40,10 +40,7 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
       domain_default_trace_config[d].mode = new_mode;
       domain_default_trace_config[d].mode_change_fired = 1;
       fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
-              domain_info_table[d].name,
-              new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
-              : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
-                                                       : "TRACING");
+              domain_info_table[d].name, pinsight_mode_str(new_mode));
     }
   }
   /* Wake control thread to apply domain-specific changes

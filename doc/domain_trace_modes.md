@@ -243,18 +243,21 @@ typedef struct domain_trace_config {
 } domain_trace_config_t;
 ```
 
-### Key Files Modified
+### Key Files
 
-| File | Changes |
-|------|---------|
-| `src/trace_config.h` | Mode enum, macros |
-| `src/trace_config.c` | Env parsing (3 modes), init, print, SIGUSR1 handler |
+| File | Role |
+|------|------|
+| `src/trace_config.h` | Mode enum, macros, `domain_trace_config_t` with volatile `mode` field |
+| `src/trace_config.c` | Env parsing (4 modes), init, print |
 | `src/trace_config_parse.c` | `SECTION_DOMAIN_GLOBAL`, `trace_mode` key, `[Domain.global]` section |
-| `src/pinsight.c` | Kill-switch: `.mode == PINSIGHT_DOMAIN_OFF`, SIGUSR1 callback re-registration |
+| `src/pinsight_control_thread.h` | Control thread API: start/stop/wakeup, `pinsight_check_pause()`, domain apply declarations |
+| `src/pinsight_control_thread.c` | Control thread loop, SIGUSR1 handler, config reload, introspection, `control_apply_all_modes()` |
+| `src/pinsight.c` | `pinsight_fire_mode_triggers()` — delegates to control thread, kill-switch: `.mode == PINSIGHT_DOMAIN_OFF` |
 | `src/pinsight.h` | Kill-switch in `lexgion_check_event_enabled()` |
-| `src/ompt_callback.c` | `pinsight_register_openmp_callbacks()`, `pinsight_wakeup_from_off_openmp()`, initial task reconnection, NULL guards |
-| `src/ompt_callback.h` | Callback and wakeup function declarations |
-| `test/trace_config_parse/test_config_parser.c` | Three-mode test cases |
+| `src/ompt_callback.c` | `pinsight_register_openmp_callbacks()`, `pinsight_control_openmp_apply_mode()`, initial task reconnection, NULL guards |
+| `src/ompt_callback.h` | Callback and apply-mode function declarations |
+| `src/cupti_callback.c` | `pinsight_control_cuda_apply_mode()`, `cupti_set_all_callbacks()` helper |
+| `test/trace_config_parse/test_config_parser.c` | Mode test cases |
 
 ## Automatic Mode Switching: `trace_mode_after`
 
@@ -284,7 +287,7 @@ trace_mode_after = INTROSPECT:timeout:script[:resume_mode]
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `timeout` | Seconds to wait before auto-resuming. `0` = wait indefinitely for SIGUSR1. | (required) |
+| `timeout` | Pause duration: `>0` = pause N seconds (interruptible by SIGUSR1), `0` = no pause (run script and continue), `-1` = wait indefinitely for SIGUSR1. | (required) |
 | `script` | Path to analysis script to launch. `-` = no script. | (required) |
 | `resume_mode` | Domain mode after resume: `OFF`, `STANDBY`, `MONITORING`, or `TRACING`. | `MONITORING` |
 
@@ -311,17 +314,22 @@ When `max_num_traces` is reached and INTROSPECT is configured:
 └───────────────────────────────────────────────────┘
         │
         ▼
-┌─ 3. Block (sigsuspend) ──────────────────────────┐
+┌─ 3. Pause all app threads ───────────────────────┐
+│  Control thread sets pinsight_app_paused = 1.     │
+│  App threads block at pinsight_check_pause()      │
+│  (condvar wait).                                  │
 │  Blocks until:                                    │
-│   • SIGALRM fires (timeout expired), or           │
-│   • SIGUSR1 received (from script or external)    │
+│   • sem_timedwait timeout expires, or             │
+│   • SIGUSR1 → sem_post (from script or external)  │
 └───────────────────────────────────────────────────┘
         │
         ▼
 ┌─ 4. Resume ──────────────────────────────────────┐
-│  Switch domain modes to resume_mode.              │
-│  If SIGUSR1 triggered config_reload_requested,    │
-│  re-read the config file before continuing.       │
+│  Control thread sets pinsight_app_paused = 0,     │
+│  broadcasts condvar to wake all app threads.      │
+│  Applies mode_after domain modes.                 │
+│  If SIGUSR1 triggered config reload,              │
+│  re-reads the config file before continuing.      │
 └───────────────────────────────────────────────────┘
 ```
 
@@ -499,13 +507,15 @@ Mode switching is triggered by modifying the config file and sending `SIGUSR1`:
 
 1. Edit config file: set `trace_mode` in `[OpenMP.global]` (or other domain)
 2. Send `kill -USR1 <pid>`
-3. The SIGUSR1 handler sets `config_reload_requested = 1`
-4. At the next `parallel_begin` (sequential pre-fork point), the deferred handler:
+3. The SIGUSR1 handler (trivial, async-signal-safe) does `sem_post(&control_sem)` to wake the control thread
+4. The **control thread** wakes and:
    - Calls `pinsight_load_trace_config()` to re-read the config
-   - Calls `pinsight_register_openmp_callbacks()` to register/deregister callbacks
-   - Reconnects the initial implicit task if switching to TRACING mode
+   - Calls `control_apply_all_modes()` to apply domain-specific changes:
+     - **CUPTI**: `cuptiEnableCallback()` to enable/disable callback dispatch (thread-safe)
+     - **OMPT**: Updates volatile mode flag — OMPT callbacks check this flag and return immediately when mode is OFF/STANDBY
+     - **MPI**: No action needed — PMPI wrappers read the volatile mode flag directly
 
-For OFF→\* transitions, `pinsight_wakeup_from_off_openmp()` temporarily re-registers `parallel_begin/end` so the deferred handler can run.
+See [control_thread_design.md](control_thread_design.md) for full architecture details.
 
 ### Test Setup
 

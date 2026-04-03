@@ -134,7 +134,7 @@ static void control_execute_introspect(trace_mode_after_t *ma) {
 }
 
 /* ================================================================
- * Apply mode changes to all domains
+ * Apply mode changes to all domains (4-mode: OFF/STANDBY/MONITOR/TRACE)
  * ================================================================ */
 static void control_apply_all_modes(void) {
 #ifdef PINSIGHT_CUDA
@@ -144,10 +144,10 @@ static void control_apply_all_modes(void) {
      * OpenMP parallel regions are actively executing causes crashes (the
      * runtime modifies internal callback tables that worker threads read).
      *
-     * For now, OMPT callbacks are NOT re-registered from the control thread.
-     * Instead, the volatile domain mode flag (readable by all callbacks)
-     * serves as the killswitch: when mode==OFF, parallel_begin returns
-     * immediately, achieving the same effect without callback deregistration.
+     * For all 4 modes, the volatile mode flag serves as the killswitch:
+     *   OFF/STANDBY: PINSIGHT_DOMAIN_ACTIVE(mode) is false → immediate return
+     *   MONITORING:  active, does LRU + count only
+     *   TRACING:     active, full tracing path
      *
      * Full OMPT callback re-registration can be done at the next
      * parallel_begin (sequential pre-fork point) if needed in the future. */
@@ -213,9 +213,7 @@ static void *pinsight_control_loop(void *arg) {
                     domain_default_trace_config[d].mode_change_fired = 1;
                     fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
                             domain_info_table[d].name,
-                            new_mode == PINSIGHT_DOMAIN_OFF        ? "OFF"
-                            : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
-                                                                      : "TRACING");
+                            pinsight_mode_str(new_mode));
                 }
             }
         }

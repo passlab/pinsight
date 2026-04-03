@@ -91,9 +91,9 @@ STANDBY ↔ MONITOR ↔ TRACE
 | Transition | Mechanism |
 |-----------|-----------|
 | → OFF | `ompt_finalize_tool()` — permanent OMPT shutdown |
-| → STANDBY | `ompt_set_callback(event, NULL)` for all events — deregister but tool stays active |
-| → MONITOR | `ompt_set_callback(event, monitor_fn)` — register lightweight callbacks (LRU + count) |
-| → TRACE | `ompt_set_callback(event, trace_fn)` — register full callbacks |
+| → STANDBY | Volatile mode flag killswitch — callbacks check `PINSIGHT_DOMAIN_ACTIVE(mode)` and return immediately when STANDBY. OMPT callbacks remain registered but do no work. (Note: `ompt_set_callback(event, NULL)` from the control thread crashes during active parallel regions; see [control_thread_design.md](control_thread_design.md).) |
+| → MONITOR | Callbacks active — LRU lookup + count only |
+| → TRACE | Callbacks active — full tracing path |
 
 #### CUDA (CUPTI)
 
@@ -210,7 +210,7 @@ For `resume_mode = TRACE` (cyclic):
 |------|---------|--------------|-------------------|--------|
 | Tracing | Incrementing | Incrementing | false | Normal tracing |
 | `trace_count` hits `max_num_traces` | — | 200 | → true | Fire INTROSPECT |
-| During INTROSPECT | Frozen | 200 | true | Blocked (sigsuspend) |
+| During INTROSPECT | Frozen | 200 | true | All threads blocked at `pinsight_check_pause()` |
 | Resume to TRACE | — | **→ 0** | **→ false** | Fresh cycle begins |
 | Tracing resumes | Incrementing | Incrementing | false | Normal tracing |
 
@@ -303,3 +303,17 @@ Since MONITOR already pays for the LRU lookup (the dominant cost), adding `count
 ### Why MONITOR skips config lookup
 
 Config lookup resolves "should I trace this execution?" — a question only TRACE mode asks. MONITOR's answer is always "no", so the lookup would be wasted work.
+
+---
+
+## Control Thread Integration
+
+All mode transitions are managed by the dedicated **PInsight Control Thread** (see [control_thread_design.md](control_thread_design.md)):
+
+- **SIGUSR1** triggers `sem_post(&control_sem)` (async-signal-safe), waking the control thread
+- The control thread calls `pinsight_load_trace_config()` to re-read the config file, then `control_apply_all_modes()` to apply domain-specific changes
+- **CUPTI**: `pinsight_control_cuda_apply_mode()` calls `cuptiEnableCallback()` (thread-safe) from the control thread
+- **OMPT**: Uses volatile mode flag killswitch — `ompt_set_callback()` from the control thread during active parallel regions causes SIGSEGV due to concurrent dispatch table modification. The volatile check in `parallel_begin` provides equivalent functionality.
+- **MPI**: No callback to re-register — PMPI wrappers read the volatile mode flag directly
+- **INTROSPECT pause**: The control thread sets `pinsight_app_paused = 1` and all app threads block at `pinsight_check_pause()` (condvar-based). This pauses ALL threads, not just one (old `sigsuspend` only blocked the triggering thread).
+- **Auto-trigger**: `pinsight_fire_mode_triggers()` calls `pinsight_control_thread_wakeup(PINSIGHT_WAKEUP_INTROSPECT)` instead of directly running introspection logic in the app thread.

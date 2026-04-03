@@ -605,6 +605,27 @@ The current pause mechanism blocks **all** threads at their next callback entry 
 A future enhancement could support per-thread or per-domain pausing, though this adds
 complexity without a clear use case yet.
 
+### 5. Full Shutdown When All Domains Are OFF
+
+When all domains are permanently OFF, the control thread is idle with zero CPU usage
+(sleeping in `sem_wait()`), but its resources (pthread, semaphore, ~8KB stack) remain
+allocated, and the SIGUSR1 handler is still installed.
+
+**Current behavior**: The control thread stays alive for the process lifetime. The
+library destructor (`pinsight_control_thread_stop()`) cleans up at exit.
+
+**Why not terminate early**: Terminating the control thread when all domains reach OFF
+would require (1) deregistering the SIGUSR1 handler (otherwise `sem_post` targets a
+destroyed semaphore → undefined behavior), (2) adding a "already terminated" guard to
+the destructor to avoid `pthread_join` on a dead thread, and (3) handling the edge case
+where a domain transitions to OFF while other domains are still active. The practical
+benefit is negligible since the sleeping thread consumes zero CPU.
+
+**Future enhancement**: A `pinsight_full_shutdown()` API could perform a coordinated
+teardown of all resources at once — control thread, signal handler, semaphore, domain
+infrastructure — rather than trying to detect the all-OFF state implicitly. This would
+be useful for applications that want to explicitly mark "PInsight is done" mid-execution.
+
 ---
 
 ## Files Modified
