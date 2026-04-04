@@ -69,19 +69,29 @@ static pinsight_domain_mode_t parse_mode_value(const char *val) {
 
 /**
  * Unified parser for trace_mode_after values.
- * Handles:
- *   "MONITORING"                     -> mode[*]=MONITORING, introspect=0
- *   "OpenMP:OFF, MPI:MONITORING"     -> per-domain modes, introspect=0
- *   "INTROSPECT:60:script.sh"        -> introspect=1, resume all MONITORING
- *   "INTROSPECT:60:script.sh:TRACING"-> introspect=1, resume all TRACING
- *   "INTROSPECT:0:-"                 -> introspect indefinitely, no script
+ * Format: [INTROSPECT:<timeout>:<script>:][OFF|STANDBY|MONITOR|TRACE|<domain>:<mode>[,...]]
+ *
+ * Examples:
+ *   "MONITORING"                                    -> mode[*]=MONITORING
+ *   "OpenMP:OFF, MPI:MONITORING"                    -> per-domain modes
+ *   "INTROSPECT:60:script.sh"                       -> introspect=1, modes unset (NONE)
+ *   "INTROSPECT:60:script.sh:TRACING"               -> introspect=1, resume all TRACING
+ *   "INTROSPECT:60:script.sh:OpenMP:STANDBY,CUDA:TRACE" -> introspect=1, per-domain resume
+ *   "INTROSPECT:0:-"                                -> introspect indefinitely, no script
+ *
+ * Unspecified domains remain PINSIGHT_DOMAIN_NONE. The consumer is responsible
+ * for applying a default policy (e.g., MONITORING) when mode[d] == NONE.
+ *
  * Returns 0 on success, -1 on error.
  */
 int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
-  memset(out, 0, sizeof(*out));
+  /* Parser only writes fields that the user explicitly specifies.
+   * Caller is responsible for initializing the struct (e.g., = {0}). */
+
+  const char *mode_str = val;  // points to the mode list portion
 
   if (strncasecmp(val, "INTROSPECT:", 11) == 0) {
-    // INTROSPECT:timeout:script[:resume_mode]
+    // INTROSPECT:timeout:script[:resume_modes]
     out->introspect = 1;
     const char *p = val + 11;
 
@@ -100,71 +110,59 @@ int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
 
     // Parse script (up to next ':' or end of string)
     const char *colon = strchr(p, ':');
-    if (colon) {
-      size_t len = colon - p;
-      if (len >= sizeof(out->introspect_script))
-        len = sizeof(out->introspect_script) - 1;
-      strncpy(out->introspect_script, p, len);
-      out->introspect_script[len] = '\0';
+    size_t len = colon ? (size_t)(colon - p) : strlen(p);
+    if (len >= sizeof(out->introspect_script))
+      len = sizeof(out->introspect_script) - 1;
+    strncpy(out->introspect_script, p, len);
+    out->introspect_script[len] = '\0';
 
-      // Parse optional resume_mode
-      pinsight_domain_mode_t resume = parse_mode_value(colon + 1);
-      for (int i = 0; i < MAX_NUM_DOMAINS; i++)
-        out->mode[i] = resume;
-    } else {
-      strncpy(out->introspect_script, p, sizeof(out->introspect_script) - 1);
-      out->introspect_script[sizeof(out->introspect_script) - 1] = '\0';
-
-      // Default resume mode: MONITORING for all domains
-      for (int i = 0; i < MAX_NUM_DOMAINS; i++)
-        out->mode[i] = PINSIGHT_DOMAIN_MONITORING;
-    }
-    return 0;
+    // Advance to resume mode string (or NULL if none)
+    mode_str = colon ? colon + 1 : NULL;
   }
 
-  // Non-INTROSPECT: existing comma-separated mode parsing
-  // "MONITORING" or "OpenMP:OFF, MPI:MONITORING"
-  char val_copy[MAX_LINE_LENGTH];
-  strncpy(val_copy, val, sizeof(val_copy) - 1);
-  val_copy[sizeof(val_copy) - 1] = '\0';
+  // Parse mode list: shorthand ("MONITORING") or per-domain ("OpenMP:OFF,MPI:MONITORING")
+  if (mode_str) {
+    char val_copy[MAX_LINE_LENGTH];
+    strncpy(val_copy, mode_str, sizeof(val_copy) - 1);
+    val_copy[sizeof(val_copy) - 1] = '\0';
 
-  char *saveptr;
-  char *token = strtok_r(val_copy, ",", &saveptr);
-  while (token) {
-    char *trimmed = token;
-    while (*trimmed == ' ') trimmed++;
+    char *saveptr;
+    char *token = strtok_r(val_copy, ",", &saveptr);
+    while (token) {
+      char *trimmed = token;
+      while (*trimmed == ' ') trimmed++;
 
-    char *colon = strchr(trimmed, ':');
-    if (colon) {
-      // Explicit: "OpenMP:MONITORING"
-      *colon = '\0';
-      char *domain_name = trimmed;
-      // Trim trailing spaces from domain name
-      char *end = domain_name + strlen(domain_name) - 1;
-      while (end > domain_name && *end == ' ') *end-- = '\0';
+      char *colon = strchr(trimmed, ':');
+      if (colon) {
+        // Explicit: "OpenMP:MONITORING"
+        *colon = '\0';
+        char *domain_name = trimmed;
+        char *end = domain_name + strlen(domain_name) - 1;
+        while (end > domain_name && *end == ' ') *end-- = '\0';
 
-      char *mode_str = colon + 1;
-      while (*mode_str == ' ') mode_str++;
+        char *ms = colon + 1;
+        while (*ms == ' ') ms++;
 
-      int d_idx = find_domain_index(domain_name);
-      if (d_idx >= 0) {
-        out->mode[d_idx] = parse_mode_value(mode_str);
+        int d_idx = find_domain_index(domain_name);
+        if (d_idx >= 0) {
+          out->mode[d_idx] = parse_mode_value(ms);
+        } else {
+          fprintf(stderr, "PInsight config: unknown domain '%s' in "
+                          "trace_mode_after\n", domain_name);
+        }
       } else {
-        fprintf(stderr, "PInsight config: unknown domain '%s' in "
-                        "trace_mode_after\n", domain_name);
-      }
-    } else {
-      // Shorthand: "MONITORING" -> apply to all registered domains
-      // Trim trailing spaces
-      char *end = trimmed + strlen(trimmed) - 1;
-      while (end > trimmed && *end == ' ') *end-- = '\0';
+        // Shorthand: "MONITORING" -> apply to all registered domains
+        char *end = trimmed + strlen(trimmed) - 1;
+        while (end > trimmed && *end == ' ') *end-- = '\0';
 
-      pinsight_domain_mode_t m = parse_mode_value(trimmed);
-      for (int i = 0; i < num_domain; i++)
-        out->mode[i] = m;
+        pinsight_domain_mode_t m = parse_mode_value(trimmed);
+        for (int i = 0; i < num_domain; i++)
+          out->mode[i] = m;
+      }
+      token = strtok_r(NULL, ",", &saveptr);
     }
-    token = strtok_r(NULL, ",", &saveptr);
   }
+
   return 0;
 }
 
@@ -452,8 +450,11 @@ static int parse_section_header(char *line) {
 
         // RESET: revert mode to install default (no body)
         if (action == ACTION_RESET) {
+          domain_default_trace_config[idx].last_mode =
+              domain_default_trace_config[idx].mode;
           domain_default_trace_config[idx].mode =
               domain_info_table[idx].starting_mode;
+          domain_default_trace_config[idx].mode_change_fired = 0;
           domain_default_trace_config[idx].events =
               domain_info_table[idx].eventInstallStatus;
           current_section_type = SECTION_NONE;
@@ -701,7 +702,7 @@ static void parse_key_value(char *line) {
         cfgs[ci]->tracing_rate = v;
     } else if (strcmp(key, "trace_mode_after") == 0) {
       // Unified parsing for all trace_mode_after values (including INTROSPECT)
-      trace_mode_after_t parsed;
+      trace_mode_after_t parsed = {0};
       parse_trace_mode_after(val, &parsed);
       for (int ci = 0; ci < cfg_count; ci++)
         cfgs[ci]->mode_after = parsed;
@@ -753,8 +754,15 @@ static void parse_key_value(char *line) {
     // --- Domain.global key-value parsing ---
     // Accepts: trace_mode, Domain.PunitKind = (Range)
     if (strcmp(key, "trace_mode") == 0) {
-      domain_default_trace_config[current_domain_idx].mode =
-          parse_mode_value(val);
+      pinsight_domain_mode_t old_mode =
+          domain_default_trace_config[current_domain_idx].mode;
+      pinsight_domain_mode_t new_mode = parse_mode_value(val);
+      domain_default_trace_config[current_domain_idx].last_mode = old_mode;
+      domain_default_trace_config[current_domain_idx].mode = new_mode;
+      /* Re-arm auto-trigger only when mode actually changed and
+       * old mode is not OFF (OFF is permanent, irreversible). */
+      if (new_mode != old_mode && old_mode != PINSIGHT_DOMAIN_OFF)
+        domain_default_trace_config[current_domain_idx].mode_change_fired = 0;
     } else {
       // Check for Domain.PunitKind = (Range)
       // e.g. OpenMP.thread = (0-64)
@@ -821,10 +829,10 @@ static void parse_key_value(char *line) {
       }
 
       // Update the appropriate bitmask
-      unsigned long *events_ptr;
+      volatile unsigned long *events_ptr;
       if (current_section_type == SECTION_DOMAIN_PUNIT) {
-        punit_trace_config_t *pcfg =
-            (punit_trace_config_t *)current_punit_config;
+        volatile punit_trace_config_t *pcfg =
+            (volatile punit_trace_config_t *)current_punit_config;
         events_ptr = &pcfg->events;
       } else {
         events_ptr = &domain_default_trace_config[current_domain_idx].events;
@@ -871,8 +879,11 @@ static void reset_domain_default_config(int domain_idx) {
   // Reset events to installed defaults
   domain_default_trace_config[domain_idx].events =
       domain_info_table[domain_idx].eventInstallStatus;
+  domain_default_trace_config[domain_idx].last_mode =
+      domain_default_trace_config[domain_idx].mode;
   domain_default_trace_config[domain_idx].mode =
       domain_info_table[domain_idx].starting_mode;
+  domain_default_trace_config[domain_idx].mode_change_fired = 0;
 }
 
 static void reset_lexgion_config(lexgion_trace_config_t *lg) {
@@ -1023,9 +1034,10 @@ static int parse_punit_set_string(char *spec_str,
       // usually), we rely on public API. pinsight.h defines bitset as struct
       // with 'size' and 'bits'. If visible: But we can check if any bit < low
       // or > high is set. Since bitset_parse_ranges handles formatting, we just
-      // need to validate constraints. Actually, `bitset_parse_ranges` might not
-      // check limits? "If a punit specified ... must be within range ... If out
-      // of range, report warning and ignore." Ignoring means unsetting the bit?
+      // need to validate constraints. ActuallyYou can, `bitset_parse_ranges`
+      // might not check limits? "If a punit specified ... must be within range
+      // ... If out of range, report warning and ignore." Ignoring means
+      // unsetting the bit?
 
       // Let's implement a simple check loop using proper API
       // Assuming max range isn't huge (usually < 1024 as per init).

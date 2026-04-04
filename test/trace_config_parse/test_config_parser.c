@@ -56,8 +56,50 @@ int CUDA_domain_index;
 domain_info_t *CUDA_domain_info;
 domain_trace_config_t *CUDA_trace_config;
 
+// --- Stubs for OMPT callback functions (ompt_callback.o is not linked) ---
+#include <omp-tools.h>
+void pinsight_register_openmp_callbacks(void) {}
+void pinsight_control_openmp_apply_mode(void) {}
+void on_ompt_callback_thread_begin(ompt_thread_t t, ompt_data_t *d) {
+  (void)t; (void)d;
+}
+void on_ompt_callback_thread_end(ompt_data_t *d) { (void)d; }
+void on_ompt_callback_parallel_begin(ompt_data_t *a, const ompt_frame_t *b,
+                                     ompt_data_t *c, unsigned int d, int e,
+                                     const void *f) {
+  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;
+}
+void on_ompt_callback_parallel_end(ompt_data_t *a, ompt_data_t *b, int c,
+                                   const void *d) {
+  (void)a; (void)b; (void)c; (void)d;
+}
+void on_ompt_callback_implicit_task(ompt_scope_endpoint_t a, ompt_data_t *b,
+                                    ompt_data_t *c, unsigned int d,
+                                    unsigned int e, int f) {
+  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;
+}
+void on_ompt_callback_work(ompt_work_t a, ompt_scope_endpoint_t b,
+                           ompt_data_t *c, ompt_data_t *d, uint64_t e,
+                           const void *f) {
+  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;
+}
+void on_ompt_callback_masked(ompt_scope_endpoint_t a, ompt_data_t *b,
+                             ompt_data_t *c, const void *d) {
+  (void)a; (void)b; (void)c; (void)d;
+}
+void on_ompt_callback_sync_region(ompt_sync_region_t a,
+                                  ompt_scope_endpoint_t b, ompt_data_t *c,
+                                  ompt_data_t *d, const void *e) {
+  (void)a; (void)b; (void)c; (void)d; (void)e;
+}
+void on_ompt_callback_sync_region_wait(ompt_sync_region_t a,
+                                       ompt_scope_endpoint_t b, ompt_data_t *c,
+                                       ompt_data_t *d, const void *e) {
+  (void)a; (void)b; (void)c; (void)d; (void)e;
+}
+
 // --- Include Domain Headers to get Registration Functions ---
-// These headers define static inline register functions
+// These headers define static inline register functions.
 #include "trace_domain_CUDA.h"
 #include "trace_domain_MPI.h"
 #include "trace_domain_OpenMP.h"
@@ -1839,17 +1881,17 @@ void test_introspect_config() {
              ma->introspect_script);
       pass = 0;
     }
-    // Default resume mode: MONITORING
+    // No explicit resume mode: all domains remain NONE (consumer applies default)
     for (int i = 0; i < MAX_NUM_DOMAINS; i++) {
-      if (ma->mode[i] != PINSIGHT_DOMAIN_MONITORING) {
-        printf("[FAIL] TMA10: mode[%d]=%d (expected MONITORING=%d)\n", i,
-               ma->mode[i], PINSIGHT_DOMAIN_MONITORING);
+      if (ma->mode[i] != PINSIGHT_DOMAIN_NONE) {
+        printf("[FAIL] TMA10: mode[%d]=%d (expected NONE=%d)\n", i,
+               ma->mode[i], PINSIGHT_DOMAIN_NONE);
         pass = 0;
         break;
       }
     }
     if (pass)
-      printf("[PASS] TMA10: INTROSPECT:0:- with default MONITORING resume\n");
+      printf("[PASS] TMA10: INTROSPECT:0:- with NONE resume (consumer default)\n");
   }
 
   // --- TMA11: INTROSPECT:30:my_analysis.sh (no explicit resume mode) ---
@@ -1877,14 +1919,14 @@ void test_introspect_config() {
              ma->introspect_script);
       pass = 0;
     }
-    // Default resume: MONITORING
-    if (ma->mode[0] != PINSIGHT_DOMAIN_MONITORING) {
-      printf("[FAIL] TMA11: resume mode=%d (expected MONITORING)\n",
-             ma->mode[0]);
+    // No explicit resume mode: NONE (consumer applies default)
+    if (ma->mode[0] != PINSIGHT_DOMAIN_NONE) {
+      printf("[FAIL] TMA11: resume mode=%d (expected NONE=%d)\n",
+             ma->mode[0], PINSIGHT_DOMAIN_NONE);
       pass = 0;
     }
     if (pass)
-      printf("[PASS] TMA11: INTROSPECT:30:my_analysis.sh default resume=MONITORING\n");
+      printf("[PASS] TMA11: INTROSPECT:30:my_analysis.sh resume=NONE (consumer default)\n");
   }
 
   // --- TMA12: INTROSPECT via env var ---

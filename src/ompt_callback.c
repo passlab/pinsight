@@ -1,5 +1,5 @@
 /* This file implements OMPT callbacks — ompt_callback.h resolves callback
- * names to real extern declarations via PINSIGHT_OMPT_CALLBACKS (set by
+ * names to real extern declarations via PINSIGHT_OPENMP (set by
  * CMake target_compile_definitions for the pinsight library target). */
 #include <execinfo.h>
 #include <inttypes.h>
@@ -27,6 +27,7 @@ static long long package_energy[MAX_PACKAGES];
 #endif
 
 #include "ompt_callback.h"
+#include "pinsight_control_thread.h"
 
 int OpenMP_domain_index;
 domain_info_t *OpenMP_domain_info;
@@ -418,6 +419,7 @@ void on_ompt_callback_parallel_begin(
     const ompt_frame_t *parent_task_frame, /* frame data of encountering task */
     ompt_data_t *parallel_data, unsigned int requested_team_size, int flag,
     const void *codeptr_ra) {
+  pinsight_check_pause(); /* cooperative pause for introspection */
   /* Configuration reloading and mode switching are now handled by the
    * dedicated control thread (pinsight_control_thread.c). No deferred
    * reconfig checks needed here — mode flags are volatile and read
@@ -462,6 +464,7 @@ void on_ompt_callback_parallel_begin(
           ompt_pinsight_lttng_ust, parallel_begin, requested_team_size, flag,
           enter_frame_ptr ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
     }
+  } else { // The MONITORING mode does not need to do anything
   }
 }
 
@@ -510,11 +513,11 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
       lexgion_post_trace_update(lgp);
     }
   }
-  /* Restore enclosing context only in TRACING mode when parent_task->ptr
-   * is available.  During a MONITORING→TRACING switch, implicit_task may
-   * not have fired for workers in the current region, leaving ptr NULL. */
-  if (domain_default_trace_config[OpenMP_domain_index].mode ==
-          PINSIGHT_DOMAIN_TRACING &&
+  /* Restore enclosing context when bookkeeping is active (MONITORING/TRACING).
+   * parent_task->ptr may be NULL during mode switches where implicit_task
+   * did not fire for workers in the current region. */
+  if (PINSIGHT_DOMAIN_ACTIVE(
+          domain_default_trace_config[OpenMP_domain_index].mode) &&
       parent_task->ptr != NULL) {
     enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
     task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
@@ -538,6 +541,7 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
                                     ompt_data_t *task_data,
                                     unsigned int team_size,
                                     unsigned int thread_num, int flags) {
+  pinsight_check_pause(); /* cooperative pause for introspection */
   if (!PINSIGHT_DOMAIN_ACTIVE(
           domain_default_trace_config[OpenMP_domain_index].mode))
     return;
@@ -652,7 +656,8 @@ void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
         record = lexgion_begin(OPENMP_LEXGION, ompt_callback_work, codeptr_ra);
         lgp = record->lgp;
         lgp->trace_config = addr_config;
-        lexgion_set_rate_trace_bit(lgp);
+        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index))
+          lexgion_set_rate_trace_bit(lgp);
         enclosing_work_lgp = lgp; /* save for subsequent barrier */
       } else {
         /* No address-specific config: piggyback on enclosing parallel region */
@@ -761,7 +766,8 @@ void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
       record = lexgion_begin(OPENMP_LEXGION, ompt_callback_masked, codeptr_ra);
       lgp = record->lgp;
       lgp->trace_config = addr_config;
-      lexgion_set_rate_trace_bit(lgp);
+      if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index))
+        lexgion_set_rate_trace_bit(lgp);
     } else {
       /* Piggyback on enclosing parallel region */
       // this should be the same as enclosing_parallel_lexgion_record
@@ -841,8 +847,9 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
                                   ompt_data_t *parallel_data,
                                   ompt_data_t *task_data,
                                   const void *codeptr_ra) {
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  /* Sync callbacks have no bookkeeping role (no lexgion_begin/end).
+   * Only needed in TRACING mode for LTTng emission. */
+  if (!PINSIGHT_SHOULD_TRACE(OpenMP_domain_index))
     return;
   if (task_data->ptr == NULL)
     return; /* Mode transition: task_data not yet initialized */
@@ -863,8 +870,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         /* this is the join barrier for the parallel region: if codeptr_ra ==
          * NULL: non-master thread; if parallel_lgp->codeptr_ra == codeptr_ra:
          * master thread */
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) &&
-            lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
@@ -882,8 +888,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -906,8 +911,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       if (enclosing_work_lgp != NULL)
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -938,7 +942,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * master thread */
         lexgion_record_t *record = (lexgion_record_t *)parallel_data->ptr;
         lgp = record->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit) {
+        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -960,7 +964,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
           lgp = enclosing_work_lgp;
         else
           lgp = ((lexgion_record_t *)parallel_data->ptr)->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
+        if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
@@ -1000,8 +1004,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * and then resummoned for doing the work, so this is actually when a
          * thread is about to enter into a new parallel region and start an
          * implicit task */
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) &&
-            lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
@@ -1018,8 +1021,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -1042,8 +1044,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
       if (enclosing_work_lgp != NULL)
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -1078,7 +1079,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * thread is about to enter into a new parallel region and start an
          * implicit task */
         lgp = enclosing_parallel_lexgion_record->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit) {
+        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1099,7 +1100,7 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
           lgp = enclosing_work_lgp;
         else
           lgp = enclosing_parallel_lexgion_record->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
+        if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
 #ifdef PINSIGHT_ENERGY
@@ -1134,8 +1135,8 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
                                        ompt_data_t *parallel_data,
                                        ompt_data_t *task_data,
                                        const void *codeptr_ra) {
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  /* Sync_region_wait has no bookkeeping role — only needed for TRACING. */
+  if (!PINSIGHT_SHOULD_TRACE(OpenMP_domain_index))
     return;
   if (task_data->ptr == NULL)
     return; /* Mode transition: task_data not yet initialized */
@@ -1151,8 +1152,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         /* this is the join barrier for the parallel region: if codeptr_ra ==
          * NULL: non-master thread; if parallel_lgp->codeptr_ra == codeptr_ra:
          * master thread */
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) &&
-            lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
@@ -1167,8 +1167,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region_wait) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -1190,8 +1189,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       if (enclosing_work_lgp != NULL)
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region_wait) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0)
           rapl_sysfs_read_packages(
@@ -1219,7 +1217,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * master thread */
         lexgion_record_t *record = (lexgion_record_t *)parallel_data->ptr;
         lgp = record->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit) {
+        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1239,7 +1237,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
           lgp = enclosing_work_lgp;
         else
           lgp = enclosing_parallel_lexgion_record->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
+        if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
@@ -1276,8 +1274,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * and then resummoned for doing the work, so this is actually when a
          * thread is about to enter into a new parallel region and start an
          * implicit task */
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) &&
-            lexgion_check_event_enabled(lgp, OpenMP_domain_index,
+        if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
@@ -1292,8 +1289,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region_wait) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(
@@ -1315,8 +1311,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
       if (enclosing_work_lgp != NULL)
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
-                                      ompt_callback_sync_region_wait) &&
-          PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
+                                      ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY
         if (global_thread_num == 0) {
           rapl_sysfs_read_packages(
@@ -1351,7 +1346,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         lgp = enclosing_parallel_lexgion_record->lgp;
         if (lgp == NULL)
           break; /* Safety: no valid lexgion context */
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit) {
+        if (lgp->trace_bit) {
 #ifdef PINSIGHT_ENERGY
           if (global_thread_num == 0)
             rapl_sysfs_read_packages(
@@ -1370,7 +1365,7 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
           lgp = enclosing_work_lgp;
         else
           lgp = enclosing_parallel_lexgion_record->lgp;
-        if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
+        if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
 #ifdef PINSIGHT_ENERGY

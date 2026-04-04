@@ -11,6 +11,11 @@
 
 #include "ompt_callback.h"
 
+/* OpenMP domain globals — defined in ompt_callback.c */
+extern int OpenMP_domain_index;
+extern domain_info_t *OpenMP_domain_info;
+extern domain_trace_config_t *OpenMP_trace_config;
+
 /* --- 1. DSL BLOCK: OpenMP domain definition (data only) --- */
 
 #define OPENMP_DOMAIN_DEFINITION                                               \

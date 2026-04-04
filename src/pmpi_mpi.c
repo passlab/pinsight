@@ -10,8 +10,9 @@
  *
  */
 #include "pinsight.h"
-#include "trace_domain_MPI.h"
+#include "pinsight_control_thread.h"
 #include "trace_config.h"
+#include "trace_domain_MPI.h"
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,20 +150,23 @@ int MPI_get_rank(void) {
  * reads here see the latest value written by the control thread.
  * ================================================================ */
 #define PMPI_CALL_PROLOGUE(MPI_FUNC, ...)                                      \
-  mpi_codeptr = __builtin_return_address(0);                                   \
-  /* OFF-mode killswitch: lgp = NULL signals epilogue to skip entirely */       \
+  pinsight_check_pause(); /* cooperative pause for introspection */            \
+  /* OFF/STANDBY killswitch: lgp = NULL signals epilogue to skip entirely */   \
   lexgion_t *lgp = NULL;                                                       \
   if (PINSIGHT_DOMAIN_ACTIVE(                                                  \
           domain_default_trace_config[MPI_domain_index].mode)) {               \
+    mpi_codeptr = __builtin_return_address(0);                                 \
     lexgion_record_t *_record =                                                \
         lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);           \
     lgp = _record->lgp;                                                        \
-    lgp->num_exes_after_last_trace++;                                          \
-    lexgion_set_top_trace_bit_domain_event(lgp, MPI_domain_index,              \
-                                           MPI_FUNC##_LEXGION);                \
-    if (lgp->trace_bit) {                                                      \
-      lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_begin,         \
-                           __VA_ARGS__);                                       \
+    /* Rate decision and LTTng only in TRACING mode */                         \
+    if (PINSIGHT_SHOULD_TRACE(MPI_domain_index)) {                             \
+      lexgion_set_top_trace_bit_domain_event(lgp, MPI_domain_index,            \
+                                             MPI_FUNC##_LEXGION);              \
+      if (lgp->trace_bit) {                                                    \
+        lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_begin,        \
+                             __VA_ARGS__);                                     \
+      }                                                                        \
     }                                                                          \
   }
 
@@ -170,8 +174,8 @@ int MPI_get_rank(void) {
   if (lgp) {                                                                   \
     lexgion_end(NULL);                                                         \
     lgp->end_codeptr_ra = mpi_codeptr;                                         \
-    if (lgp->trace_bit) {                                                      \
-      lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_end,           \
+    if (PINSIGHT_SHOULD_TRACE(MPI_domain_index) && lgp->trace_bit) {           \
+      lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_end,            \
                            __VA_ARGS__);                                       \
       lexgion_post_trace_update(lgp);                                          \
     }                                                                          \
@@ -291,23 +295,25 @@ _EXTERN_C_ int PMPI_Sendrecv(const void *sendbuf, int sendcount,
                              MPI_Comm comm, MPI_Status *status);
 _EXTERN_C_ int MPI_Sendrecv(const void *sendbuf, int sendcount,
                             MPI_Datatype sendtype, int dest, int sendtag,
-                            void *recvbuf, int recvcount,
-                            MPI_Datatype recvtype, int source, int recvtag,
-                            MPI_Comm comm, MPI_Status *status) {
-  PMPI_CALL_PROLOGUE(MPI_Sendrecv, sendbuf, sendcount, dest, sendtag,
-                                   recvbuf, recvcount, source, recvtag);
-  int return_val = PMPI_Sendrecv(sendbuf, sendcount, sendtype, dest, sendtag,
-                                 recvbuf, recvcount, recvtype, source, recvtag,
-                                 comm, status);
+                            void *recvbuf, int recvcount, MPI_Datatype recvtype,
+                            int source, int recvtag, MPI_Comm comm,
+                            MPI_Status *status) {
+  PMPI_CALL_PROLOGUE(MPI_Sendrecv, sendbuf, sendcount, dest, sendtag, recvbuf,
+                     recvcount, source, recvtag);
+  int return_val =
+      PMPI_Sendrecv(sendbuf, sendcount, sendtype, dest, sendtag, recvbuf,
+                    recvcount, recvtype, source, recvtag, comm, status);
   PMPI_CALL_EPILOGUE(MPI_Sendrecv, return_val);
   return return_val;
 }
 
 /* ================== C Wrappers for MPI_Isend ================== */
 _EXTERN_C_ int PMPI_Isend(const void *buf, int count, MPI_Datatype datatype,
-                          int dest, int tag, MPI_Comm comm, MPI_Request *request);
+                          int dest, int tag, MPI_Comm comm,
+                          MPI_Request *request);
 _EXTERN_C_ int MPI_Isend(const void *buf, int count, MPI_Datatype datatype,
-                         int dest, int tag, MPI_Comm comm, MPI_Request *request) {
+                         int dest, int tag, MPI_Comm comm,
+                         MPI_Request *request) {
   PMPI_CALL_PROLOGUE(MPI_Isend, buf, count, dest, tag);
   int return_val = PMPI_Isend(buf, count, datatype, dest, tag, comm, request);
   PMPI_CALL_EPILOGUE(MPI_Isend, return_val);
@@ -316,9 +322,11 @@ _EXTERN_C_ int MPI_Isend(const void *buf, int count, MPI_Datatype datatype,
 
 /* ================== C Wrappers for MPI_Irecv ================== */
 _EXTERN_C_ int PMPI_Irecv(void *buf, int count, MPI_Datatype datatype,
-                          int source, int tag, MPI_Comm comm, MPI_Request *request);
+                          int source, int tag, MPI_Comm comm,
+                          MPI_Request *request);
 _EXTERN_C_ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
-                         int source, int tag, MPI_Comm comm, MPI_Request *request) {
+                         int source, int tag, MPI_Comm comm,
+                         MPI_Request *request) {
   PMPI_CALL_PROLOGUE(MPI_Irecv, buf, count, source, tag);
   int return_val = PMPI_Irecv(buf, count, datatype, source, tag, comm, request);
   PMPI_CALL_EPILOGUE(MPI_Irecv, return_val);
@@ -353,8 +361,8 @@ _EXTERN_C_ int MPI_Scatter(const void *sendbuf, int sendcount,
                            MPI_Datatype sendtype, void *recvbuf, int recvcount,
                            MPI_Datatype recvtype, int root, MPI_Comm comm) {
   PMPI_CALL_PROLOGUE(MPI_Scatter, sendbuf, sendcount, recvbuf, recvcount, root);
-  int return_val = PMPI_Scatter(sendbuf, sendcount, sendtype,
-                                recvbuf, recvcount, recvtype, root, comm);
+  int return_val = PMPI_Scatter(sendbuf, sendcount, sendtype, recvbuf,
+                                recvcount, recvtype, root, comm);
   PMPI_CALL_EPILOGUE(MPI_Scatter, return_val);
   return return_val;
 }
@@ -367,36 +375,39 @@ _EXTERN_C_ int MPI_Gather(const void *sendbuf, int sendcount,
                           MPI_Datatype sendtype, void *recvbuf, int recvcount,
                           MPI_Datatype recvtype, int root, MPI_Comm comm) {
   PMPI_CALL_PROLOGUE(MPI_Gather, sendbuf, sendcount, recvbuf, recvcount, root);
-  int return_val = PMPI_Gather(sendbuf, sendcount, sendtype,
-                               recvbuf, recvcount, recvtype, root, comm);
+  int return_val = PMPI_Gather(sendbuf, sendcount, sendtype, recvbuf, recvcount,
+                               recvtype, root, comm);
   PMPI_CALL_EPILOGUE(MPI_Gather, return_val);
   return return_val;
 }
 
 /* ================== C Wrappers for MPI_Allgather ================== */
 _EXTERN_C_ int PMPI_Allgather(const void *sendbuf, int sendcount,
-                              MPI_Datatype sendtype, void *recvbuf, int recvcount,
-                              MPI_Datatype recvtype, MPI_Comm comm);
+                              MPI_Datatype sendtype, void *recvbuf,
+                              int recvcount, MPI_Datatype recvtype,
+                              MPI_Comm comm);
 _EXTERN_C_ int MPI_Allgather(const void *sendbuf, int sendcount,
-                             MPI_Datatype sendtype, void *recvbuf, int recvcount,
-                             MPI_Datatype recvtype, MPI_Comm comm) {
+                             MPI_Datatype sendtype, void *recvbuf,
+                             int recvcount, MPI_Datatype recvtype,
+                             MPI_Comm comm) {
   PMPI_CALL_PROLOGUE(MPI_Allgather, sendbuf, sendcount, recvbuf, recvcount);
-  int return_val = PMPI_Allgather(sendbuf, sendcount, sendtype,
-                                  recvbuf, recvcount, recvtype, comm);
+  int return_val = PMPI_Allgather(sendbuf, sendcount, sendtype, recvbuf,
+                                  recvcount, recvtype, comm);
   PMPI_CALL_EPILOGUE(MPI_Allgather, return_val);
   return return_val;
 }
 
 /* ================== C Wrappers for MPI_Alltoall ================== */
 _EXTERN_C_ int PMPI_Alltoall(const void *sendbuf, int sendcount,
-                             MPI_Datatype sendtype, void *recvbuf, int recvcount,
-                             MPI_Datatype recvtype, MPI_Comm comm);
+                             MPI_Datatype sendtype, void *recvbuf,
+                             int recvcount, MPI_Datatype recvtype,
+                             MPI_Comm comm);
 _EXTERN_C_ int MPI_Alltoall(const void *sendbuf, int sendcount,
                             MPI_Datatype sendtype, void *recvbuf, int recvcount,
                             MPI_Datatype recvtype, MPI_Comm comm) {
   PMPI_CALL_PROLOGUE(MPI_Alltoall, sendbuf, sendcount, recvbuf, recvcount);
-  int return_val = PMPI_Alltoall(sendbuf, sendcount, sendtype,
-                                 recvbuf, recvcount, recvtype, comm);
+  int return_val = PMPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf,
+                                 recvcount, recvtype, comm);
   PMPI_CALL_EPILOGUE(MPI_Alltoall, return_val);
   return return_val;
 }

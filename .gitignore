@@ -67,3 +67,51 @@ cmake-build-debug/
 
 # Trace output directories
 traces/
+
+# IDE / Editor
+.idea/
+.cproject
+.project
+tracecompass/
+.tracecompass/
+
+# clangd index cache
+.cache/
+
+# compile_commands.json is a build artifact (symlink into build/)
+compile_commands.json
+Makefile
+
+# Scratch / one-off output files in project root or src/
+tmp.diff
+paper_text.txt
+trace_config.txt
+pinsight_trace_config.txt
+src/final_verification.txt
+src/multi_punit_output.txt
+src/parser_output.txt
+src/CMakeFiles/
+
+# Built test binaries and intermediate CUDA build files
+test/hello/helloomp
+test/jacobi/jacobi
+test/jacobi/OpenMP_trace_config.install
+test/trace_config_parse/test_parser
+test/trace_config_parse/trace_config.txt
+test/vecadd/
+test/vecaddcuda
+
+# Built experiment binaries
+experiment/backtrace/backtrace
+experiment/backtrace/backtrace_dlinfo
+experiment/backtrace/backtrace_libunwind
+
+# Local benchmark repo clones (not submodules — just local checkouts)
+eva/AMG/
+eva/Kripke/
+eva/Quicksilver/
+eva/cuda-samples/
+eva/mlperfhpc/
+eva/warpx/
+test/LULESH/
+test/cuda-samples/

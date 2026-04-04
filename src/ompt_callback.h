@@ -1,24 +1,19 @@
 /**
  * ompt_callback.h — Declarations of PInsight's OMPT callback functions.
  *
- * These callbacks are implemented in ompt_callback.c.  When that file is
- * linked into the final binary it defines PINSIGHT_OMPT_CALLBACKS before
- * including this header, which exposes the real extern declarations.
+ * These callbacks are implemented in ompt_callback.c.  This header is
+ * included only from trace_domain_OpenMP.h, which is already guarded
+ * by #ifdef PINSIGHT_OPENMP.
  *
- * Translation units that do NOT link ompt_callback.o (e.g. test_config_parser)
- * include this header without PINSIGHT_OMPT_CALLBACKS defined, so every
- * callback name expands to NULL — safe for storing in event_table.
+ * Test binaries that do NOT link ompt_callback.o must provide their
+ * own stub implementations for these symbols.
  */
 #ifndef OMPT_CALLBACK_H
 #define OMPT_CALLBACK_H
 
-#include "trace_config.h"
 #include <omp-tools.h>
 
-/* OpenMP domain globals — defined in ompt_callback.c */
-extern int OpenMP_domain_index;
-extern domain_info_t *OpenMP_domain_info;
-extern domain_trace_config_t *OpenMP_trace_config;
+/* OMPT callback declarations — resolved by linker against ompt_callback.o */
 
 /* Re-register or deregister OpenMP callbacks based on current domain mode.
  * Call after config reload to sync OMPT callbacks with new mode. */
@@ -28,9 +23,7 @@ extern void pinsight_register_openmp_callbacks(void);
  * Tested safe from non-OpenMP pthread on LLVM libomp. */
 extern void pinsight_control_openmp_apply_mode(void);
 
-#ifdef PINSIGHT_OMPT_CALLBACKS
-
-/* Real declarations — resolved by the linker against ompt_callback.o */
+/* OMPT callback declarations — resolved by linker against ompt_callback.o */
 extern void on_ompt_callback_thread_begin(ompt_thread_t, ompt_data_t *);
 extern void on_ompt_callback_thread_end(ompt_data_t *);
 extern void on_ompt_callback_parallel_begin(ompt_data_t *, const ompt_frame_t *,
@@ -53,20 +46,5 @@ extern void on_ompt_callback_sync_region_wait(ompt_sync_region_t,
                                               ompt_scope_endpoint_t,
                                               ompt_data_t *, ompt_data_t *,
                                               const void *);
-
-#else /* !PINSIGHT_OMPT_CALLBACKS */
-
-/* Stubs: callbacks not linked — all names expand to NULL */
-#define on_ompt_callback_thread_begin NULL
-#define on_ompt_callback_thread_end NULL
-#define on_ompt_callback_parallel_begin NULL
-#define on_ompt_callback_parallel_end NULL
-#define on_ompt_callback_implicit_task NULL
-#define on_ompt_callback_work NULL
-#define on_ompt_callback_masked NULL
-#define on_ompt_callback_sync_region NULL
-#define on_ompt_callback_sync_region_wait NULL
-
-#endif /* PINSIGHT_OMPT_CALLBACKS */
 
 #endif /* OMPT_CALLBACK_H */

@@ -3,6 +3,7 @@ project(pinsight)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_BUILD_TYPE Debug)
 
@@ -29,7 +30,7 @@ set(SOURCE_FILES
         src/bitset.c
         src/bitset.h
         src/trace_config.c
-    src/trace_config_parse.c
+        src/trace_config_parse.c
         src/trace_config.h
         src/trace_domain_dsl.h
         src/trace_domain_loader.h
@@ -101,10 +102,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(pinsight m dl lttng-ust pthread)
 
 if (PINSIGHT_OPENMP)
-# Define PINSIGHT_OMPT_CALLBACKS for all pinsight source files so that
-# ompt_callback.h resolves callback names to real extern declarations
-# rather than NULL stubs. The test binary omits this to avoid link errors.
-    target_compile_definitions(pinsight PRIVATE PINSIGHT_OMPT_CALLBACKS)
     target_link_libraries(pinsight omp) # no need libomp.so for pinsight
 endif()
 
@@ -160,6 +157,5 @@ add_executable(test_config_parser
     src/trace_domain_loader.c
     src/app_knob.c
 )
-target_compile_definitions(test_config_parser PRIVATE PINSIGHT_OPENMP PINSIGHT_MPI PINSIGHT_CUDA)
 target_include_directories(test_config_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/src)
 target_link_libraries(test_config_parser m ${CMAKE_DL_LIBS})

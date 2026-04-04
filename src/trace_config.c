@@ -14,7 +14,6 @@
 #endif
 
 #ifdef PINSIGHT_OPENMP
-#include "ompt_callback.h"
 #include "trace_domain_OpenMP.h"
 #endif
 
@@ -242,6 +241,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
         domain_info_table[i].eventInstallStatus;
     domain_default_trace_config[i].mode_change_fired = 0;
     domain_default_trace_config[i].mode = domain_info_table[i].starting_mode;
+    domain_default_trace_config[i].last_mode = domain_info_table[i].starting_mode;
   }
 
   // Initialize the default lexgion trace config
