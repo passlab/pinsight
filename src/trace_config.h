@@ -171,8 +171,8 @@ typedef struct punit_trace_config {
  * TRACING:    Full tracing with LTTng output (default).
  */
 typedef enum {
-  PINSIGHT_DOMAIN_NONE = 0,       /* No mode specified (mode_after arrays) */
-  PINSIGHT_DOMAIN_OFF = 1,        /* Permanent teardown */
+  PINSIGHT_DOMAIN_NONE = 0, /* No mode specified (only for trace_mode_after) */
+  PINSIGHT_DOMAIN_OFF = 1,  /* Permanent teardown */
   PINSIGHT_DOMAIN_STANDBY = 2,    /* Callback-ready, immediate return */
   PINSIGHT_DOMAIN_MONITORING = 3, /* LRU lookup + count, no LTTng */
   PINSIGHT_DOMAIN_TRACING = 4,    /* Full tracing (default) */
@@ -189,11 +189,16 @@ typedef enum {
 /* Convert mode enum to string — eliminates scattered ternary chains */
 static inline const char *pinsight_mode_str(pinsight_domain_mode_t mode) {
   switch (mode) {
-  case PINSIGHT_DOMAIN_OFF:        return "OFF";
-  case PINSIGHT_DOMAIN_STANDBY:    return "STANDBY";
-  case PINSIGHT_DOMAIN_MONITORING: return "MONITORING";
-  case PINSIGHT_DOMAIN_TRACING:    return "TRACING";
-  default:                         return "NONE";
+  case PINSIGHT_DOMAIN_OFF:
+    return "OFF";
+  case PINSIGHT_DOMAIN_STANDBY:
+    return "STANDBY";
+  case PINSIGHT_DOMAIN_MONITORING:
+    return "MONITORING";
+  case PINSIGHT_DOMAIN_TRACING:
+    return "TRACING";
+  default:
+    return "NONE";
   }
 }
 
@@ -202,9 +207,15 @@ static inline const char *pinsight_mode_str(pinsight_domain_mode_t mode) {
  * domain
  */
 typedef struct domain_trace_config { // The trace config for a domain
-  volatile pinsight_domain_mode_t mode; // Domain operating mode (OFF/STANDBY/MONITORING/TRACING)
-  volatile unsigned long int events;    // The default event config for the domain, initially copied from domain_info->events
-  volatile int mode_change_fired; // Once-per-domain latch: set when mode_after fires, reset on config reload
+  volatile pinsight_domain_mode_t
+      mode; // Domain operating mode (OFF/STANDBY/MONITORING/TRACING)
+  volatile pinsight_domain_mode_t
+      last_mode; // Previous mode (for transition detection, zero-init = NONE)
+  volatile unsigned long int
+      events; // The default event config for the domain, initially copied from
+              // domain_info->events
+  volatile int mode_change_fired; // Once-per-domain latch: set when mode_after
+                                  // fires, reset on config reload
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
@@ -213,15 +224,16 @@ extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
  * Unified trace_mode_after action: handles both regular mode switching
  * (e.g. MONITORING, OpenMP:OFF) and INTROSPECT with timeout/script.
  *
- * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect == 0.
- * For INTROSPECT:     introspect == 1, introspect_timeout/introspect_script set,
- *                     mode[] specifies per-domain resume modes after introspection.
+ * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect ==
+ * 0. For INTROSPECT:     introspect == 1, introspect_timeout/introspect_script
+ * set, mode[] specifies per-domain resume modes after introspection.
  */
 typedef struct trace_mode_after {
   pinsight_domain_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
                                                 // (NONE = no change)
-  int introspect;             // 1 = introspect before switching modes
-  int introspect_timeout;     // >0: pause N seconds, 0: no pause, <0: wait indefinitely for SIGUSR1
+  int introspect;              // 1 = introspect before switching modes
+  int introspect_timeout;      // >0: pause N seconds, 0: no pause, <0: wait
+                               // indefinitely for SIGUSR1
   char introspect_script[256]; // script to invoke ("-" or "" = none)
 } trace_mode_after_t;
 
@@ -276,7 +288,8 @@ void parse_trace_config_file(char *filename);
 extern int find_domain_index(const char *name);
 
 // Unified parser for trace_mode_after values:
-// "MONITORING", "OpenMP:OFF,MPI:MONITORING", "INTROSPECT:60:script.sh[:TRACING]"
+// "MONITORING", "OpenMP:OFF,MPI:MONITORING",
+// "INTROSPECT:60:script.sh[:TRACING]"
 extern int parse_trace_mode_after(const char *val, trace_mode_after_t *out);
 
 // Check whether the current execution punit id's match the domain_punit_set

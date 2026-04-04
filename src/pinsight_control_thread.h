@@ -84,7 +84,7 @@ static inline void pinsight_check_pause(void) {
  * Set the pending introspection action for the control thread.
  * Called from pinsight_fire_mode_triggers() when mode_after.introspect == 1.
  */
-void pinsight_control_set_introspect(trace_mode_after_t *ma);
+void pinsight_control_set_pending_action(trace_mode_after_t *ma);
 
 /* ================================================================
  * Domain-specific apply functions — called by control thread only.
@@ -99,7 +99,7 @@ void pinsight_control_set_introspect(trace_mode_after_t *ma);
 extern void pinsight_control_cuda_apply_mode(void);
 #endif
 
-#ifdef PINSIGHT_OMPT_CALLBACKS
+#ifdef PINSIGHT_OPENMP
 /**
  * Register/deregister OMPT callbacks based on current OpenMP domain mode.
  * Calls ompt_set_callback() — tested safe from non-OpenMP threads on libomp.

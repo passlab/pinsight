@@ -210,11 +210,6 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
   if (tc && tc->max_num_traces != (unsigned int)-1 &&
       lgp->trace_counter >= tc->max_num_traces) {
     pinsight_fire_mode_triggers(tc);
-    /* Reset trace_counter for cyclic INTROSPECT support:
-     * after firing, the next tracing window starts fresh.
-     * If mode_change_fired prevents re-firing, the counter
-     * stays at 0 until config reload resets mode_change_fired. */
-    lgp->trace_counter = 0;
   }
 }
 

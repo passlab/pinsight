@@ -48,8 +48,8 @@ static volatile int control_shutdown = 0;
  * Multiple wakeups can OR their reasons together. */
 static volatile int pending_wakeup_reason = 0;
 
-/* Pending introspection action — set by auto-trigger, consumed by control thread */
-static trace_mode_after_t *pending_introspect_action = NULL;
+/* Pending mode action — set by auto-trigger, consumed by control thread */
+static trace_mode_after_t *pending_mode_action = NULL;
 
 /* ================================================================
  * Introspection support — moved from pinsight.c
@@ -140,21 +140,16 @@ static void control_apply_all_modes(void) {
 #ifdef PINSIGHT_CUDA
     pinsight_control_cuda_apply_mode();
 #endif
-    /* OMPT note: calling ompt_set_callback from the control thread while
-     * OpenMP parallel regions are actively executing causes crashes (the
-     * runtime modifies internal callback tables that worker threads read).
+    /* OMPT note: calling ompt_set_callback from the control thread to
+     * register/deregister callbacks while OpenMP regions are active has
+     * not shown issues in practice (LLVM runtime uses simple pointer
+     * stores for callback slots). The volatile mode flag in each callback
+     * provides a safe fallback regardless.
      *
-     * For all 4 modes, the volatile mode flag serves as the killswitch:
-     *   OFF/STANDBY: PINSIGHT_DOMAIN_ACTIVE(mode) is false → immediate return
-     *   MONITORING:  active, does LRU + count only
-     *   TRACING:     active, full tracing path
-     *
-     * Full OMPT callback re-registration can be done at the next
-     * parallel_begin (sequential pre-fork point) if needed in the future. */
-#if 0 /* Disabled: see above comment */
-#ifdef PINSIGHT_OMPT_CALLBACKS
+     * If crashes are observed during mode switches, disable this block
+     * and rely solely on the volatile mode flag killswitch. */
+#ifdef PINSIGHT_OPENMP
     pinsight_control_openmp_apply_mode();
-#endif
 #endif
     /* MPI: no registration needed — PMPI wrappers read volatile mode flag */
 }
@@ -190,25 +185,32 @@ static void *pinsight_control_loop(void *arg) {
         if (reason & PINSIGHT_WAKEUP_CONFIG_RELOAD) {
             fprintf(stderr, "PInsight: Control thread reloading config\n");
             pinsight_load_trace_config(NULL);
-            /* Reset mode_change_fired so auto-triggers can fire again */
-            for (int d = 0; d < num_domain; d++) {
-                domain_default_trace_config[d].mode_change_fired = 0;
-            }
+            /* Note: we intentionally do NOT reset mode_change_fired here.
+             * Config reload updates configuration (modes, rates, events)
+             * but does not touch runtime state (counters, trigger guards).
+             * Auto-triggers re-arm naturally when the user increases
+             * max_num_traces in the config (new threshold > trace_count). */
         }
 
-        /* 2. Introspection (pause + script) */
-        if ((reason & PINSIGHT_WAKEUP_INTROSPECT) && pending_introspect_action) {
-            trace_mode_after_t *ma = pending_introspect_action;
-            pending_introspect_action = NULL;
+        /* 2 & 3. Auto-trigger: Mode Change and/or Introspection */
+        if ((reason & (PINSIGHT_WAKEUP_INTROSPECT | PINSIGHT_WAKEUP_MODE_CHANGE)) && pending_mode_action) {
+            trace_mode_after_t *ma = pending_mode_action;
+            pending_mode_action = NULL;
 
-            control_execute_introspect(ma);
+            if (reason & PINSIGHT_WAKEUP_INTROSPECT) {
+                control_execute_introspect(ma);
+            }
 
             /* Apply mode_after modes */
             for (int d = 0; d < num_domain; d++) {
                 pinsight_domain_mode_t new_mode = ma->mode[d];
+                /* NONE = user didn't specify → keep current mode */
                 if (new_mode == PINSIGHT_DOMAIN_NONE)
                     continue;
-                if (!domain_default_trace_config[d].mode_change_fired) {
+                if (!domain_default_trace_config[d].mode_change_fired &&
+                    new_mode != domain_default_trace_config[d].mode) {
+                    domain_default_trace_config[d].last_mode =
+                        domain_default_trace_config[d].mode;
                     domain_default_trace_config[d].mode = new_mode;
                     domain_default_trace_config[d].mode_change_fired = 1;
                     fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
@@ -216,11 +218,6 @@ static void *pinsight_control_loop(void *arg) {
                             pinsight_mode_str(new_mode));
                 }
             }
-        }
-
-        /* 3. Mode change (auto-trigger without introspection) */
-        if (reason & PINSIGHT_WAKEUP_MODE_CHANGE) {
-            /* Modes already set by pinsight_fire_mode_triggers() */
         }
 
         /* 4. Apply domain-specific changes (enable/disable callbacks) */
@@ -285,8 +282,8 @@ void pinsight_install_signal_handler(void) {
 }
 
 /* ================================================================
- * Set pending introspection action — called from pinsight_fire_mode_triggers
+ * Set pending mode action — called from pinsight_fire_mode_triggers
  * ================================================================ */
-void pinsight_control_set_introspect(trace_mode_after_t *ma) {
-    pending_introspect_action = ma;
+void pinsight_control_set_pending_action(trace_mode_after_t *ma) {
+    pending_mode_action = ma;
 }

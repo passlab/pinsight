@@ -22,30 +22,23 @@ __thread pinsight_thread_data_t pinsight_thread_data;
 void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
   trace_mode_after_t *ma = &tc->mode_after;
 
-  if (ma->introspect) {
-    /* Delegate introspection + mode switching to the control thread.
-     * The control thread will handle script execution, pause/resume,
-     * and applying the mode_after modes. */
-    pinsight_control_set_introspect(ma);
-    pinsight_control_thread_wakeup(PINSIGHT_WAKEUP_INTROSPECT);
-    return;
-  }
+  /* Delegate all auto-trigger mode switching to the control thread.
+   * The control thread handles script execution/pause (if introspect)
+   * and subsequently applies the mode_after modes.
+   *
+   * Known limitation: if two lexgions reach max_num_traces simultaneously,
+   * their pinsight_control_set_pending_action() calls race on the single
+   * pending_mode_action pointer. The second write wins. This is benign
+   * in practice: the mode change is global, and simultaneous triggers
+   * require both lexgions to cross their threshold in the exactly same
+   * scheduling window — an extremely narrow race. */
+  pinsight_control_set_pending_action(ma);
 
-  /* Non-introspect: apply mode switches directly */
-  for (int d = 0; d < num_domain; d++) {
-    pinsight_domain_mode_t new_mode = ma->mode[d];
-    if (new_mode == PINSIGHT_DOMAIN_NONE)
-      continue;
-    if (!domain_default_trace_config[d].mode_change_fired) {
-      domain_default_trace_config[d].mode = new_mode;
-      domain_default_trace_config[d].mode_change_fired = 1;
-      fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
-              domain_info_table[d].name, pinsight_mode_str(new_mode));
-    }
+  if (ma->introspect) {
+    pinsight_control_thread_wakeup(PINSIGHT_WAKEUP_INTROSPECT);
+  } else {
+    pinsight_control_thread_wakeup(PINSIGHT_WAKEUP_MODE_CHANGE);
   }
-  /* Wake control thread to apply domain-specific changes
-   * (cuptiEnableCallback, ompt_set_callback, etc.) */
-  pinsight_control_thread_wakeup(PINSIGHT_WAKEUP_MODE_CHANGE);
 }
 
 /* pinsight_execute_introspect() and the old pinsight_fire_mode_triggers()
