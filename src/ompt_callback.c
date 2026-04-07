@@ -286,7 +286,7 @@ void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
          lgp->type, lgp->counter, lgp->trace_counter, lgp->first_trace_num,    \
          lgp->last_trace_num)
 
-#define PRINT_LEXGION_SUMMARY 1
+//#define PRINT_LEXGION_SUMMARY 1
 
 void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
   if (pinsight_thread_data

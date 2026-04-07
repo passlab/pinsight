@@ -241,7 +241,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
         domain_info_table[i].eventInstallStatus;
     domain_default_trace_config[i].mode_change_fired = 0;
     domain_default_trace_config[i].mode = domain_info_table[i].starting_mode;
-    domain_default_trace_config[i].last_mode = domain_info_table[i].starting_mode;
+    domain_default_trace_config[i].last_mode = PINSIGHT_DOMAIN_NONE;
   }
 
   // Initialize the default lexgion trace config
@@ -270,6 +270,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   /* Signal handler is now installed by pinsight_control_thread_start()
    * in enter_exit.c — no need to call pinsight_install_signal_handler() here. */
 
+#ifdef PINSIGHT_PRINT_CONFIG
   // Print domain info
   for (int di = 0; di < num_domain; di++) {
     struct domain_info *d = &domain_info_table[di];
@@ -278,6 +279,7 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   print_domain_trace_config(stdout);
   print_lexgion_trace_config(stdout);
   pinsight_print_knob_config(stdout);
+#endif
 }
 
 #ifdef PINSIGHT_CUDA

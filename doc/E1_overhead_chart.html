@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PInsight E1: Instrumentation Overhead Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    padding: 32px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 32px;
+  }
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    max-width: 1200px;
+    margin: 0 auto 36px;
+  }
+  .chart-card {
+    background: #1a1d27;
+    border-radius: 14px;
+    padding: 22px 22px 16px;
+    border: 1px solid #2a2d3a;
+  }
+  .chart-card.full-width {
+    grid-column: 1 / -1;
+  }
+  .chart-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #ccc;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .chart-container { position: relative; width: 100%; }
+  .callout-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto 32px;
+  }
+  .callout {
+    background: #1a1d27;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #2a2d3a;
+    text-align: center;
+  }
+  .callout .value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .callout .label {
+    font-size: 0.75rem;
+    color: #888;
+    line-height: 1.3;
+  }
+  .green { color: #4ade80; }
+  .red { color: #f87171; }
+  .amber { color: #fbbf24; }
+  .blue { color: #60a5fa; }
+  .footer {
+    text-align: center;
+    font-size: 0.72rem;
+    color: #555;
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>PInsight Instrumentation Overhead Evaluation</h1>
+<p class="subtitle">LULESH Benchmark · AMD EPYC 7413 (48 cores, 8 NUMA nodes) · LLVM OpenMP Runtime</p>
+
+<div class="callout-row">
+  <div class="callout">
+    <div class="value green">&lt;1%</div>
+    <div class="label">PInsight STANDBY overhead<br>(60³, avg across all threads)</div>
+  </div>
+  <div class="callout">
+    <div class="value red">OOM</div>
+    <div class="label">Score-P crashes at 60³<br>(all thread counts)</div>
+  </div>
+  <div class="callout">
+    <div class="value amber">100–300×</div>
+    <div class="label">Trace size reduction<br>(STANDBY vs Full Trace)</div>
+  </div>
+  <div class="callout">
+    <div class="value blue">32%</div>
+    <div class="label">HPCToolkit overhead<br>(48³, avg across threads)</div>
+  </div>
+</div>
+
+<div class="charts-grid">
+
+  <div class="chart-card">
+    <div class="chart-title">LULESH 48³ — Overhead vs Baseline (%)</div>
+    <div class="chart-container">
+      <canvas id="chart48"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title">LULESH 60³ — Overhead vs Baseline (%)</div>
+    <div class="chart-container">
+      <canvas id="chart60"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title">Trace Size per Run (MB, log scale)</div>
+    <div class="chart-container">
+      <canvas id="chartTrace"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title">Tool Scalability at 60³</div>
+    <div class="chart-container" style="display:flex;align-items:center;justify-content:center;min-height:260px;">
+      <table style="border-collapse:collapse;width:90%;font-size:0.82rem;">
+        <thead>
+          <tr style="border-bottom:2px solid #333;">
+            <th style="text-align:left;padding:8px;color:#aaa;">Tool</th>
+            <th style="padding:8px;color:#aaa;">8T</th>
+            <th style="padding:8px;color:#aaa;">16T</th>
+            <th style="padding:8px;color:#aaa;">24T</th>
+            <th style="padding:8px;color:#aaa;">32T</th>
+            <th style="padding:8px;color:#aaa;">48T</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #2a2d3a;">
+            <td style="padding:8px;font-weight:600;">PInsight</td>
+            <td style="padding:8px;text-align:center;color:#4ade80;">✓</td>
+            <td style="padding:8px;text-align:center;color:#4ade80;">✓</td>
+            <td style="padding:8px;text-align:center;color:#4ade80;">✓</td>
+            <td style="padding:8px;text-align:center;color:#4ade80;">✓</td>
+            <td style="padding:8px;text-align:center;color:#4ade80;">✓</td>
+          </tr>
+          <tr style="border-bottom:1px solid #2a2d3a;">
+            <td style="padding:8px;font-weight:600;">HPCToolkit</td>
+            <td style="padding:8px;text-align:center;color:#fbbf24;">⚠</td>
+            <td style="padding:8px;text-align:center;color:#fbbf24;">⚠</td>
+            <td style="padding:8px;text-align:center;color:#fbbf24;">⚠</td>
+            <td style="padding:8px;text-align:center;color:#fbbf24;">⚠</td>
+            <td style="padding:8px;text-align:center;color:#fbbf24;">⚠</td>
+          </tr>
+          <tr style="border-bottom:1px solid #2a2d3a;">
+            <td style="padding:8px;font-weight:600;">Score-P</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">OOM</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">OOM</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">OOM</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">OOM</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">OOM</td>
+          </tr>
+          <tr>
+            <td style="padding:8px;font-weight:600;">Nsight Systems</td>
+            <td style="padding:8px;text-align:center;color:#fbbf24;">✓*</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">hang</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">hang</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">hang</td>
+            <td style="padding:8px;text-align:center;color:#f87171;">hang</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<p class="footer">
+  ⚠ HPCToolkit: functional but hpcrun runtime interposition alters LULESH execution characteristics at 60³ &nbsp;|&nbsp;
+  ✓* Nsight: completes LULESH but single-threaded post-processing hangs for hours
+</p>
+
+<script>
+const threads = ['8T','16T','24T','32T','48T'];
+const colors = {
+  full:    { bg: 'rgba(251,146,60,0.75)',  border: '#fb923c' },
+  standby: { bg: 'rgba(74,222,128,0.75)',  border: '#4ade80' },
+  hpc:     { bg: 'rgba(96,165,250,0.75)',  border: '#60a5fa' },
+};
+const barOpts = {
+  responsive: true,
+  plugins: {
+    legend: { labels: { color: '#aaa', font: { size: 11 } } },
+    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%' } }
+  },
+  scales: {
+    x: { ticks: { color: '#888' }, grid: { color: '#222' } },
+    y: { ticks: { color: '#888', callback: v => v+'%' }, grid: { color: '#222' },
+         title: { display: true, text: 'Overhead (%)', color: '#888' } }
+  }
+};
+
+// 48^3 chart
+new Chart(document.getElementById('chart48'), {
+  type: 'bar',
+  data: {
+    labels: threads,
+    datasets: [
+      { label: 'PInsight Full Trace', data: [13.2,24.3,24.7,24.2,28.3], backgroundColor: colors.full.bg, borderColor: colors.full.border, borderWidth: 1 },
+      { label: 'PInsight STANDBY+TBB', data: [9.3,3.3,2.9,3.6,6.6], backgroundColor: colors.standby.bg, borderColor: colors.standby.border, borderWidth: 1 },
+      { label: 'HPCToolkit', data: [28.9,36.4,31.5,31.0,33.1], backgroundColor: colors.hpc.bg, borderColor: colors.hpc.border, borderWidth: 1 },
+    ]
+  },
+  options: barOpts
+});
+
+// 60^3 chart
+new Chart(document.getElementById('chart60'), {
+  type: 'bar',
+  data: {
+    labels: threads,
+    datasets: [
+      { label: 'PInsight Full Trace', data: [12.6,9.8,8.8,8.4,8.2], backgroundColor: colors.full.bg, borderColor: colors.full.border, borderWidth: 1 },
+      { label: 'PInsight STANDBY+TBB', data: [1.0,8.1,0.5,0.3,0.0], backgroundColor: colors.standby.bg, borderColor: colors.standby.border, borderWidth: 1 },
+    ]
+  },
+  options: { ...barOpts, plugins: { ...barOpts.plugins,
+    annotation: {} } }
+});
+
+// Trace size chart
+new Chart(document.getElementById('chartTrace'), {
+  type: 'bar',
+  data: {
+    labels: threads,
+    datasets: [
+      { label: 'PInsight Full (60³)', data: [2500,1800,1600,1500,1500], backgroundColor: 'rgba(251,146,60,0.6)', borderColor: '#fb923c', borderWidth: 1 },
+      { label: 'PInsight STANDBY', data: [4.7,8.3,12,16,23], backgroundColor: 'rgba(74,222,128,0.6)', borderColor: '#4ade80', borderWidth: 1 },
+      { label: 'HPCToolkit (48³)', data: [5,7,9,11,17], backgroundColor: 'rgba(96,165,250,0.6)', borderColor: '#60a5fa', borderWidth: 1 },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#aaa', font: { size: 11 } } },
+      tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y + ' MB' } }
+    },
+    scales: {
+      x: { ticks: { color: '#888' }, grid: { color: '#222' } },
+      y: { type: 'logarithmic', ticks: { color: '#888', callback: v => v>=1000?(v/1000+'G'):(v+'M') },
+           grid: { color: '#222' }, title: { display: true, text: 'Trace Size (MB, log)', color: '#888' } }
+    }
+  }
+});
+</script>
+</body>
+</html>

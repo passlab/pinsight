@@ -21,12 +21,16 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+/* environ is required for posix_spawn to pass the full environment */
+extern char **environ;
 
 /* ================================================================
  * Shared state — written only by control thread, read by app threads
@@ -71,25 +75,43 @@ static void control_execute_introspect(trace_mode_after_t *ma) {
                      "%s/lttng-traces", trace_home);
         }
 
-        pid_t pid = fork();
-        if (pid == 0) {
-            /* Child: exec the introspection script */
-            char pid_str[32];
-            snprintf(pid_str, sizeof(pid_str), "%d", getppid());
-            char *config_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
-            if (!config_file)
-                config_file = "pinsight_trace_config.txt";
-            execlp(ma->introspect_script, ma->introspect_script,
-                   chunk_path, pid_str, config_file, (char *)NULL);
-            fprintf(stderr, "PInsight WARNING: Failed to exec '%s'\n",
-                    ma->introspect_script);
-            _exit(1);
-        } else if (pid > 0) {
+        /* Build argv for: bash <script> <chunk_path> <pid_str> <config> */
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", getpid());
+        char *config_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+        if (!config_file) config_file = "pinsight_trace_config.txt";
+
+        char *argv[] = {
+            "bash", (char *)ma->introspect_script,
+            chunk_path, pid_str, config_file, NULL
+        };
+
+        /* Build a clean envp: copy environ but strip LD_PRELOAD and
+         * OMP_TOOL_LIBRARIES to prevent TBB/OMPT from re-initialising
+         * inside the bash child — a common cause of fork-child deadlocks. */
+        int env_count = 0;
+        while (environ[env_count]) env_count++;
+        char **child_env = malloc((env_count + 1) * sizeof(char *));
+        int j = 0;
+        for (int i = 0; i < env_count; i++) {
+            if (strncmp(environ[i], "LD_PRELOAD=", 11) == 0) continue;
+            if (strncmp(environ[i], "OMP_TOOL_LIBRARIES=", 19) == 0) continue;
+            child_env[j++] = environ[i];
+        }
+        child_env[j] = NULL;
+
+        /* posix_spawn is safe to use from multithreaded context — it does
+         * not inherit locked mutexes the way fork() does. */
+        pid_t pid = -1;
+        int rc = posix_spawn(&pid, "/bin/bash", NULL, NULL, argv, child_env);
+        free(child_env);
+
+        if (rc == 0) {
             fprintf(stderr, "PInsight: Launched analysis script '%s' (pid %d)\n",
                     ma->introspect_script, pid);
         } else {
-            fprintf(stderr, "PInsight WARNING: fork() failed for script '%s'\n",
-                    ma->introspect_script);
+            fprintf(stderr, "PInsight WARNING: posix_spawn failed for '%s': %s\n",
+                    ma->introspect_script, strerror(rc));
         }
     }
 
@@ -149,7 +171,7 @@ static void control_apply_all_modes(void) {
      * If crashes are observed during mode switches, disable this block
      * and rely solely on the volatile mode flag killswitch. */
 #ifdef PINSIGHT_OPENMP
-    pinsight_control_openmp_apply_mode();
+    // pinsight_control_openmp_apply_mode();
 #endif
     /* MPI: no registration needed — PMPI wrappers read volatile mode flag */
 }
