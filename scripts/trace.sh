@@ -52,8 +52,7 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH_PREPEND}:$LD_LIBRARY_PATH
 
 echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
-# Clean the trace folder first
-rm -rf ${TRACING_OUTPUT_DEST}
+# Clean the trace folder first (disabled: let caller manage trace dirs)\n# rm -rf ${TRACING_OUTPUT_DEST}
 
 # --------------------------------------------------------
 # Main tracing commands
@@ -107,7 +106,7 @@ lttng start
 #LD_PRELOAD=${PINSIGHT_LIB} "$@"
 #LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:/usr/lib/x86_64-linux-gnu/liblttng-ust-dl.so OMP_TOOL_LIBRARIES=${PINSIGHT_LIB} "$@"
 #LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile-fast.so
-LD_PRELOAD=${PINSIGHT_LIB} OMP_TOOL_LIBRARIES=${PINSIGHT_LIB} "$@"
+LD_PRELOAD="${PINSIGHT_LIB} ${LD_PRELOAD}" OMP_TOOL_LIBRARIES=${PINSIGHT_LIB} "$@"
 
 # LD_PRELOAD=/usr/lib/x86_64-linux-gnu/liblttng-ust-cyg-profile.so:${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"
 # LD_PRELOAD=${PINSIGHT_LIB} LTTNG_UST_ALLOW_BLOCKING=1 "$@"

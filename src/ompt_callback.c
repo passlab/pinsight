@@ -561,6 +561,10 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
     // already setup by the parallel_begin. But they are needed for worker
     // threads
     enclosing_parallel_lexgion_record = parallel_data->ptr;
+    /* Guard: MPI-spawned processes may receive implicit_task before
+     * the initial parallel region is set up via thread_begin. */
+    if (enclosing_parallel_lexgion_record == NULL)
+      return;
     parallel_codeptr = enclosing_parallel_lexgion_record->lgp->codeptr_ra;
     parallel_record_id = enclosing_parallel_lexgion_record->record_id;
 
@@ -575,7 +579,7 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
     task_codeptr = parallel_codeptr;
     task_record_id = enclosing_task_lexgion_record->record_id;
     lexgion_t *lgp = enclosing_parallel_lexgion_record->lgp;
-    if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
+    if (lgp != NULL && PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_implicit_task)) {
 #ifdef PINSIGHT_ENERGY
@@ -605,8 +609,11 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
     lgp->end_codeptr_ra = (void *)
         UNKNOWN_END_CODEPTR; // Sadly, it is unknow at this point since
                              // parallel_end happens after this event callback
-    lexgion_t *parallel_lgp = enclosing_parallel_lexgion_record->lgp;
-    if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && parallel_lgp->trace_bit &&
+    lexgion_t *parallel_lgp = (enclosing_parallel_lexgion_record != NULL)
+                                  ? enclosing_parallel_lexgion_record->lgp
+                                  : NULL;
+    if (parallel_lgp != NULL &&
+        PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && parallel_lgp->trace_bit &&
         lexgion_check_event_enabled(parallel_lgp, OpenMP_domain_index,
                                     ompt_callback_implicit_task)) {
 #ifdef PINSIGHT_ENERGY

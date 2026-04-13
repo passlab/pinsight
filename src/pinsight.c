@@ -1,6 +1,6 @@
 #include "pinsight.h"
-#include "trace_config.h"
 #include "pinsight_control_thread.h"
+#include "trace_config.h"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,7 +44,6 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
 /* pinsight_execute_introspect() and the old pinsight_fire_mode_triggers()
  * have been moved to pinsight_control_thread.c. The control thread now
  * handles introspection, pause/resume, and callback re-registration. */
-
 
 /** init thread data
  */
@@ -365,7 +364,7 @@ int lexgion_check_event_enabled(lexgion_t *lgp, int domain, int event) {
   }
 
   /* Check whether the punit set is enabled for tracing */
-  if (tc->domain_punit_set_set) {
+  if (tc != NULL && tc->domain_punit_set_set) {
     if (!domain_punit_set_match(tc->domain_punits)) {
       return 0;
     }
