@@ -107,6 +107,9 @@ typedef struct lexgion {
                                * incremented only for regions with independent
                                * rate-limiting: topmost parallel/task or regions
                                * with address-specific config) */
+  unsigned int introspect_gen; /* generation when trace_counter was last reset;
+                                * compared against mode_after.generation to detect
+                                * new cycles and auto-reset the counter */
   unsigned int
       first_trace_num; // the execution number when the first trace is recorded
   unsigned int
@@ -207,9 +210,21 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
 
   // Auto-trigger: fire mode changes when max_num_traces is reached
   lexgion_trace_config_t *tc = lgp->trace_config;
-  if (tc && tc->max_num_traces != (unsigned int)-1 &&
-      lgp->trace_counter >= tc->max_num_traces) {
-    pinsight_fire_mode_triggers(tc);
+  if (tc && tc->max_num_traces != (unsigned int)-1) {
+    /* Generation check: if the control thread advanced the generation
+     * (cyclic INTROSPECT completed), all lexgions must reset their
+     * counter to start a fresh tracing window. This ensures evenly
+     * spaced cycles regardless of per-lexgion invocation rates. */
+    unsigned int cur_gen = tc->mode_after.generation;
+    if (lgp->introspect_gen != cur_gen) {
+      lgp->trace_counter = 1; /* this trace is the first of the new cycle */
+      lgp->introspect_gen = cur_gen;
+    }
+
+    if (lgp->trace_counter >= tc->max_num_traces) {
+      pinsight_fire_mode_triggers(tc);
+      lgp->trace_counter = 0;
+    }
   }
 }
 

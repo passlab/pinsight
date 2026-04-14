@@ -224,6 +224,7 @@ static void *pinsight_control_loop(void *arg) {
             }
 
             /* Apply mode_after modes */
+            int cyclic_resume = 0; /* detect TRACING resume for counter reset */
             for (int d = 0; d < num_domain; d++) {
                 pinsight_domain_mode_t new_mode = ma->mode[d];
                 /* NONE = user didn't specify → keep current mode */
@@ -239,6 +240,28 @@ static void *pinsight_control_loop(void *arg) {
                             domain_info_table[d].name,
                             pinsight_mode_str(new_mode));
                 }
+                if (new_mode == PINSIGHT_DOMAIN_TRACING)
+                    cyclic_resume = 1;
+            }
+
+            /* Cyclic INTROSPECT: if any domain resumes to TRACING,
+             * advance the generation counter and reset latches so the
+             * next cycle can fire with a full tracing window.
+             *
+             * The generation increment causes ALL lexgions (across all
+             * threads) to auto-reset their trace_counter on the next
+             * invocation of lexgion_post_trace_update(), regardless of
+             * which lexgion fired this cycle. This ensures evenly
+             * spaced cycles even when lexgions have different call rates. */
+            if (cyclic_resume) {
+                for (int d = 0; d < num_domain; d++) {
+                    domain_default_trace_config[d].mode_change_fired = 0;
+                }
+                __atomic_store_n(&ma->fired, 0, __ATOMIC_SEQ_CST);
+                ma->generation++;  /* all lexgions will see new gen and reset */
+                fprintf(stderr,
+                    "PInsight: Cyclic INTROSPECT: cycle %u complete, "
+                    "latches reset for next cycle\n", ma->generation);
             }
         }
 

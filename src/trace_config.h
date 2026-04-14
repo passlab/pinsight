@@ -235,6 +235,11 @@ typedef struct trace_mode_after {
   int introspect_timeout;      // >0: pause N seconds, 0: no pause, <0: wait
                                // indefinitely for SIGUSR1
   char introspect_script[256]; // script to invoke ("-" or "" = none)
+  volatile int fired;          // latch: set by first lexgion to fire,
+                               // prevents duplicate triggers in same cycle
+  volatile unsigned int generation; // incremented each cyclic INTROSPECT cycle;
+                                    // lexgions compare against their local
+                                    // introspect_gen to auto-reset trace_counter
 } trace_mode_after_t;
 
 /**

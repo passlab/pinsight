@@ -22,16 +22,19 @@ __thread pinsight_thread_data_t pinsight_thread_data;
 void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
   trace_mode_after_t *ma = &tc->mode_after;
 
+  /* Atomic latch: only the FIRST lexgion to reach max_num_traces fires
+   * the trigger. All subsequent lexgions see fired==1 and skip.
+   * This prevents duplicate posix_spawn and mode transitions. */
+  int expected = 0;
+  if (!__atomic_compare_exchange_n(&ma->fired, &expected, 1,
+                                   0 /* strong */, __ATOMIC_SEQ_CST,
+                                   __ATOMIC_SEQ_CST)) {
+    return; /* Already fired by another lexgion in this cycle */
+  }
+
   /* Delegate all auto-trigger mode switching to the control thread.
    * The control thread handles script execution/pause (if introspect)
-   * and subsequently applies the mode_after modes.
-   *
-   * Known limitation: if two lexgions reach max_num_traces simultaneously,
-   * their pinsight_control_set_pending_action() calls race on the single
-   * pending_mode_action pointer. The second write wins. This is benign
-   * in practice: the mode change is global, and simultaneous triggers
-   * require both lexgions to cross their threshold in the exactly same
-   * scheduling window — an extremely narrow race. */
+   * and subsequently applies the mode_after modes. */
   pinsight_control_set_pending_action(ma);
 
   if (ma->introspect) {
