@@ -6,11 +6,28 @@
 - **Benchmark**: Castro Sedov 3D, 128³ base grid, 2 AMR levels, 200 steps
 - **Launch**: `mpirun -np 4` (1 rank per GPU)
 - **PInsight**: `scripts/trace.sh` with LTTng
+- **PInsight build**: 2026-04-07 (post 4-mode architecture redesign)
 
 ---
 
-## 2. Issues Discovered and Fixed
-During the evaluation, we hit several bugs that blocked proper tracing, which we methodically isolated and resolved:
+## 1. Architecture Changes Since Initial E2
+
+The E2 evaluation was re-run on 2026-04-07 after significant architectural changes to PInsight:
+
+| Change | Impact |
+|---|---|
+| **4-mode trace architecture** (OFF/STANDBY/MONITORING/TRACING) | Cleaner zero-cost bypass paths in STANDBY/OFF |
+| **Dedicated control thread** (SWMR pattern) | Mode transitions no longer crash libomp |
+| **Cooperative pause** for introspection | New synchronization in callbacks |
+| **MPI semantics hardening** | Cleaner MPI wrapper behavior |
+
+These changes resolved the issues found during the initial E2 run (§2) and dramatically improved MONITORING and Full Trace overhead.
+
+---
+
+## 2. Issues Discovered and Fixed (Initial E2, March 2026)
+
+During the initial evaluation, we hit several bugs that blocked proper tracing, which we methodically isolated and resolved:
 
 ### 2.1 Initial Mode Transition Bug
 *   **Symptoms:** Trace size was too small (~48M) for "Full Trace", capturing only MPI events, and no CUDA events were present.
@@ -29,37 +46,75 @@ During the evaluation, we hit several bugs that blocked proper tracing, which we
 
 ---
 
-## 3. Final E2 Benchmark Results
+## 3. E2 Benchmark Results (Re-evaluation, 2026-04-07)
 
-After applying fixes, the evaluation successfully executed 20 runs across the 4 configurations.
+Re-evaluation with the 4-mode architecture. 5 runs per configuration, 30 runs total.
 
 ### Wall-clock Times
-| Configuration | Avg Wall Time (s) | Median Time (s) | Overhead vs Baseline (s) | Overhead (%) |
-|---------------|-------------------|-----------------|--------------------------|--------------|
-| **Baseline**  | 32.32s            | 32.32s          | -                        | -            |
-| **CUDA-only** | 35.11s            | 34.60s          | +2.28s                   | 7.0%         |
-| **Dynamic50 (OFF)** | 35.66s      | 34.35s          | +2.03s                   | 6.3%         |
-| **Dynamic50 (STANDBY)** | 37.81s  | 34.41s          | +2.09s                   | 6.4%         |
-| **Dynamic50 (MONITORING)** | 40.64s| 39.98s         | +7.66s                   | 23.7%        |
-| **Full Trace**| 41.58s            | 41.53s          | +9.21s                   | 28.5%        |
+| Configuration | Avg Wall Time (s) | Median Time (s) | StdDev (s) | Overhead (%) |
+|---|---|---|---|---|
+| **Baseline** | 32.04 | 31.98 | 0.10 | — |
+| **Dynamic50 (MONITORING)** | 33.84 | 33.93 | 0.17 | **5.6%** |
+| **Dynamic50 (OFF)** | 34.04 | 34.11 | 0.12 | **6.2%** |
+| **Dynamic50 (STANDBY)** | 34.22 | 34.15 | 0.27 | **6.8%** |
+| **CUDA-only** | 34.02 | 33.89 | 0.19 | **6.2%** |
+| **Full Trace** | 34.66 | 34.58 | 0.27 | **8.2%** |
 
-*Note: Median time is displayed due to occasional systemic noise spikes (e.g., 43s+ migrations) during some runs.*
+### Raw Run Times
+| Config | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 |
+|---|---|---|---|---|---|
+| Baseline | 31.98 | 31.91 | 32.12 | 32.19 | 31.98 |
+| Dynamic50 (MONITORING) | 33.65 | 33.98 | 34.03 | 33.61 | 33.93 |
+| Dynamic50 (OFF) | 33.84 | 34.11 | 34.17 | 34.13 | 33.95 |
+| Dynamic50 (STANDBY) | 34.32 | 34.67 | 34.15 | 33.89 | 34.05 |
+| CUDA-only | 34.14 | 34.34 | 33.87 | 33.89 | 33.86 |
+| Full Trace | 34.58 | 34.72 | 34.48 | 34.38 | 35.16 |
 
 ### Trace Volume Sizes
-| Configuration | Est. Trace Volume | Volume Reduction vs Full Trace |
-|---------------|-------------------|--------------------------------|
-| **Full Trace**| 48.0 MB           | 0% (Baseline Max)              |
-| **Dynamic50** |   1.0 MB          | 98% reduction                  |
-| **CUDA-only** |   0.9 MB          | 98% reduction                  |
+| Configuration | Trace Size | Volume Reduction vs Full Trace |
+|---|---|---|
+| **Full Trace** | 48 MB | 0% (Baseline Max) |
+| **Dynamic50 (all modes)** | ~988K | **98% reduction** |
+| **CUDA-only** | ~892K | **98% reduction** |
+
+### Comparison: Initial E2 (March) vs Re-evaluation (April)
+
+| Mode | Old Overhead | New Overhead | Improvement |
+|---|---|---|---|
+| Dynamic50 → MONITORING | **23.7%** | **5.6%** | 4.2× better |
+| Dynamic50 → OFF | 6.3% | 6.2% | Same |
+| Dynamic50 → STANDBY | 6.4% | 6.8% | Same |
+| CUDA-only | 7.0% | 6.2% | Slightly better |
+| Full Trace | **28.5%** | **8.2%** | 3.5× better |
 
 ---
 
 ## 4. Key Findings
 
 > [!IMPORTANT]
-> **Volume Reduction Factory:** PInsight's mode switching (rate limit) works brilliantly. **ALL** `dynamic50` configurations (`MONITORING`, `OFF`, and `STANDBY`) universally capped at trace sizes around **~1MB**, reducing the massive 48MB full volume by 98%.
+> **All modes under 9% overhead.** The 4-mode architecture redesign eliminated the MONITORING/Full Trace overhead cliff. MONITORING dropped from 23.7% to 5.6%, and Full Trace from 28.5% to 8.2%.
 
-1. **STANDBY and OFF are Phenomenally Fast:** While `MONITORING` mode generated a ~23% execution overhead, modifying the `trace_mode_after` configuration to `OFF` or `STANDBY` brings the overhead of rate-controlled tracing down to a mere **6.3 - 6.4%**, which represents about +2 seconds. This perfectly hits our evaluation goal of sub-10% overhead tracing without needing to hard-disable dependencies.
-2. **True Bottle-neck is Interception Dispatch:** The `MONITORING` mode executes similarly to `full_trace` because it keeps `cuptiEnableCallback(1)` active. `STANDBY` acts as a pure bypass via `cuptiEnableCallback(0)`, returning instantly and proving that LTTng is virtually free, and it is the raw CUDA Callback dispatch machinery that slows the application down.
-3. **Domain Segregation Efficiency:** The `cuda_only` config bypasses OpenMP/MPI registration entirely. Its overhead is extremely low.
-4. **OpenMP Callbacks are Unsafe to Revoke:** LLVM libomp does not officially support asynchronous revoking of `ompt_set_callback`. Relying on the volatile control variable `PINSIGHT_SHOULD_TRACE` inside the payload executes seamlessly with no crashes and preserves fast path optimization.
+1. **Uniform Low Overhead Across All Modes:** After the 4-mode redesign, all PInsight configurations (MONITORING, OFF, STANDBY, CUDA-only, Full Trace) show **5.6–8.2% overhead** — a narrow band with no mode incurring disproportionate cost. This is a dramatic improvement from the initial evaluation where MONITORING (23.7%) and Full Trace (28.5%) were significantly more expensive.
+
+2. **MONITORING No Longer a Bottleneck:** The previous MONITORING mode kept `cuptiEnableCallback(1)` active, causing ~24% overhead from CUPTI callback dispatch. The new architecture uses cleaner bypass paths, reducing MONITORING to just **5.6%** — essentially the same as OFF/STANDBY.
+
+3. **Volume Reduction Remains Excellent:** All rate-limited configurations produce ~1MB traces (98% reduction from 48MB full trace), unchanged from the initial evaluation.
+
+4. **Very Low Variance:** Standard deviations are 0.10–0.27s across all configs (vs occasional 43s+ spikes in the initial evaluation), indicating the new architecture has more predictable performance characteristics.
+
+5. **CUPTI Callback Overhead is Architectural:** The remaining ~6% overhead across all modes represents the irreducible cost of CUPTI subscriber registration and domain-active checking. This is consistent with CUPTI-based tool overhead on GPU-dense workloads.
+
+---
+
+## 5. Files
+
+| File | Description |
+|---|---|
+| `eva/Castro/Exec/hydro_tests/Sedov/run_e2_redo.sh` | Re-evaluation script (6 configs × 5 runs) |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_results_redo/` | Raw results from re-evaluation |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_results/` | Original results (March 2026) |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_dynamic50.txt` | Config: 50 traces, then MONITORING |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_dynamic50_off.txt` | Config: 50 traces, then OFF |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_dynamic50_standby.txt` | Config: 50 traces, then STANDBY |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_cuda_only.txt` | Config: CUDA-only (MPI/OpenMP OFF) |
+| `eva/Castro/Exec/hydro_tests/Sedov/e2_full_trace.txt` | Config: all domains TRACING, unlimited |
