@@ -6,6 +6,9 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(CMAKE_BUILD_TYPE Debug)
 
+# Allow implicit pointer-to-integer conversions for compatibility with newer GCC versions
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-int-conversion -Wno-implicit-function-declaration")
+
 set(PINSIGHT_VERSION_MAJOR 0)
 set(PINSIGHT_VERSION_MINOR 1)
 set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
@@ -15,6 +18,7 @@ option(PINSIGHT_MPI          "Build with MPI support"          FALSE)
 option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
+option(PINSIGHT_PYTHON       "Build with Python profiling support" TRUE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
@@ -95,6 +99,24 @@ target_link_libraries(pinsight m dl lttng-ust)
 if (PINSIGHT_OPENMP)
 #	target_link_libraries(pinsight omp) # no need libomp.so for pinsight
 endif()
+
+if (PINSIGHT_PYTHON)
+    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+    include_directories(${Python3_INCLUDE_DIRS})
+    
+    set(PYTHON_SOURCE_FILES
+        src/python_profiler.c
+    )
+    
+    Python3_add_library(_pinsight_python MODULE ${PYTHON_SOURCE_FILES})
+    target_link_libraries(_pinsight_python PRIVATE m dl lttng-ust)
+    target_include_directories(_pinsight_python PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+    # Copy the Python wrapper script to the build directory for testing
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight.py
+                   ${CMAKE_CURRENT_BINARY_DIR}/pinsight.py COPYONLY)
+endif()
+
 
 if (PINSIGHT_MPI)
 	target_link_libraries(pinsight mpi)
