@@ -19,6 +19,8 @@ for performance debugging such that the application execution can be paused for 
    [pmpi]: https://www.open-mpi.org/faq/?category=perftools#PMPI
    [cupti]: https://docs.nvidia.com/cuda/cupti/index.html
    
+PInsight also provides native capability to trace **Python** execution seamlessly using `sys.monitoring` (PEP 669).
+
 ### Build
 1. Install the essential dependencies. On Ubuntu systems:
 
@@ -38,6 +40,7 @@ The option to enable features of PInsight includes:
             option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
             option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
             option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    TRUE)
+            option(PINSIGHT_PYTHON       "Build with Python profiling support" TRUE)
 
 You can pass each option to cmake, e.g. `cmake -DPINSIGHT_MPI=TRUE | FALSE <other options> ` to turn on or off each feature. 
 For OpenMP tracing, building the library requires omp.h and omp-tools.h headers. The PInsight repo `src` folder contains copies of these two header files
@@ -96,12 +99,40 @@ The above command will install CUDA at `/usr/local/cuda`, with that, the pinsigh
            cmake -DPINSIGHT_CUDA=TRUE ..
            make
 	   
-If CUDA is not installed at `/usr/local/cuda`, The `CUDA_INSTALL` option should pass to cmake to provide the path to a CUDA install folder. 
+If CUDA is not installed at `/usr/local/cuda`, The `CUDA_INSTALL` option should pass to cmake to provide the path to a CUDA install folder.
+
+#### To build and setup for Python tracing
+Tracing Python workloads natively without overhead is achieved via a custom `_pinsight_python` C-extension built using the Python 3.12+ `sys.monitoring` API (PEP 669). Ensure you have Python development headers installed (e.g. `sudo apt install python3-dev`). The `PINSIGHT_PYTHON=TRUE` flag to cmake will build the extension and package `pinsight.py`.
 
 #### To build and setup for MPI PMPI event tracing
 To be completed
 
 ### Tracing the Application Execution
+
+#### Tracing Python Applications
+
+To enable native Python profiling without modifying your source code, PInsight includes a zero-overhead launcher (`pinsight.py`). 
+
+Ensure you have your LTTng daemon running and events enabled for `python_pinsight_lttng_ust:*`. Then, simply prepend `python3 -m pinsight` to your normal run command and pass your script's arguments naturally:
+
+```bash
+# 1. Provide the built PInsight python module to PYTHONPATH
+export PYTHONPATH=/path/to/pinsight/build
+
+# 2. Setup your LTTng tracing session
+lttng create python-trace-session
+lttng enable-event --userspace "python_pinsight_lttng_ust:*"
+lttng start
+
+# 3. Execute your Python target with the launcher wrapper
+python3 -m pinsight my_app.py --arg1 --arg2
+
+# 4. Stop and view
+lttng stop
+lttng view
+```
+
+Under the hood, this launcher leverages Python's `runpy` utility combined with asynchronous PEP 669 callbacks inside the C-extension (`_pinsight_python.so`) to hook `PY_START`, `PY_RETURN`, and `CALL` functions natively, preventing typical `cProfile` locking behavior overhead.
 
 #### Tracing script
 
