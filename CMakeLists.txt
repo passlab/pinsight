@@ -16,6 +16,7 @@ option(PINSIGHT_MPI          "Build with MPI support"          TRUE)
 option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
+option(PINSIGHT_PYTHON       "Build with Python tracing support" FALSE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
@@ -97,6 +98,7 @@ if (PINSIGHT_ENERGY)
     list(APPEND SOURCE_FILES src/rapl.c src/rapl.h)
 endif()
 
+
 add_library(pinsight SHARED ${SOURCE_FILES})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(pinsight m dl lttng-ust pthread)
@@ -112,6 +114,24 @@ endif()
 if (PINSIGHT_CUDA)
     target_link_libraries(pinsight CUDA::cudart CUDA::cupti)
 endif()
+
+## Python tracing via sys.monitoring (PEP 669, Python 3.12+)
+## Must come after add_library(pinsight) since _pinsight_python links against it.
+if (PINSIGHT_PYTHON)
+    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+    Python3_add_library(_pinsight_python MODULE src/pysysmon_callback.c)
+    target_include_directories(_pinsight_python PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(_pinsight_python PRIVATE pinsight lttng-ust)
+
+    # Copy the Python launcher to the build directory for easy testing
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight.py
+                   ${CMAKE_CURRENT_BINARY_DIR}/pinsight/__init__.py COPYONLY)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight.py
+                   ${CMAKE_CURRENT_BINARY_DIR}/pinsight/__main__.py COPYONLY)
+endif()
+
 
 install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h
@@ -147,6 +167,12 @@ if (PINSIGHT_BACKTRACE)
     message("Build with GNU BACKTRACE SUPPORT:  TRUE")
 else()
     message("Build with GNU BACKTRACE SUPPORT:  FALSE")
+endif()
+if (PINSIGHT_PYTHON)
+    message("Build with Python Support:     TRUE (Python ${Python3_VERSION})")
+    message("    Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
+else()
+    message("Build with Python Support:     FALSE")
 endif()
 message("============================================================")
 add_executable(test_config_parser 

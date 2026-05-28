@@ -31,6 +31,7 @@ typedef enum LEXGION_CLASS {
                               */
   ROCL_LEXGION, /* check https://github.com/ROCm-Developer-Tools/roctracer */
   USER_LEXGION, /* user defined API for tracing */
+  PYTHON_LEXGION, /* Python tracing via sys.monitoring (PEP 669) */
 } LEXGION_CLASS_t;
 
 /**

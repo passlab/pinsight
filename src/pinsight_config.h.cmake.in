@@ -13,5 +13,6 @@
 #cmakedefine PINSIGHT_CUDA
 #cmakedefine PINSIGHT_ENERGY
 #cmakedefine PINSIGHT_BACKTRACE
+#cmakedefine PINSIGHT_PYTHON
 
 #endif /* PINSIGHT_CONFIG_H */
