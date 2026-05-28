@@ -59,7 +59,7 @@ def activate(events=("function", "c_call")):
     if "c_call" in events:
         sys.monitoring.register_callback(
             TOOL_ID, sys.monitoring.events.CALL,
-            _pinsight_python.on_call)
+            _pinsight_python.on_c_start)
         sys.monitoring.register_callback(
             TOOL_ID, sys.monitoring.events.C_RETURN,
             _pinsight_python.on_c_return)

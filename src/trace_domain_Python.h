@@ -25,7 +25,7 @@ extern domain_trace_config_t *Python_trace_config;
  * Events (dense IDs, 0-based):
  *   0  pysysmon_py_start   — PY_START callback        (on by default)
  *   1  pysysmon_py_return  — PY_RETURN callback        (on by default)
- *   2  pysysmon_call       — CALL callback (C ext)     (on by default)
+ *   2  pysysmon_c_start    — CALL callback (C ext)     (on by default)
  *   3  pysysmon_c_return   — C_RETURN callback (C ext) (on by default)
  *   4  pysysmon_import     — reserved for future use   (off by default)
  *
@@ -51,7 +51,7 @@ extern domain_trace_config_t *Python_trace_config;
                                                                                \
   /* [Python(bridge)] */                                                       \
   TRACE_SUBDOMAIN_BEGIN("bridge")                                              \
-  TRACE_EVENT("pysysmon_call",     1, 2, NULL)                                 \
+  TRACE_EVENT("pysysmon_c_start",  1, 2, NULL)                                 \
   TRACE_EVENT("pysysmon_c_return", 1, 3, NULL)                                 \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \

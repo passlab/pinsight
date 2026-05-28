@@ -6,7 +6,7 @@
  * This C extension provides 4 callbacks registered by pinsight.py:
  *   on_py_start  — PY_START event (function entry)
  *   on_py_return — PY_RETURN event (function exit)
- *   on_call      — CALL event (C extension call begin)
+ *   on_c_start   — CALL event (C extension call begin)
  *   on_c_return  — C_RETURN event (C extension call end)
  *
  * Each callback integrates with PInsight's master infrastructure:
@@ -42,7 +42,7 @@ domain_trace_config_t *Python_trace_config;
  * ================================================================ */
 #define PYSYSMON_EVENT_PY_START   0
 #define PYSYSMON_EVENT_PY_RETURN  1
-#define PYSYSMON_EVENT_CALL       2
+#define PYSYSMON_EVENT_C_START    2
 #define PYSYSMON_EVENT_C_RETURN   3
 
 /* ================================================================
@@ -227,7 +227,7 @@ static PyObject *on_py_return(PyObject *self, PyObject *const *args,
  * Python function's trace decision, same pattern as OpenMP work regions
  * piggybacking on the enclosing parallel region.
  * ================================================================ */
-static PyObject *on_call(PyObject *self, PyObject *const *args,
+static PyObject *on_c_start(PyObject *self, PyObject *const *args,
                          Py_ssize_t nargs) {
   if (nargs < 3)
     Py_RETURN_NONE;
@@ -269,7 +269,7 @@ static PyObject *on_call(PyObject *self, PyObject *const *args,
  *
  * sys.monitoring signature: callback(code, instruction_offset, callable, arg0)
  *
- * Mirrors on_call — same piggyback pattern on enclosing Python function.
+ * Mirrors on_c_start — same piggyback pattern on enclosing Python function.
  * ================================================================ */
 static PyObject *on_c_return(PyObject *self, PyObject *const *args,
                              Py_ssize_t nargs) {
@@ -315,7 +315,7 @@ static PyMethodDef pysysmon_methods[] = {
      "sys.monitoring PY_START callback"},
     {"on_py_return", (PyCFunction)on_py_return, METH_FASTCALL,
      "sys.monitoring PY_RETURN callback"},
-    {"on_call", (PyCFunction)on_call, METH_FASTCALL,
+    {"on_c_start", (PyCFunction)on_c_start, METH_FASTCALL,
      "sys.monitoring CALL callback (C extension begin)"},
     {"on_c_return", (PyCFunction)on_c_return, METH_FASTCALL,
      "sys.monitoring C_RETURN callback (C extension end)"},

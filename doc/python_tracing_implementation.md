@@ -35,7 +35,7 @@ The Python domain follows the same architecture as OpenMP (OMPT) and CUDA (CUPTI
 │  _pinsight_python.so (pysysmon_callback.c)                   │
 │    │  on_py_start  ──→ lexgion_begin() + trace_bit           │
 │    │  on_py_return ──→ lexgion_end()   + post_trace_update   │
-│    │  on_call      ──→ piggyback parent trace_bit            │
+│    │  on_c_start      ──→ piggyback parent trace_bit            │
 │    │  on_c_return  ──→ piggyback parent trace_bit            │
 │    ↓                                                         │
 │  libpinsight.so (loaded via LD_PRELOAD)                      │
@@ -79,7 +79,7 @@ This split is required because:
 
 3. User script runs
    └── Every Python function call fires on_py_start → on_py_return
-   └── Every C extension call fires on_call → on_c_return
+   └── Every C extension call fires on_c_start → on_c_return
 ```
 
 ---
@@ -96,7 +96,7 @@ Each `sys.monitoring` event gets its own event ID, consistent with how OpenMP us
 |:--------:|------|---------------------|----------|---------|
 | 0 | `pysysmon_py_start` | `PY_START` | `on_py_start` | ON |
 | 1 | `pysysmon_py_return` | `PY_RETURN` | `on_py_return` | ON |
-| 2 | `pysysmon_call` | `CALL` | `on_call` | ON |
+| 2 | `pysysmon_c_start` | `CALL` | `on_c_start` | ON |
 | 3 | `pysysmon_c_return` | `C_RETURN` | `on_c_return` | ON |
 | 4 | `pysysmon_import` | (reserved) | — | OFF |
 
@@ -105,7 +105,7 @@ Each `sys.monitoring` event gets its own event ID, consistent with how OpenMP us
 | Subdomain | Events | Purpose |
 |-----------|--------|---------|
 | `function` | `pysysmon_py_start`, `pysysmon_py_return` | Python function entry/exit |
-| `bridge` | `pysysmon_call`, `pysysmon_c_return` | C extension call/return |
+| `bridge` | `pysysmon_c_start`, `pysysmon_c_return` | C extension call/return |
 | `others` | `pysysmon_import` | Reserved for future use |
 
 ### 3.3 Punits (1)
@@ -226,7 +226,7 @@ C extension calls (`numpy.linalg.solve()`, `mpi4py.MPI.Comm.Allreduce()`) are tr
 **Key design decision**: Bridge events do NOT create their own lexgions. They piggyback on the enclosing Python function's trace decision, identical to how OpenMP work regions piggyback on the enclosing parallel region. This avoids redundant lexgion creation and is semantically correct — the C call is part of the Python function's execution span.
 
 ```c
-static PyObject *on_call(...) {
+static PyObject *on_c_start(...) {
     PyObject *callable = args[2];
 
     // Only trace C function calls (not pure Python calls)
@@ -242,7 +242,7 @@ static PyObject *on_call(...) {
 }
 ```
 
-The `on_c_return` callback mirrors `on_call`, emitting `c_call_end`. Together they enable duration measurement for C extension calls.
+The `on_c_return` callback mirrors `on_c_start`, emitting `c_call_end`. Together they enable duration measurement for C extension calls.
 
 ### 4.5 Lexgion Stack Example
 
@@ -252,7 +252,7 @@ For a Python call `main() → compute() → numpy.linalg.solve()`:
 Thread 0's lexgion stack:
   [0] main()     (PYTHON_LEXGION)  ← pushed by on_py_start (codeptr=main's PyCodeObject)
   [1] compute()  (PYTHON_LEXGION)  ← pushed by on_py_start
-       on_call fires (c_call_begin)   ← NOT pushed (bridge event, piggybacks on compute)
+       on_c_start fires (c_call_begin)   ← NOT pushed (bridge event, piggybacks on compute)
        on_c_return fires (c_call_end) ← NOT pushed
   [1] compute()  (PYTHON_LEXGION)  ← popped by on_py_return
   [0] main()     (PYTHON_LEXGION)  ← popped by on_py_return
@@ -281,7 +281,7 @@ Provider: `pysysmon_pinsight_lttng_ust`
 |------------|--------|----------|
 | `function_begin` | `qualname`, `filename`, `lineno`, `code_id`, `python_thread_id` | `on_py_start` |
 | `function_end` | `qualname`, `filename`, `lineno`, `code_id`, `python_thread_id` | `on_py_return` |
-| `c_call_begin` | `caller_qualname`, `callee_name`, `caller_filename`, `caller_lineno`, `code_id` | `on_call` |
+| `c_call_begin` | `caller_qualname`, `callee_name`, `caller_filename`, `caller_lineno`, `code_id` | `on_c_start` |
 | `c_call_end` | `caller_qualname`, `callee_name`, `caller_filename`, `caller_lineno`, `code_id` | `on_c_return` |
 
 ### 5.2 Field Details
@@ -310,7 +310,7 @@ def activate(events=("function", "c_call")):
         sys.monitoring.register_callback(TOOL_ID, PY_RETURN, on_py_return)
 
     if "c_call" in events:
-        sys.monitoring.register_callback(TOOL_ID, CALL, on_call)
+        sys.monitoring.register_callback(TOOL_ID, CALL, on_c_start)
         sys.monitoring.register_callback(TOOL_ID, C_RETURN, on_c_return)
 
     sys.monitoring.set_events(TOOL_ID, event_mask)
