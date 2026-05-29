@@ -25,6 +25,10 @@
 #include "trace_domain_Python.h"
 #endif
 
+#ifdef PINSIGHT_HIP
+#include "trace_domain_HIP.h"
+#endif
+
 struct domain_info domain_info_table[MAX_NUM_DOMAINS];
 domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
@@ -247,6 +251,9 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
 #endif
 #ifdef PINSIGHT_PYTHON
   register_Python_trace_domain();
+#endif
+#ifdef PINSIGHT_HIP
+  register_HIP_trace_domain();
 #endif
 
   // Initialize the default domain trace configs by copying from

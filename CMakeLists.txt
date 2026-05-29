@@ -14,6 +14,7 @@ set(PINSIGHT_VERSION ${PINSIGHT_VERSION_MAJOR}.${PINSIGHT_VERSION_MINOR})
 option(PINSIGHT_OPENMP       "Build with OpenMP support"       TRUE)
 option(PINSIGHT_MPI          "Build with MPI support"          TRUE)
 option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
+option(PINSIGHT_HIP          "Build with HIP/ROCm support"     FALSE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
 option(PINSIGHT_PYTHON       "Build with Python tracing support" FALSE)
@@ -85,6 +86,31 @@ if (PINSIGHT_CUDA)
             )
 endif()
 
+## HIP/ROCm support via ROCTracer
+if (PINSIGHT_HIP)
+    # ROCM_PATH defaults to /opt/rocm if not set in the environment
+    if (NOT DEFINED ROCM_PATH)
+        set(ROCM_PATH "$ENV{ROCM_PATH}")
+        if (NOT ROCM_PATH)
+            set(ROCM_PATH "/opt/rocm")
+        endif()
+    endif()
+
+    find_package(hip REQUIRED HINTS ${ROCM_PATH})
+
+    find_library(ROCTRACER_LIB
+        NAMES roctracer64 roctracer
+        HINTS ${ROCM_PATH}/lib ${ROCM_PATH}/lib64
+        REQUIRED)
+
+    include_directories(${ROCM_PATH}/include)
+    list(APPEND SOURCE_FILES
+        src/roctracer_lttng_ust_tracepoint.h
+        src/roctracer_callback.c
+        src/trace_domain_HIP.h
+        )
+endif()
+
 ## Backtrace support, which use GNU extension
 if (PINSIGHT_BACKTRACE)
     list(APPEND SOURCE_FILES
@@ -113,6 +139,11 @@ endif()
 
 if (PINSIGHT_CUDA)
     target_link_libraries(pinsight CUDA::cudart CUDA::cupti)
+endif()
+
+if (PINSIGHT_HIP)
+    target_link_libraries(pinsight hip::host ${ROCTRACER_LIB})
+    target_compile_definitions(pinsight PRIVATE PINSIGHT_HIP)
 endif()
 
 ## Python tracing via sys.monitoring (PEP 669, Python 3.12+)
@@ -162,6 +193,13 @@ if (PINSIGHT_CUDA)
     message("    CUDA_TOOLKIT_ROOT_DIR: ${CUDAToolkit_BIN_DIR}/..")
 else()
     message("Build with CUDA Support:       FALSE")
+endif()
+if (PINSIGHT_HIP)
+    message("Build with HIP/ROCm Support:   TRUE")
+    message("    ROCM_PATH: ${ROCM_PATH}")
+    message("    ROCTRACER_LIB: ${ROCTRACER_LIB}")
+else()
+    message("Build with HIP/ROCm Support:   FALSE")
 endif()
 if (PINSIGHT_BACKTRACE)
     message("Build with GNU BACKTRACE SUPPORT:  TRUE")

@@ -3,9 +3,7 @@
 
 [HIP(all)]
     HIP_init = off
-    HIP_finalize = off
 
-    HIP_device_init = off
     HIP_device_reset = off
     HIP_device_synchronize = off
     HIP_device_get = off
@@ -32,8 +30,8 @@
 
     HIP_malloc = off
     HIP_free = off
-    HIP_malloc_host = off
-    HIP_free_host = off
+    HIP_host_malloc = off
+    HIP_host_free = off
     HIP_malloc_managed = off
     HIP_memcpy_HtoD = off
     HIP_memcpy_DtoH = off
@@ -54,24 +52,16 @@
 
     HIP_module_load = off
     HIP_module_unload = off
-    HIP_function_load = off
-    HIP_function_unload = off
-
-    HIP_peer_access_enable = off
-    HIP_peer_access_disable = off
+    HIP_module_get_function = off
 
     HIP_api_enter = off
     HIP_api_exit = off
     HIP_driver_call = off
     HIP_runtime_call = off
 
-    HIP_synchronize = off
-    HIP_nvtx_range_push = off
-    HIP_nvtx_range_pop = off
-    HIP_nvtx_mark = off
+    HIP_roctx_range_push = off
+    HIP_roctx_range_pop = off
+    HIP_roctx_mark = off
 
-    HIP_unified_memory_migrate = off
     HIP_unified_memory_prefetch = off
     HIP_unified_memory_advise = off
-
-	

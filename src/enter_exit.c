@@ -24,6 +24,10 @@ char hostname[48];
 extern void LTTNG_CUPTI_Init(void);
 extern void LTTNG_CUPTI_Fini(void);
 #endif
+#ifdef PINSIGHT_HIP
+extern void LTTNG_ROCTRACER_Init(void);
+extern void LTTNG_ROCTRACER_Fini(void);
+#endif
 
 /**
  * This has to be the initial/main thread of the main program and I do not see a
@@ -43,6 +47,9 @@ void enter_pinsight_func() {
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Init();
 #endif
+#ifdef PINSIGHT_HIP
+  LTTNG_ROCTRACER_Init();
+#endif
 #ifdef PINSIGHT_ENERGY
 #endif
 #ifdef PINSIGHT_BACKTRACE
@@ -54,6 +61,9 @@ void exit_pinsight_func() {
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, exit_pinsight);
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Fini();
+#endif
+#ifdef PINSIGHT_HIP
+  LTTNG_ROCTRACER_Fini();
 #endif
   /* Stop the control thread after domain finalization */
   pinsight_control_thread_stop();

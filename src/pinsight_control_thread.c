@@ -162,6 +162,9 @@ static void control_apply_all_modes(void) {
 #ifdef PINSIGHT_CUDA
     pinsight_control_cuda_apply_mode();
 #endif
+#ifdef PINSIGHT_HIP
+    pinsight_control_hip_apply_mode();
+#endif
     /* OMPT note: calling ompt_set_callback from the control thread to
      * register/deregister callbacks while OpenMP regions are active has
      * not shown issues in practice (LLVM runtime uses simple pointer
