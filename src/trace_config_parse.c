@@ -18,6 +18,7 @@ static int parse_domain_punit_spec(char *spec, int *domain_idx,
                                    unsigned int *high);
 static int parse_range_string(const char *range_str, unsigned int *low,
                               unsigned int *high, BitSet *range_mask);
+static lexgion_trace_config_t *alloc_lexgion_config(void);
 static lexgion_trace_config_t *get_or_create_address_lexgion_config(void *codeptr);
 static lexgion_trace_config_t *get_or_create_named_lexgion_config(
     int domain_idx, const char *name, const char *filename_hint);
@@ -1172,54 +1173,42 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config,
   return 0;
 }
 
-static lexgion_trace_config_t *get_or_create_address_lexgion_config(void *codeptr) {
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    if (lexgion_address_trace_config[i].codeptr == codeptr) {
-      return &lexgion_address_trace_config[i];
-    }
+static lexgion_trace_config_t *alloc_lexgion_config(void) {
+  if (num_lexgion_trace_configs >= MAX_NUM_LEXGIONS) {
+    fprintf(stderr, "PInsight: lexgion config table full\n");
+    return NULL;
   }
-
-  if (num_lexgion_address_trace_configs < MAX_NUM_LEXGIONS) {
-    lexgion_trace_config_t *lg =
-        &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
-    // Initialize from Lexgion.default so new entries inherit default rate,
-    // max_num_traces, trace_starts_at, mode_after, etc.
-    *lg = *lexgion_default_trace_config;
-    lg->codeptr = codeptr;
-    lg->removed = 0;
-    return lg;
-  }
-  return NULL;
+  lexgion_trace_config_t *lc = &lexgion_trace_config[num_lexgion_trace_configs++];
+  *lc = *lexgion_default_trace_config;
+  lc->removed = 0;
+  return lc;
 }
 
-/* Find or create a named lexgion config entry in lexgion_address_trace_config[].
+static lexgion_trace_config_t *get_or_create_address_lexgion_config(void *codeptr) {
+  for (int i = 0; i < num_lexgion_trace_configs; i++)
+    if (lexgion_trace_config[i].codeptr == codeptr)
+      return &lexgion_trace_config[i];
+  lexgion_trace_config_t *lc = alloc_lexgion_config();
+  if (lc) lc->codeptr = codeptr;
+  return lc;
+}
+
+/* Find or create a named lexgion config entry in lexgion_trace_config[].
  * Named entries have codeptr==NULL, name[0]!='\0', and are matched at runtime
  * by lgp->name.  domain_idx==-1 matches any domain. */
 static lexgion_trace_config_t *get_or_create_named_lexgion_config(
     int domain_idx, const char *name, const char *filename_hint) {
   if (!name || !name[0]) return NULL;
 
-  /* Search for an existing matching named entry (handles multi-token sections
-   * like Lexgion(Python:a, CUDA:b) where both tokens share one body). */
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    lexgion_trace_config_t *c = &lexgion_address_trace_config[i];
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    lexgion_trace_config_t *c = &lexgion_trace_config[i];
     if (c->codeptr != NULL || !c->name[0]) continue;
     if (c->domain_index == domain_idx && strcmp(c->name, name) == 0)
       return c;
   }
 
-  if (num_lexgion_address_trace_configs >= MAX_NUM_LEXGIONS) {
-    fprintf(stderr,
-            "PInsight: lexgion config table full, cannot add named entry '%s'\n",
-            name);
-    return NULL;
-  }
-
-  lexgion_trace_config_t *lc =
-      &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
-  /* Inherit global rate defaults (trace_starts_at, max_num_traces, tracing_rate,
-   * mode_after) so named configs compose with [Lexgion.default] naturally. */
-  *lc = *lexgion_default_trace_config;
+  lexgion_trace_config_t *lc = alloc_lexgion_config();
+  if (!lc) return NULL;
   lc->codeptr = NULL;
   strncpy(lc->name, name, sizeof(lc->name) - 1);
   lc->name[sizeof(lc->name) - 1] = '\0';
@@ -1228,6 +1217,5 @@ static lexgion_trace_config_t *get_or_create_named_lexgion_config(
     lc->filename_hint[sizeof(lc->filename_hint) - 1] = '\0';
   }
   lc->domain_index = domain_idx;
-  lc->removed = 0;
   return lc;
 }

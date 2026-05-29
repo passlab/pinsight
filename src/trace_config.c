@@ -36,9 +36,9 @@ lexgion_trace_config_t *lexgion_default_trace_config =
     &all_lexgion_trace_config[0];
 lexgion_trace_config_t *lexgion_domain_default_trace_config =
     &all_lexgion_trace_config[1];
-lexgion_trace_config_t *lexgion_address_trace_config =
+lexgion_trace_config_t *lexgion_trace_config =
     &all_lexgion_trace_config[1 + MAX_NUM_DOMAINS];
-int num_lexgion_address_trace_configs = 0;
+int num_lexgion_trace_configs = 0;
 unsigned int trace_config_change_counter = 0;
 
 #ifdef PINSIGHT_CUDA
@@ -88,8 +88,8 @@ int domain_punit_set_match(domain_punit_set_t *domain_punit_set) {
  * @return the pointer to the config struct object
  */
 lexgion_trace_config_t *retrieve_lexgion_trace_config(const void *codeptr) {
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    lexgion_trace_config_t *config = &lexgion_address_trace_config[i];
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    lexgion_trace_config_t *config = &lexgion_trace_config[i];
     if (config->codeptr == codeptr) {
       if (config->removed) {
         return NULL;
@@ -201,9 +201,9 @@ void pinsight_load_trace_config(char *filepath) {
      * bindings are not used after reload. The name_resolved_gen mismatch caused
      * by trace_config_change_counter++ below drives each callback to re-set
      * lgp->name, which then re-matches against the freshly parsed named entries. */
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].name[0])
-        lexgion_address_trace_config[i].removed = 1;
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].name[0])
+        lexgion_trace_config[i].removed = 1;
     }
     parse_trace_config_file(filepath);
 
@@ -591,8 +591,8 @@ void print_lexgion_trace_config(FILE *out) {
   }
 
   // 3. Print address-specific lexgion configs
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    lexgion_trace_config_t *lg = &lexgion_address_trace_config[i];
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    lexgion_trace_config_t *lg = &lexgion_trace_config[i];
 
     // Build header with inheritance and punit set
     fprintf(out, "[Lexgion(%p)]", lg->codeptr);

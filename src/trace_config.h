@@ -290,8 +290,8 @@ typedef struct lexgion_trace_config {
 extern lexgion_trace_config_t all_lexgion_trace_config[];
 extern lexgion_trace_config_t *lexgion_default_trace_config;
 extern lexgion_trace_config_t *lexgion_domain_default_trace_config;
-extern lexgion_trace_config_t *lexgion_address_trace_config;
-extern int num_lexgion_address_trace_configs;
+extern lexgion_trace_config_t *lexgion_trace_config;
+extern int num_lexgion_trace_configs;
 extern unsigned int
     trace_config_change_counter; /* bumped on every reconfig to invalidate
                                 cached trace_config in lexgions */

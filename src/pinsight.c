@@ -221,8 +221,8 @@ lexgion_record_t *top_lexgion() { return pinsight_thread_data.current_record; }
 /**
  * Set the trace bit for a lexgion based on domain and event, with 4-level
  * config resolution:
- *   1. Search lexgion_address_trace_config by lgp->codeptr_ra
- *   2. Search lexgion_address_trace_config by lgp->name (named lexgion)
+ *   1. Search lexgion_trace_config by lgp->codeptr_ra
+ *   2. Search lexgion_trace_config by lgp->name (named lexgion)
  *   3. Fall back to lexgion_domain_default_trace_config[domain]
  *   4. Fall back to lexgion_default_trace_config
  * @return 1 if the lexgion should be traced, 0 otherwise
@@ -248,11 +248,11 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
       lgp->trace_config_change_counter != trace_config_change_counter) {
     trace_config = NULL;
 
-    /* 1. Search the lexgion_address_trace_config table by lgp->codeptr_ra */
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].codeptr == lgp->codeptr_ra &&
-          !lexgion_address_trace_config[i].removed) {
-        trace_config = &lexgion_address_trace_config[i];
+    /* 1. Search the lexgion_trace_config table by lgp->codeptr_ra */
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr == lgp->codeptr_ra &&
+          !lexgion_trace_config[i].removed) {
+        trace_config = &lexgion_trace_config[i];
         break;
       }
     }
@@ -261,8 +261,8 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
      * has a runtime-resolved name (set by the domain callback). Named entries
      * have codeptr==NULL and name[0]!='\0'. */
     if (trace_config == NULL && lgp->name) {
-      for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-        lexgion_trace_config_t *c = &lexgion_address_trace_config[i];
+      for (int i = 0; i < num_lexgion_trace_configs; i++) {
+        lexgion_trace_config_t *c = &lexgion_trace_config[i];
         if (c->removed || c->codeptr != NULL || !c->name[0]) continue;
         if (c->domain_index != -1 && c->domain_index != domain) continue;
         if (c->filename_hint[0] && lgp->filename_hint &&
@@ -320,8 +320,8 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
 
 /**
  * Set the trace config for a lexgion using the 4-level hierarchy:
- *   1. lexgion_address_trace_config by codeptr_ra
- *   2. lexgion_address_trace_config by name (named lexgion)
+ *   1. lexgion_trace_config by codeptr_ra
+ *   2. lexgion_trace_config by name (named lexgion)
  *   3. lexgion_domain_default_trace_config[domain]
  *   4. lexgion_default_trace_config
  * @return the trace config for the lexgion
@@ -334,19 +334,19 @@ lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
       lgp->trace_config_change_counter != trace_config_change_counter) {
     trace_config = NULL;
 
-    /* 1. Search the lexgion_address_trace_config table by lgp->codeptr_ra */
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].codeptr == lgp->codeptr_ra &&
-          !lexgion_address_trace_config[i].removed) {
-        trace_config = &lexgion_address_trace_config[i];
+    /* 1. Search the lexgion_trace_config table by lgp->codeptr_ra */
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr == lgp->codeptr_ra &&
+          !lexgion_trace_config[i].removed) {
+        trace_config = &lexgion_trace_config[i];
         break;
       }
     }
 
     /* 2. Search by name if the codeptr search found nothing */
     if (trace_config == NULL && lgp->name) {
-      for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-        lexgion_trace_config_t *c = &lexgion_address_trace_config[i];
+      for (int i = 0; i < num_lexgion_trace_configs; i++) {
+        lexgion_trace_config_t *c = &lexgion_trace_config[i];
         if (c->removed || c->codeptr != NULL || !c->name[0]) continue;
         if (c->domain_index != -1 && c->domain_index != domain) continue;
         if (c->filename_hint[0] && lgp->filename_hint &&
