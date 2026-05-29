@@ -270,6 +270,13 @@ typedef struct lexgion_trace_config {
                //  When it is removed , the object may still exist in the array
                //  but should not be used.
 
+  /* Named lexgion fields. Empty name ("") means address-based config.
+   * Named configs have codeptr==NULL and name[0]!='\0'. domain_index==-1
+   * means match any domain; otherwise the config only matches that domain. */
+  char name[128];         /* co_qualname, kernel name, MPI func, or "" */
+  char filename_hint[64]; /* optional: source file basename for disambiguation */
+  int domain_index;       /* -1 = any domain; else must match lexgion class */
+
   // Auto-trigger: switch domain modes when max_num_traces is reached
   trace_mode_after_t mode_after;
 } lexgion_trace_config_t;

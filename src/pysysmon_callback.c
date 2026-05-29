@@ -160,13 +160,33 @@ static PyObject *on_py_start(PyObject *self, PyObject *const *args,
       lexgion_begin(PYTHON_LEXGION, PYSYSMON_EVENT_PY_START, codeptr);
   lexgion_t *lgp = record->lgp;
 
-  /* 6. Rate control + config resolution (TRACING mode only) */
+  /* 6. Name resolution for named lexgion config matching.
+   * Runs once per unique function per config reload cycle (O(1) check).
+   * PyObject_GetAttrString returns a new reference; Py_XDECREF on it is safe
+   * because the code object retains its own reference to co_qualname/co_filename,
+   * keeping the internal UTF-8 buffer valid for the code object's lifetime. */
+  if (lgp->name_resolved_gen != trace_config_change_counter) {
+    PyObject *qn = PyObject_GetAttrString(code, "co_qualname");
+    PyObject *fn = PyObject_GetAttrString(code, "co_filename");
+    lgp->name = qn ? PyUnicode_AsUTF8(qn) : NULL;
+    if (fn) {
+      const char *fp = PyUnicode_AsUTF8(fn);
+      const char *base = fp ? strrchr(fp, '/') : NULL;
+      lgp->filename_hint = base ? base + 1 : fp;
+    }
+    Py_XDECREF(qn);
+    Py_XDECREF(fn);
+    lgp->name_resolved_gen = trace_config_change_counter;
+    lgp->trace_config_change_counter = (unsigned int)-1; /* force config re-resolve */
+  }
+
+  /* 7. Rate control + config resolution (TRACING mode only) */
   if (PINSIGHT_SHOULD_TRACE(Python_domain_index)) {
     lexgion_set_top_trace_bit_domain_event(lgp, Python_domain_index,
                                            PYSYSMON_EVENT_PY_START);
   }
 
-  /* 7. Emit tracepoint if trace_bit is set */
+  /* 8. Emit tracepoint if trace_bit is set */
   if (PINSIGHT_SHOULD_TRACE(Python_domain_index) && lgp->trace_bit) {
     CodeInfo info;
     extract_code_info(code, &info);

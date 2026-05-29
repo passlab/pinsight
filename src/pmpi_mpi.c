@@ -159,6 +159,16 @@ int MPI_get_rank(void) {
     lexgion_record_t *_record =                                                \
         lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);           \
     lgp = _record->lgp;                                                        \
+    /* Name resolution for named lexgion config matching. Runs once per        \
+     * unique call site per reload cycle. MPI event names are static strings   \
+     * in domain_info_table — zero allocation. */                              \
+    if (lgp->name_resolved_gen != trace_config_change_counter) {              \
+      lgp->name = domain_info_table[MPI_domain_index]                         \
+                      .event_table[lgp->type].name;                           \
+      lgp->filename_hint = NULL;                                               \
+      lgp->name_resolved_gen = trace_config_change_counter;                   \
+      lgp->trace_config_change_counter = (unsigned int)-1;                    \
+    }                                                                          \
     /* Rate decision and LTTng only in TRACING mode */                         \
     if (PINSIGHT_SHOULD_TRACE(MPI_domain_index)) {                             \
       lexgion_set_top_trace_bit_domain_event(lgp, MPI_domain_index,            \

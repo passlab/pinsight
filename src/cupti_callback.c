@@ -270,6 +270,15 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_KERNEL_LAUNCH, codeptr);
       lexgion_t *lgp = record->lgp;
 
+      /* Name resolution: cbInfo->symbolName is the kernel name (e.g. "vectorAdd").
+       * CUPTI-owned, stable for the session lifetime — zero allocation. */
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = cbInfo->symbolName;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
+
       /* MONITOR mode: skip config resolution + rate decision.
        * Only lexgion_begin above (LRU + count) runs. */
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -328,6 +337,15 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
       lexgion_record_t *record = lexgion_begin(CUDA_LEXGION, event_id, codeptr);
       lexgion_t *lgp = record->lgp;
 
+      /* Name resolution: use CUDA event name from domain_info_table for
+       * non-kernel API calls (e.g. "CUDA_cudaMemcpy"). Zero allocation. */
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = domain_info_table[CUDA_domain_index].event_table[event_id].name;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
+
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
         lexgion_set_top_trace_bit_domain_event(lgp, CUDA_domain_index,
                                                event_id);
@@ -373,6 +391,13 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
       lexgion_record_t *record = lexgion_begin(CUDA_LEXGION, event_id, codeptr);
       lexgion_t *lgp = record->lgp;
+
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = domain_info_table[CUDA_domain_index].event_table[event_id].name;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
         lexgion_set_top_trace_bit_domain_event(lgp, CUDA_domain_index,
@@ -423,6 +448,14 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_DEVICE_SYNCHRONIZE, codeptr);
       lexgion_t *lgp = record->lgp;
 
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = domain_info_table[CUDA_domain_index]
+                        .event_table[CUDA_EVENT_DEVICE_SYNCHRONIZE].name;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
+
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
         lexgion_set_top_trace_bit_domain_event(lgp, CUDA_domain_index,
                                                CUDA_EVENT_DEVICE_SYNCHRONIZE);
@@ -468,6 +501,14 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
       lexgion_record_t *record =
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_STREAM_SYNCHRONIZE, codeptr);
       lexgion_t *lgp = record->lgp;
+
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = domain_info_table[CUDA_domain_index]
+                        .event_table[CUDA_EVENT_STREAM_SYNCHRONIZE].name;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
         lexgion_set_top_trace_bit_domain_event(lgp, CUDA_domain_index,

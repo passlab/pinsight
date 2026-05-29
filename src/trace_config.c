@@ -196,6 +196,15 @@ void pinsight_load_trace_config(char *filepath) {
     for (int i = 0; i < num_domain; i++) {
       lexgion_domain_default_trace_config[i].codeptr = NULL;
     }
+    /* Invalidate named lexgion configs before re-parsing. Named entries have
+     * name[0]!='\0' and codeptr==NULL. Marking them removed here ensures stale
+     * bindings are not used after reload. The name_resolved_gen mismatch caused
+     * by trace_config_change_counter++ below drives each callback to re-set
+     * lgp->name, which then re-matches against the freshly parsed named entries. */
+    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+      if (lexgion_address_trace_config[i].name[0])
+        lexgion_address_trace_config[i].removed = 1;
+    }
     parse_trace_config_file(filepath);
 
     // Fill domain defaults: combine global lexgion default (rate triple) with

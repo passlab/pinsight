@@ -18,7 +18,9 @@ static int parse_domain_punit_spec(char *spec, int *domain_idx,
                                    unsigned int *high);
 static int parse_range_string(const char *range_str, unsigned int *low,
                               unsigned int *high, BitSet *range_mask);
-static lexgion_trace_config_t *get_or_create_lexgion_config(void *codeptr);
+static lexgion_trace_config_t *get_or_create_address_lexgion_config(void *codeptr);
+static lexgion_trace_config_t *get_or_create_named_lexgion_config(
+    int domain_idx, const char *name, const char *filename_hint);
 static punit_trace_config_t *
 get_or_create_punit_config(int domain_idx, BitSet *punit_mask, int punit_kind,
                            unsigned int low, unsigned int high);
@@ -29,7 +31,7 @@ typedef enum {
   SECTION_DOMAIN_DEFAULT,
   SECTION_DOMAIN_GLOBAL,
   SECTION_DOMAIN_PUNIT,
-  SECTION_LEXGION_ADDRESS,
+  SECTION_LEXGION_ADDRESS_NAME,
   SECTION_LEXGION_DEFAULT,
   SECTION_LEXGION_DOMAIN_DEFAULT,
   SECTION_KNOB
@@ -332,24 +334,79 @@ static int parse_section_header(char *line) {
                 domain_default_trace_config[d_idx].events;
           }
         } else {
-          // Lexgion(0x...) or Lexgion(0x..., 0x..., ...) - address-specific
-          current_section_type = SECTION_LEXGION_ADDRESS;
+          /* Lexgion(0x...) or Lexgion(Name) or Lexgion(Domain:name, ...).
+           * Tokens starting with "0x" are address-based; everything else
+           * is a named lexgion config. */
+          current_section_type = SECTION_LEXGION_ADDRESS_NAME;
           *ptr_end = '\0';
           char *addr_list = ptr_start + 1;
 
-          // Parse comma-separated addresses
           num_current_lexgion_configs = 0;
           char *saveptr = NULL;
           char *token = strtok_r(addr_list, ",", &saveptr);
           while (token && num_current_lexgion_configs < MAX_MULTI_LEXGION) {
             char *trimmed = trim_whitespace(token);
             if (*trimmed) {
-              uint64_t addr = strtoull(trimmed, NULL, 0);
-              void *codeptr = (void *)(uintptr_t)addr;
-              lexgion_trace_config_t *lc =
-                  get_or_create_lexgion_config(codeptr);
-              lc->removed = 0;
-              current_lexgion_configs[num_current_lexgion_configs++] = lc;
+              if (strncasecmp(trimmed, "0x", 2) == 0) {
+                /* ── Address-based ──────────────────────────────── */
+                void *codeptr =
+                    (void *)(uintptr_t)strtoull(trimmed, NULL, 16);
+                lexgion_trace_config_t *lc =
+                    get_or_create_address_lexgion_config(codeptr);
+                lc->removed = 0;
+                current_lexgion_configs[num_current_lexgion_configs++] = lc;
+              } else {
+                /* ── Named lexgion ──────────────────────────────── */
+                if (action == ACTION_REMOVE) {
+                  /* Named entries were already cleared at reload start;
+                   * REMOVE means "don't recreate" — nothing to do. */
+                  token = strtok_r(NULL, ",", &saveptr);
+                  continue;
+                }
+
+                /* Parse up to three colon-delimited parts:
+                 *   "name"               → d=-1, name="name"
+                 *   "Domain:name"        → d=Domain, name="name"
+                 *   "Domain:file:name"   → d=Domain, hint="file", name="name"
+                 *   "file:name"          → d=-1, hint="file", name="name"  */
+                char buf[256];
+                strncpy(buf, trimmed, sizeof(buf) - 1);
+                buf[sizeof(buf) - 1] = '\0';
+                char *parts[3] = {buf, NULL, NULL};
+                int nparts = 1;
+                for (char *p = buf; *p && nparts < 3; p++) {
+                  if (*p == ':') { *p = '\0'; parts[nparts++] = p + 1; }
+                }
+
+                int d_idx = -1;
+                const char *filename_hint = NULL;
+                const char *name_part = NULL;
+
+                if (nparts == 1) {
+                  name_part = parts[0];
+                } else if (nparts == 2) {
+                  int d = find_domain_index(parts[0]);
+                  if (d >= 0) { d_idx = d; name_part = parts[1]; }
+                  else        { filename_hint = parts[0]; name_part = parts[1]; }
+                } else { /* nparts == 3 */
+                  d_idx = find_domain_index(parts[0]);
+                  if (d_idx < 0) {
+                    fprintf(stderr,
+                            "PInsight: unknown domain '%s' in Lexgion spec\n",
+                            parts[0]);
+                    token = strtok_r(NULL, ",", &saveptr);
+                    continue;
+                  }
+                  filename_hint = parts[1];
+                  name_part     = parts[2];
+                }
+
+                lexgion_trace_config_t *lc =
+                    get_or_create_named_lexgion_config(d_idx, name_part,
+                                                       filename_hint);
+                if (lc)
+                  current_lexgion_configs[num_current_lexgion_configs++] = lc;
+              }
             }
             token = strtok_r(NULL, ",", &saveptr);
           }
@@ -406,7 +463,7 @@ static int parse_section_header(char *line) {
 
       // SET: Apply Inheritance (all Lexgion section types)
       if (parts[0]) {
-        if (current_section_type == SECTION_LEXGION_ADDRESS) {
+        if (current_section_type == SECTION_LEXGION_ADDRESS_NAME) {
           for (int i = 0; i < num_current_lexgion_configs; i++) {
             apply_inheritance(current_lexgion_configs[i], parts[0]);
           }
@@ -417,7 +474,7 @@ static int parse_section_header(char *line) {
       }
 
       // SET: Apply PunitSet (only for Lexgion(address))
-      if (parts[1] && current_section_type == SECTION_LEXGION_ADDRESS) {
+      if (parts[1] && current_section_type == SECTION_LEXGION_ADDRESS_NAME) {
         for (int i = 0; i < num_current_lexgion_configs; i++) {
           parse_punit_set_string(parts[1],
                                  current_lexgion_configs[i]->domain_punits);
@@ -674,14 +731,14 @@ static void parse_key_value(char *line) {
   char *key = trim_whitespace(line);
   char *val = trim_whitespace(eq + 1);
 
-  if ((current_section_type == SECTION_LEXGION_ADDRESS ||
+  if ((current_section_type == SECTION_LEXGION_ADDRESS_NAME ||
        current_section_type == SECTION_LEXGION_DEFAULT ||
        current_section_type == SECTION_LEXGION_DOMAIN_DEFAULT) &&
       current_lexgion_config) {
     // Determine how many configs to update
     int cfg_count = 1;
     lexgion_trace_config_t **cfgs = &current_lexgion_config;
-    if (current_section_type == SECTION_LEXGION_ADDRESS &&
+    if (current_section_type == SECTION_LEXGION_ADDRESS_NAME &&
         num_current_lexgion_configs > 0) {
       cfg_count = num_current_lexgion_configs;
       cfgs = current_lexgion_configs;
@@ -1115,7 +1172,7 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config,
   return 0;
 }
 
-static lexgion_trace_config_t *get_or_create_lexgion_config(void *codeptr) {
+static lexgion_trace_config_t *get_or_create_address_lexgion_config(void *codeptr) {
   for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
     if (lexgion_address_trace_config[i].codeptr == codeptr) {
       return &lexgion_address_trace_config[i];
@@ -1133,4 +1190,44 @@ static lexgion_trace_config_t *get_or_create_lexgion_config(void *codeptr) {
     return lg;
   }
   return NULL;
+}
+
+/* Find or create a named lexgion config entry in lexgion_address_trace_config[].
+ * Named entries have codeptr==NULL, name[0]!='\0', and are matched at runtime
+ * by lgp->name.  domain_idx==-1 matches any domain. */
+static lexgion_trace_config_t *get_or_create_named_lexgion_config(
+    int domain_idx, const char *name, const char *filename_hint) {
+  if (!name || !name[0]) return NULL;
+
+  /* Search for an existing matching named entry (handles multi-token sections
+   * like Lexgion(Python:a, CUDA:b) where both tokens share one body). */
+  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+    lexgion_trace_config_t *c = &lexgion_address_trace_config[i];
+    if (c->codeptr != NULL || !c->name[0]) continue;
+    if (c->domain_index == domain_idx && strcmp(c->name, name) == 0)
+      return c;
+  }
+
+  if (num_lexgion_address_trace_configs >= MAX_NUM_LEXGIONS) {
+    fprintf(stderr,
+            "PInsight: lexgion config table full, cannot add named entry '%s'\n",
+            name);
+    return NULL;
+  }
+
+  lexgion_trace_config_t *lc =
+      &lexgion_address_trace_config[num_lexgion_address_trace_configs++];
+  /* Inherit global rate defaults (trace_starts_at, max_num_traces, tracing_rate,
+   * mode_after) so named configs compose with [Lexgion.default] naturally. */
+  *lc = *lexgion_default_trace_config;
+  lc->codeptr = NULL;
+  strncpy(lc->name, name, sizeof(lc->name) - 1);
+  lc->name[sizeof(lc->name) - 1] = '\0';
+  if (filename_hint && filename_hint[0]) {
+    strncpy(lc->filename_hint, filename_hint, sizeof(lc->filename_hint) - 1);
+    lc->filename_hint[sizeof(lc->filename_hint) - 1] = '\0';
+  }
+  lc->domain_index = domain_idx;
+  lc->removed = 0;
+  return lc;
 }

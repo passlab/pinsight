@@ -172,6 +172,9 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
         NULL; /* resolved lazily by lexgion_set_top_trace_bit_domain_event */
     lgp->trace_config_change_counter =
         -1; /* force mismatch to trigger config resolution */
+    lgp->name_resolved_gen =
+        (unsigned int)-1; /* force name resolution on first callback */
+    /* lgp->name and lgp->filename_hint are NULL from TLS zero-init */
   }
   pinsight_thread_data.recent_lexgion = index; /* cache it for future search */
 
@@ -216,11 +219,12 @@ lexgion_record_t *top_lexgion_type(int class, int type) {
 lexgion_record_t *top_lexgion() { return pinsight_thread_data.current_record; }
 
 /**
- * Set the trace bit for a lexgion based on domain and event, with 3-level
+ * Set the trace bit for a lexgion based on domain and event, with 4-level
  * config resolution:
  *   1. Search lexgion_address_trace_config by lgp->codeptr_ra
- *   2. Fall back to lexgion_domain_default_trace_config[domain]
- *   3. Fall back to lexgion_default_trace_config
+ *   2. Search lexgion_address_trace_config by lgp->name (named lexgion)
+ *   3. Fall back to lexgion_domain_default_trace_config[domain]
+ *   4. Fall back to lexgion_default_trace_config
  * @return 1 if the lexgion should be traced, 0 otherwise
  */
 int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
@@ -253,7 +257,25 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
       }
     }
 
-    /* 2. If not found, try the domain-specific default config */
+    /* 2. Search by name if the codeptr search found nothing and the lexgion
+     * has a runtime-resolved name (set by the domain callback). Named entries
+     * have codeptr==NULL and name[0]!='\0'. */
+    if (trace_config == NULL && lgp->name) {
+      for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+        lexgion_trace_config_t *c = &lexgion_address_trace_config[i];
+        if (c->removed || c->codeptr != NULL || !c->name[0]) continue;
+        if (c->domain_index != -1 && c->domain_index != domain) continue;
+        if (c->filename_hint[0] && lgp->filename_hint &&
+            strncmp(lgp->filename_hint, c->filename_hint,
+                    strlen(c->filename_hint)) != 0) continue;
+        if (strcmp(lgp->name, c->name) == 0) {
+          trace_config = c;
+          break;
+        }
+      }
+    }
+
+    /* 3. If not found, try the domain-specific default config */
     if (trace_config == NULL) {
       lexgion_trace_config_t *domain_default =
           &lexgion_domain_default_trace_config[domain];
@@ -262,7 +284,7 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
       }
     }
 
-    /* 3. If still not found, fall back to the global default */
+    /* 4. If still not found, fall back to the global default */
     if (trace_config == NULL) {
       trace_config = lexgion_default_trace_config;
     }
@@ -297,9 +319,11 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
 }
 
 /**
- * Set the trace config for a lexgion by checking the
- * lexgion_address_trace_config table, the domain_default_trace_config table,
- * and the default_trace_config table.
+ * Set the trace config for a lexgion using the 4-level hierarchy:
+ *   1. lexgion_address_trace_config by codeptr_ra
+ *   2. lexgion_address_trace_config by name (named lexgion)
+ *   3. lexgion_domain_default_trace_config[domain]
+ *   4. lexgion_default_trace_config
  * @return the trace config for the lexgion
  */
 lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
@@ -319,7 +343,23 @@ lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
       }
     }
 
-    /* 2. If not found, try the domain-specific default config */
+    /* 2. Search by name if the codeptr search found nothing */
+    if (trace_config == NULL && lgp->name) {
+      for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
+        lexgion_trace_config_t *c = &lexgion_address_trace_config[i];
+        if (c->removed || c->codeptr != NULL || !c->name[0]) continue;
+        if (c->domain_index != -1 && c->domain_index != domain) continue;
+        if (c->filename_hint[0] && lgp->filename_hint &&
+            strncmp(lgp->filename_hint, c->filename_hint,
+                    strlen(c->filename_hint)) != 0) continue;
+        if (strcmp(lgp->name, c->name) == 0) {
+          trace_config = c;
+          break;
+        }
+      }
+    }
+
+    /* 3. If not found, try the domain-specific default config */
     if (trace_config == NULL) {
       lexgion_trace_config_t *domain_default =
           &lexgion_domain_default_trace_config[domain];
@@ -328,7 +368,7 @@ lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
       }
     }
 
-    /* 3. If still not found, fall back to the global default */
+    /* 4. If still not found, fall back to the global default */
     if (trace_config == NULL) {
       trace_config = lexgion_default_trace_config;
     }

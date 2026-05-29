@@ -121,6 +121,19 @@ typedef struct lexgion {
   unsigned int trace_config_change_counter; /* change counter when trace_config
                                                was resolved */
   unsigned int trace_bit; // bit to indicate whether to trace or not
+
+  /* Runtime-resolved name for named lexgion config matching.
+   * Set by domain callbacks on first encounter (or after each reload).
+   * Borrowed pointer — caller owns the lifetime:
+   *   Python: PyUnicode internal buffer (stable for code object lifetime)
+   *   MPI:    domain_info_table event name (static string)
+   *   CUDA:   CUPTI functionName (stable for session lifetime)
+   * NULL for domains that do not support named matching (e.g. OpenMP). */
+  const char *name;
+  const char *filename_hint; /* optional: source file basename */
+  unsigned int name_resolved_gen; /* trace_config_change_counter value when
+                                   * name was last set; init = (unsigned int)-1
+                                   * to force resolution on first callback */
 } lexgion_t;
 
 /**
