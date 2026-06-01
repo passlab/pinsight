@@ -477,8 +477,10 @@ static int parse_section_header(char *line) {
       // SET: Apply PunitSet (only for Lexgion(address))
       if (parts[1] && current_section_type == SECTION_LEXGION_ADDRESS_NAME) {
         for (int i = 0; i < num_current_lexgion_configs; i++) {
-          parse_punit_set_string(parts[1],
-                                 current_lexgion_configs[i]->domain_punits);
+          if (parse_punit_set_string(parts[1],
+                                 current_lexgion_configs[i]->domain_punits) == 0) {
+            current_lexgion_configs[i]->domain_punit_set_set = 1;
+          }
         }
       }
     }
@@ -762,8 +764,15 @@ static void parse_key_value(char *line) {
       // Unified parsing for all trace_mode_after values (including INTROSPECT)
       trace_mode_after_t parsed = {0};
       parse_trace_mode_after(val, &parsed);
-      for (int ci = 0; ci < cfg_count; ci++)
+      for (int ci = 0; ci < cfg_count; ci++) {
+        /* Preserve runtime cycling state (generation, fired) across reload.
+         * These fields are incremented/reset by the control thread during
+         * cyclic INTROSPECT; resetting them on re-parse would break the
+         * generation-based counter reset that drives each new cycle. */
+        parsed.generation = cfgs[ci]->mode_after.generation;
+        parsed.fired      = cfgs[ci]->mode_after.fired;
         cfgs[ci]->mode_after = parsed;
+      }
     } else {
       // Check for Domain.Event override
       char *dot = strchr(key, '.');
@@ -1203,8 +1212,10 @@ static lexgion_trace_config_t *get_or_create_named_lexgion_config(
   for (int i = 0; i < num_lexgion_trace_configs; i++) {
     lexgion_trace_config_t *c = &lexgion_trace_config[i];
     if (c->codeptr != NULL || !c->name[0]) continue;
-    if (c->domain_index == domain_idx && strcmp(c->name, name) == 0)
+    if (c->domain_index == domain_idx && strcmp(c->name, name) == 0) {
+      c->removed = 0; /* restore on re-parse after reload */
       return c;
+    }
   }
 
   lexgion_trace_config_t *lc = alloc_lexgion_config();

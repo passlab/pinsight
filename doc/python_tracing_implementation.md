@@ -1,8 +1,8 @@
 # PInsight Python Tracing: Design and Implementation
 
-> **Status**: Implemented, pending build/test on Linux with LTTng.
+> **Status**: Implemented and tested (Phases 1–5 passing on Linux with LTTng).
 > **Requires**: Python 3.12+ (PEP 669 `sys.monitoring`)
-> **Branch**: `master` (integrated from `feature/python-profiling-support`)
+> **Branch**: `master`
 
 ---
 
@@ -66,20 +66,36 @@ This split is required because:
 ```
 1. libpinsight.so loaded via LD_PRELOAD
    └── __attribute__((constructor(101))) initial_setup_trace_config()
-       └── register_Python_trace_domain()          ← Python_domain_index assigned
-           └── DSL expanded → domain_info_table populated
+       └── register_Python_trace_domain()
+           └── Python_domain_index assigned; starting_mode = PINSIGHT_DOMAIN_TRACING
+       └── apply config file + env vars (PINSIGHT_TRACE_PYTHON, etc.)
+       └── save config/env-resolved mode → last_mode
+       └── force Python domain to PINSIGHT_DOMAIN_STANDBY
+           (stdlib imports that happen before activate() produce no lexgion entries)
 
 2. Python interpreter starts
    └── python3 -m pinsight my_app.py
+       └── pinsight.py imports stdlib (threading, runpy, os, ...)
+           ← Python domain is STANDBY: on_py_start returns immediately, no lexgion created
        └── pinsight.py imports _pinsight_python
            └── PyInit__pinsight_python()            ← module loaded, domain_index valid
        └── pinsight.py calls activate()
            └── sys.monitoring.register_callback()   ← callbacks armed
-           └── sys.monitoring.set_events()          ← events enabled
+           └── sys.monitoring.set_events()          ← events enabled in CPython
+           └── _pinsight_python.set_trace_mode()    ← atomically restore last_mode
+               (Python domain switches from STANDBY to TRACING/MONITORING/OFF/STANDBY
+                per config file or env var; default is TRACING)
 
 3. User script runs
    └── Every Python function call fires on_py_start → on_py_return
    └── Every C extension call fires on_c_start → on_c_return
+
+4. Script exits
+   └── pinsight.py calls deactivate()
+       └── _pinsight_python.reset_trace_mode()  ← save current mode, force STANDBY
+       └── unregister C_RETURN/C_RAISE callbacks (Python 3.14+ requirement)
+       └── sys.monitoring.set_events(TOOL_ID, 0)
+       └── sys.monitoring.free_tool_id(TOOL_ID)
 ```
 
 ---
@@ -118,7 +134,12 @@ The punit ID function returns a **domain-specific sequential thread ID** (0, 1, 
 
 ### 3.4 Starting Mode
 
-`TRACING` — same as OpenMP and CUDA. Since Python tracing is opt-in (user must run `python3 -m pinsight`), the user has explicitly requested tracing.
+`starting_mode = PINSIGHT_DOMAIN_TRACING`. This represents the default when no
+config or env var is set. However, `initial_setup_trace_config()` immediately
+saves this mode to `last_mode` and forces the domain to `PINSIGHT_DOMAIN_STANDBY`
+so that stdlib imports (which happen before `activate()`) do not consume per-thread
+lexgion cache slots. The `set_trace_mode()` call inside `activate()` atomically
+restores `last_mode` to open the tracing window at the correct time.
 
 ---
 
@@ -149,7 +170,7 @@ The first callback on any Python thread triggers `pysysmon_ensure_thread_init()`
 
 ### 4.2 PY_START Callback (on_py_start)
 
-Called for every Python function entry:
+Called for every Python function entry. The eight-step flow:
 
 ```c
 static PyObject *on_py_start(PyObject *self, PyObject *const *args, Py_ssize_t nargs) {
@@ -157,39 +178,67 @@ static PyObject *on_py_start(PyObject *self, PyObject *const *args, Py_ssize_t n
     pinsight_check_pause();
 
     // 2. Fast-path domain mode check (~2ns volatile read)
+    //    Returns immediately when domain is STANDBY or OFF.
     if (!PINSIGHT_DOMAIN_ACTIVE(domain_default_trace_config[Python_domain_index].mode))
         return Py_None;
 
-    // 3. Thread init (once per thread)
+    // 3. Thread init (once per thread, double-checked with __builtin_expect)
     pysysmon_ensure_thread_init();
 
     // 4. Lexgion begin — LRU lookup by PyCodeObject* pointer
-    //    The code object pointer serves as the lexgion identity,
-    //    analogous to codeptr_ra in OpenMP or __builtin_return_address in CUDA.
+    //    The code object pointer is the lexgion identity (stable for the function's
+    //    lifetime), analogous to codeptr_ra in OpenMP.
     const void *codeptr = (const void *)args[0];
     lexgion_record_t *record = lexgion_begin(PYTHON_LEXGION,
                                              PYSYSMON_EVENT_PY_START, codeptr);
     lexgion_t *lgp = record->lgp;
 
-    // 5. Rate control + config resolution
+    // 5. Name resolution for named lexgion config matching (once per function
+    //    per config-reload cycle). Stores co_qualname pointer and filename_hint
+    //    into lgp->name / lgp->filename_hint. Forces config re-resolve when stale.
+    if (lgp->name_resolved_gen != trace_config_change_counter) {
+        /* extract co_qualname, co_filename; store in lgp->name, lgp->filename_hint */
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1; /* force re-resolve */
+    }
+
+    // 6. Rate control + config resolution (TRACING mode only)
+    //    lexgion_set_top_trace_bit_domain_event() looks up named config by lgp->name,
+    //    applies punit thread filter (domain_punit_set_match), and sets lgp->trace_bit.
     if (PINSIGHT_SHOULD_TRACE(Python_domain_index))
         lexgion_set_top_trace_bit_domain_event(lgp, Python_domain_index,
                                                PYSYSMON_EVENT_PY_START);
 
-    // 6. Emit tracepoint if trace_bit is set
+    // 7. Emit tracepoint if trace_bit is set
+    //    Code info (co_qualname, co_filename, co_firstlineno) is extracted lazily
+    //    only when actually tracing — avoids Python string ops on suppressed paths.
     if (PINSIGHT_SHOULD_TRACE(Python_domain_index) && lgp->trace_bit) {
         CodeInfo info;
-        extract_code_info(code, &info);
-        lttng_ust_tracepoint(pysysmon_pinsight_lttng_ust, function_begin, ...);
+        extract_code_info(args[0], &info);
+        lttng_ust_tracepoint(pysysmon_pinsight_lttng_ust, function_begin,
+                             info.qualname, info.filename, info.lineno,
+                             (unsigned long)args[0], pysysmon_thread_id);
         free_code_info(&info);
     }
     return Py_None;
 }
 ```
 
-**Lexgion identity**: The `PyCodeObject*` pointer uniquely identifies each Python function definition. Every call to the same function uses the same pointer, so lexgion LRU lookup is O(1) on cache hit — exactly like `codeptr_ra` for OpenMP or `__builtin_return_address()` for CUDA.
+**Lexgion identity**: `PyCodeObject*` is stable for the function's lifetime and uniquely
+identifies each function definition. LRU lookup is O(1) on cache hit.
 
-**Lazy code info extraction**: Code info (`co_qualname`, `co_filename`, `co_firstlineno`) is only extracted when tracing is active (`trace_bit` is set). This avoids Python string operations on the fast path when tracing is suppressed by rate control.
+**Name resolution**: `lgp->name` stores the `co_qualname` UTF-8 pointer for use by
+`lexgion_set_top_trace_bit_domain_event()` when matching named lexgion configs. The
+pointer is valid for the code object's lifetime (code objects are never freed while
+the function exists). The generation counter `name_resolved_gen` tracks config reloads
+so re-resolution happens once per SIGUSR1 cycle, not on every call.
+
+**Punit filter**: `lexgion_set_top_trace_bit_domain_event()` checks
+`domain_punit_set_match()` when `domain_punit_set_set = 1` on the resolved config.
+This implements `[Lexgion(Python:name)] : Python.default : Python.thread(N-M)` filtering.
+
+**Lazy code info extraction**: Full `CodeInfo` (`co_qualname`, `co_filename`, `co_firstlineno`)
+is only extracted when `trace_bit` is set, avoiding Python attribute lookups on suppressed paths.
 
 ### 4.3 PY_RETURN Callback (on_py_return)
 
@@ -297,7 +346,10 @@ Provider: `pysysmon_pinsight_lttng_ust`
 
 ## 6. Python Launcher (pinsight.py)
 
-The launcher handles `sys.monitoring` registration (Python-only API — no C equivalent):
+The launcher handles `sys.monitoring` registration (Python-only API — no C equivalent)
+and manages the tracing window via `set_trace_mode()`/`reset_trace_mode()`.
+
+### 6.1 activate() / deactivate()
 
 ```python
 TOOL_ID = 3  # sys.monitoring tool slot
@@ -308,15 +360,65 @@ def activate(events=("function", "c_call")):
     if "function" in events:
         sys.monitoring.register_callback(TOOL_ID, PY_START, on_py_start)
         sys.monitoring.register_callback(TOOL_ID, PY_RETURN, on_py_return)
+        event_mask |= PY_START | PY_RETURN
 
     if "c_call" in events:
         sys.monitoring.register_callback(TOOL_ID, CALL, on_c_start)
         sys.monitoring.register_callback(TOOL_ID, C_RETURN, on_c_return)
+        event_mask |= CALL
+        # C_RETURN and C_RAISE are "dependent" events in Python 3.12+:
+        # they fire automatically when CALL is enabled. Must NOT be set
+        # explicitly in event_mask (raises ValueError on Python 3.14+).
 
     sys.monitoring.set_events(TOOL_ID, event_mask)
+
+    # Open the tracing window: restore the Python domain to the mode resolved
+    # by config file or env var (saved in last_mode by initial_setup_trace_config()).
+    # Default (no config, no env) = TRACING.
+    _pinsight_python.set_trace_mode()
+
+def deactivate():
+    # Close the tracing window before tearing down callbacks.
+    _pinsight_python.reset_trace_mode()
+    # Unregister dependent-event callbacks before clearing event mask
+    # (Python 3.14+ raises ValueError otherwise).
+    sys.monitoring.register_callback(TOOL_ID, C_RETURN, None)
+    sys.monitoring.register_callback(TOOL_ID, C_RAISE,  None)
+    sys.monitoring.set_events(TOOL_ID, 0)
+    sys.monitoring.free_tool_id(TOOL_ID)
 ```
 
-Usage:
+### 6.2 set_trace_mode() / reset_trace_mode() (C extension)
+
+Two C functions exposed as Python-callable methods in `_pinsight_python`:
+
+```c
+/* Restore Python domain to the config/env-resolved mode (saved in last_mode).
+ * Called by activate() to open the tracing window after callbacks are armed. */
+static PyObject *set_trace_mode(PyObject *self, PyObject *args) {
+    pinsight_domain_mode_t target =
+        domain_default_trace_config[Python_domain_index].last_mode;
+    __atomic_store_n(&domain_default_trace_config[Python_domain_index].mode,
+                     target, __ATOMIC_SEQ_CST);
+    return PyLong_FromLong((long)target);  /* returns the mode applied */
+}
+
+/* Save current mode to last_mode, then force Python domain to STANDBY.
+ * Called by deactivate() to stop tracing before unregistering callbacks. */
+static PyObject *reset_trace_mode(PyObject *self, PyObject *args) {
+    domain_default_trace_config[Python_domain_index].last_mode =
+        domain_default_trace_config[Python_domain_index].mode;
+    __atomic_store_n(&domain_default_trace_config[Python_domain_index].mode,
+                     PINSIGHT_DOMAIN_STANDBY, __ATOMIC_SEQ_CST);
+    Py_RETURN_NONE;
+}
+```
+
+The `__ATOMIC_SEQ_CST` store ensures all threads see the mode change immediately.
+`set_trace_mode()` returns the applied mode as an integer (useful for logging).
+
+### 6.3 Usage
+
 ```bash
 # Zero-code-change tracing:
 python3 -m pinsight my_app.py --arg1 --arg2
@@ -328,7 +430,8 @@ pinsight.activate()
 pinsight.deactivate()
 ```
 
-The launcher uses `runpy.run_path()` to execute the target script as `__main__`, preserving `sys.argv` semantics.
+The launcher uses `runpy.run_path()` to execute the target script as `__main__`,
+preserving `sys.argv` semantics.
 
 ---
 
@@ -457,22 +560,60 @@ kill -USR1 $PID
 # Verify no new trace events are emitted after SIGUSR1
 ```
 
+### 8.7 Named Lexgion Config Test
+
+```bash
+cat > /tmp/pinsight_trace_config.txt <<'EOF'
+[Lexgion(Python).default]
+    max_num_traces = 0
+
+[Lexgion(Python:do_work)]: Python.default
+    max_num_traces = 3
+EOF
+
+PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+  LD_PRELOAD=build/libpinsight.so PYTHONPATH=build \
+  python3 -m pinsight test/python_simple/python_simple.py
+```
+
+Verify `function_begin` events for `do_work` total exactly 3; all other functions
+are suppressed (max=0 default).
+
+### 8.8 Thread/Punit Filter Test
+
+See `test/python_simple/test_phase5.sh` for the full 5-scenario thread filter
+test suite. Example run:
+
+```bash
+cd test/python_simple
+./test_phase5.sh ../../build
+```
+
+Test scenarios covered:
+- **5.1**: Worker filtered to threads 1-2 (max=8 each → 16 total), threads 3-4 suppressed
+- **5.2**: Worker filtered to threads 3-4 (max=6 each → 12 total)
+- **5.3**: `function_begin` count equals `function_end` count (pairing with thread filter)
+- **5.4**: Domain default fallback alongside thread filter
+- **5.5**: All 4 worker threads traced (thread range 1-4, max=5 each → 20 total)
+
 ---
 
 ## 9. Source Files
 
 | File | Role |
 |------|------|
-| `src/pysysmon_callback.c` | C extension: 4 sys.monitoring callbacks, thread init, domain globals |
+| `src/pysysmon_callback.c` | C extension: 4 sys.monitoring callbacks, thread init, set/reset_trace_mode, domain globals |
 | `src/pysysmon_lttng_ust_tracepoint.h` | LTTng UST tracepoint definitions (4 events) |
-| `src/trace_domain_Python.h` | Domain registration DSL (5 events, 3 subdomains, 1 punit) |
-| `src/pinsight.py` | Python launcher — sys.monitoring callback registration |
-| `src/pinsight.h` | `PYTHON_LEXGION` enum value |
+| `src/trace_domain_Python.h` | Domain registration DSL (5 events, 3 subdomains, 1 punit); STANDBY startup logic |
+| `src/pinsight.py` | Python launcher — sys.monitoring registration, activate/deactivate, set/reset_trace_mode calls |
+| `src/pinsight.h` | `PYTHON_LEXGION` enum value; `MAX_LEXGION_STACK_DEPTH = 16` |
 | `src/pinsight_config.h.cmake.in` | `#cmakedefine PINSIGHT_PYTHON` |
 | `CMakeLists.txt` | `PINSIGHT_PYTHON` option + `_pinsight_python` module build |
-| `src/trace_config.c` | `#include` + `register_Python_trace_domain()` call |
-| `test/python_simple/python_simple.py` | Multi-threaded test program |
-| `test/python_simple/Makefile` | LTTng session setup + test execution |
+| `src/trace_config.c` | `register_Python_trace_domain()` call; STANDBY save/force block; `domain_punit_set_match` fix |
+| `src/trace_config_parse.c` | `Python:` prefix handling; `domain_punit_set_set = 1` fix |
+| `test/python_simple/python_simple.py` | Single-threaded basic test |
+| `test/python_simple/test_thread_filter.py` | Multi-threaded workload for Phase 5 punit filter tests |
+| `test/python_simple/test_phase5.sh` | Thread/punit filtering test suite (5 scenarios, 16 checks) |
 
 ---
 
@@ -516,7 +657,10 @@ The offset scheme (OpenMP 0+, CUDA 2000+, Python 3000+) ensures `global_thread_n
 |------|--------|-------|
 | `sys.setprofile` fallback | Deferred | For Python < 3.12 support; doubles testing surface |
 | `pysysmon_import` event | Reserved (OFF) | Track import timing for startup analysis |
+| Heavy imports after `set_trace_mode()` | Known limitation | `import numpy` (if not yet cached) inside the user script fills lexgion slots. The STANDBY window only covers stdlib imports before `activate()`. Mitigation: pre-import heavy modules, or increase `MAX_NUM_LEXGIONS`. |
 | Python GIL-aware tracing | Not implemented | Could skip tracing when waiting for GIL |
 | `set_local_events()` | Not used | Per-code-object event masking for finer control |
+| Free-threaded Python 3.13+ | Not tested | Per-thread TLS is likely correct; `lexgion_t` shared fields may need `_Atomic` |
 | Multi-interpreter | Not tested | `sys.monitoring` is per-interpreter in 3.12+ |
 | Install target | Not implemented | `_pinsight_python.so` and `pinsight/` package installation |
+| Wildcard name matching | Deferred | `Python:Solver.*` — increases parser complexity |

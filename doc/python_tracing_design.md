@@ -1,7 +1,7 @@
 # PInsight Python Tracing Support: Design and Implementation Plan
 
-**Date:** 2026-04-14  
-**Status:** Design  
+**Date:** 2026-04-14 (updated 2026-05-31)
+**Status:** Implemented (Phases 1–2 complete; Phase 3 deferred)
 **Author:** Y. Yan  
 
 ---
@@ -602,45 +602,51 @@ at the CPython level.
 
 ## 9. Implementation Plan
 
-### Phase 1: Minimal Viable Tracing (1-2 days)
+### Phase 1: Minimal Viable Tracing ✅ Complete
 
-- [ ] Create `src/python/` directory
-- [ ] Implement `python_lttng_ust_tracepoint.h` (function_begin, function_end, c_call_begin)
-- [ ] Implement `_pinsight_python.c` with `on_py_start`, `on_py_return`, and `on_call`
-- [ ] Implement `pinsight_python.py` setup script with event selection
-- [ ] Build system: add Python extension to CMakeLists.txt (find_package Python3)
-- [ ] Basic test: trace a simple Python+NumPy script, verify events in babeltrace2
-- [ ] Verify c_call events correctly bridge Python names to OpenMP parallel regions
+- [x] Implement `pysysmon_lttng_ust_tracepoint.h` (function_begin, function_end, c_call_begin/end)
+- [x] Implement `pysysmon_callback.c` with `on_py_start`, `on_py_return`, `on_c_start`, `on_c_return`
+- [x] Implement `pinsight.py` launcher with `activate()`/`deactivate()` and `sys.monitoring` event registration
+- [x] Build system: CMakeLists.txt `PINSIGHT_PYTHON` option + `_pinsight_python` module build
+- [x] Basic test: verified function_begin/end and c_call_begin/end events with babeltrace2
+- [x] Verified Python domain STANDBY startup to prevent stdlib import overflow
 
-### Phase 2: PInsight Integration (1-2 days)
+### Phase 2: PInsight Integration ✅ Complete
 
-- [ ] Register Python as a new domain in `trace_domain_Python.h`
-- [ ] Add `Python` section support to config parser
-- [ ] Integrate lexgion lookup/rate-control with existing infrastructure
-- [ ] Domain mode check (`PINSIGHT_DOMAIN_ACTIVE`) in callbacks
-- [ ] `pinsight_check_pause()` integration for INTROSPECT pause
-- [ ] Test: config file with `[Python] trace_mode = TRACING` + rate limiting
+- [x] Register Python as a new domain via `trace_domain_Python.h` DSL (5 events, 3 subdomains, 1 punit)
+- [x] Config file + env var support (`PINSIGHT_TRACE_PYTHON`, `PINSIGHT_TRACE_RATE`, `PINSIGHT_TRACE_CONFIG_FILE`)
+- [x] Lexgion LRU + rate control (`lexgion_begin`/`end`, `lexgion_set_top_trace_bit_domain_event`)
+- [x] Domain mode check (`PINSIGHT_DOMAIN_ACTIVE`) in all callbacks
+- [x] `pinsight_check_pause()` integration for INTROSPECT cooperative pause
+- [x] Named lexgion matching: `[Lexgion(Python:qualname)]` and `[Lexgion(Python:file.py:qualname)]`
+- [x] Thread/punit filtering: `[Lexgion(Python:name)] : Python.default : Python.thread(N-M)`
+- [x] `set_trace_mode()`/`reset_trace_mode()` for deferred-open tracing window
+- [x] SIGUSR1 reconfiguration via control thread + generation counter (`name_resolved_gen`)
+- [x] Test suite: Phases 1–5 in `test/python_simple/`
 
-### Phase 3: sys.setprofile Fallback (0.5 day)
+### Phase 3: sys.setprofile Fallback — Deferred
 
-- [ ] Add `PyEval_SetProfile`-based fallback for Python <3.12
+- [ ] `PyEval_SetProfile`-based fallback for Python < 3.12
 - [ ] Auto-detect Python version and select mechanism
 - [ ] Test on Python 3.8, 3.10, 3.12+
 
-### Phase 4: TraceCompass Integration (0.5 day)
+Rationale: The scientific Python stack (NumPy, SciPy) requires 3.11+ per SPEC 0;
+HPC environments predominantly run 3.12+. Deferred until demand emerges.
 
-- [ ] Add Python state system to TraceCompass XML
-- [ ] Python function time graph view (analogous to OpenMP thread view)
+### Phase 4: TraceCompass Integration — Deferred
+
+- [ ] Python state system in TraceCompass XML
+- [ ] Python function time graph view
 - [ ] Cross-domain correlation view (Python → OpenMP/MPI/CUDA)
 
-### Phase 5: Module Filtering and Optimization (1 day)
+### Phase 5: Module Filtering and Advanced Optimization — Deferred
 
-- [ ] Implement `module_filter` / `module_exclude` config options
-- [ ] Use `sys.monitoring.set_local_events()` for per-code-object enable/disable
-- [ ] Benchmark overhead on real HPC Python workloads (NumPy, mpi4py)
-- [ ] Optimize: cache `PyUnicode_AsUTF8` results per code object in lexgion
+- [ ] `module_filter` / `module_exclude` config options
+- [ ] `sys.monitoring.set_local_events()` per-code-object enable/disable
+- [ ] Overhead benchmark on real HPC workloads (NumPy, mpi4py)
+- [ ] Heavy-import handling (e.g., `import numpy` after `set_trace_mode()`)
 
-### Phase 6: Evaluation (1-2 days)
+### Phase 6: Evaluation — Pending
 
 - [ ] Overhead benchmark: Python+NumPy matrix operations with/without PInsight
 - [ ] Cross-domain demo: mpi4py + NumPy traced end-to-end
@@ -649,26 +655,29 @@ at the CPython level.
 
 ---
 
-## 10. Open Questions
+## 10. Open Questions (Resolved)
 
-1. **GIL and thread safety**: Since Python has the GIL, only one thread executes Python
-   code at a time. But the lexgion directory is per-thread TLS — should Python callbacks
-   use the main thread's TLS, or create a Python-specific TLS?
+1. **GIL and thread safety** — **Resolved**: Each Python OS thread has its own TLS
+   `pinsight_thread_data` (lexgion LRU, stack, thread ID). Callbacks are always called
+   on the thread executing Python code, so per-thread TLS is correct. No locking needed
+   for the hot path. Domain mode is a `volatile` atomic read.
 
-2. **free-threaded Python (3.13+)**: PEP 703 removes the GIL. If PInsight needs to support
-   `python3.13t`, the callbacks must be thread-safe. The existing lexgion LRU and volatile
-   domain mode checks should be sufficient, but needs verification.
+2. **free-threaded Python (3.13+)** — **Deferred**: The existing volatile domain mode
+   check and per-thread TLS are expected to be sufficient, but has not been tested against
+   `python3.13t`. No GIL means multiple threads can be in `on_py_start` simultaneously —
+   the LRU and stack are per-thread so no contention, but `lexgion_t` fields shared
+   across threads (e.g., `trace_bit`) may need `_Atomic` annotations for 3.13t.
 
-3. **String lifetime**: `PyUnicode_AsUTF8()` returns a pointer into the Python object's
-   internal buffer. This is safe as long as the code object is alive (which it is during
-   the callback), but LTTng copies the string into the ring buffer immediately, so there's
-   no lifetime concern.
+3. **String lifetime** — **Resolved**: `PyUnicode_AsUTF8()` returns a pointer into the
+   `PyCodeObject`'s internal buffer. The code object lives for the application's lifetime.
+   LTTng copies the string into the ring buffer immediately — no lifetime concern.
+   `lgp->name` (stored for named config matching) is safe for the same reason.
 
-4. **Activation method**: Should Python tracing be activated via:
-   - (a) `import pinsight_python` in user code (explicit)
-   - (b) `PYTHONSTARTUP` environment variable (transparent)
-   - (c) Site-packages `.pth` file (always-on, like PInsight's LD_PRELOAD)
-   - (d) All of the above?
+4. **Activation method** — **Resolved**: The canonical method is `python3 -m pinsight
+   <script.py>` using the `pinsight/__main__.py` launcher. This requires no user code
+   changes. Programmatic use (`import pinsight; pinsight.activate()`) is also supported
+   for embedding. `PYTHONSTARTUP` and `.pth` file methods are possible but not provided
+   as built-in targets.
 
-5. **Minimum Python version**: sys.monitoring requires 3.12+. Should we support older
-   Python (3.8+) via sys.setprofile fallback, or target 3.12+ only?
+5. **Minimum Python version** — **Resolved**: Python 3.12+ only (sys.monitoring). A
+   sys.setprofile fallback for 3.8+ is deferred (see Phase 3).

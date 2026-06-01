@@ -359,6 +359,7 @@ extern void print_domain_info(FILE *out);
 extern void print_domain_trace_config(FILE *out);
 extern void print_lexgion_trace_config(FILE *out);
 extern void pinsight_load_trace_config(char *filepath);
+extern void pinsight_invalidate_config_mtime(void);
 
 // --------------------------------------------------------
 // Safe environment variable query functions

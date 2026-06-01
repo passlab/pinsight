@@ -61,7 +61,7 @@ int domain_punit_set_match(domain_punit_set_t *domain_punit_set) {
   int i;
   int match = 0;
   for (i = 0; i < num_domain; i++) {
-    if (!domain_punit_set->set)
+    if (!domain_punit_set[i].set)
       continue;
     // check whether the current execution punit id is in the punit id set
     struct domain_info *d = &domain_info_table[i];
@@ -168,6 +168,13 @@ void setup_trace_config_env() {
 }
 
 static time_t last_config_mtime = 0;
+
+/* Force the next pinsight_load_trace_config call to re-parse even if mtime is
+ * unchanged (e.g. SIGUSR1-triggered reload where file was overwritten in-place
+ * within the same second). */
+void pinsight_invalidate_config_mtime(void) {
+    last_config_mtime = 0;
+}
 
 /* Signal handler and config_reload_requested have been moved to
  * pinsight_control_thread.c. The control thread now handles all
@@ -290,6 +297,19 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
 
   pinsight_load_trace_config(NULL);
   setup_trace_config_env();
+
+#ifdef PINSIGHT_PYTHON
+  /* After config file and env vars have been applied, save the intended Python
+   * domain mode into last_mode, then force the domain back to STANDBY.
+   * The launcher calls _pinsight_python.set_trace_mode() after all callbacks
+   * are registered (imports complete) to restore the intended mode.
+   * This prevents stdlib imports from consuming per-thread lexgion cache slots. */
+  domain_default_trace_config[Python_domain_index].last_mode =
+      domain_default_trace_config[Python_domain_index].mode;
+  domain_default_trace_config[Python_domain_index].mode =
+      PINSIGHT_DOMAIN_STANDBY;
+#endif
+
   /* Signal handler is now installed by pinsight_control_thread_start()
    * in enter_exit.c — no need to call pinsight_install_signal_handler() here. */
 

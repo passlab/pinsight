@@ -150,6 +150,10 @@ endif()
 ## Must come after add_library(pinsight) since _pinsight_python links against it.
 if (PINSIGHT_PYTHON)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+    # pysysmon_globals.c: domain globals + pysysmon_get_thread_id.
+    # No Python.h dependency — compiled into libpinsight.so so the symbols
+    # are present when the constructor calls register_Python_trace_domain().
+    target_sources(pinsight PRIVATE src/pysysmon_globals.c src/trace_domain_Python.h)
     Python3_add_library(_pinsight_python MODULE src/pysysmon_callback.c)
     target_include_directories(_pinsight_python PRIVATE
         ${CMAKE_CURRENT_BINARY_DIR}/src
@@ -213,7 +217,7 @@ else()
     message("Build with Python Support:     FALSE")
 endif()
 message("============================================================")
-add_executable(test_config_parser 
+set(test_config_parser_sources
     test/trace_config_parse/test_config_parser.c
     src/trace_config_parse.c
     src/trace_config.c
@@ -221,5 +225,9 @@ add_executable(test_config_parser
     src/trace_domain_loader.c
     src/app_knob.c
 )
+if (PINSIGHT_PYTHON)
+    list(APPEND test_config_parser_sources src/pysysmon_globals.c)
+endif()
+add_executable(test_config_parser ${test_config_parser_sources})
 target_include_directories(test_config_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/src)
 target_link_libraries(test_config_parser m ${CMAKE_DL_LIBS})

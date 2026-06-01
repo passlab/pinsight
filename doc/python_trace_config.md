@@ -1,12 +1,10 @@
 # Python Trace Configuration
 
-> **Status**: Domain-level and event-level config ready to use.
-> Named lexgion matching: design proposed, implementation pending.
+> **Status**: Fully implemented — domain-level, event-level, named lexgion matching, and thread/punit filtering are all ready to use.
 
 This document covers how to configure PInsight's Python tracing domain
 (`pysysmon_pinsight_lttng_ust`) using the standard PInsight config file and
-environment variables, and then proposes a Python-specific lexgion naming
-extension for per-function trace control.
+environment variables.
 
 For the general config file format, see [PINSIGHT_TRACE_CONFIG_FORMAT.md](PINSIGHT_TRACE_CONFIG_FORMAT.md).
 For Python tracing implementation details, see [python_tracing_implementation.md](python_tracing_implementation.md).
@@ -232,32 +230,14 @@ limiting; keep OpenMP at full tracing:
 
 ---
 
-## Part 2 — Named Lexgion Matching (Design Proposal)
-
-### 2.1 The Problem
+## Part 2 — Named Lexgion Matching
 
 For OpenMP and CUDA, lexgions are identified by `codeptr_ra` — a machine code
-address that is stable across runs:
+address stable across runs. For Python, the lexgion identity is `PyCodeObject*` —
+a heap pointer that changes each run and is meaningless to users. Named lexgion
+config lets you identify Python functions by their qualified name (`co_qualname`).
 
-```ini
-[Lexgion(0x4010bd)]           # always refers to the same parallel region
-    max_num_traces = 50
-```
-
-For Python, the lexgion identity is `PyCodeObject*` — a **heap pointer** that:
-
-1. Changes between runs (heap addresses are non-deterministic)
-2. Is meaningless to the user (they think in `module.function` terms)
-3. Cannot be known at config-write time
-
-This means address-based lexgion config is **not usable for Python**. Users
-need to say "trace `solver.compute` at rate 1, but trace `main` at rate 50"
-using the function's qualified name.
-
-### 2.2 Proposed Syntax
-
-Extend the `Lexgion(...)` syntax with a `Python:` prefix that accepts qualified
-function names as registered in `co_qualname`:
+### 2.1 Syntax
 
 ```ini
 # Single function by qualified name
@@ -270,7 +250,7 @@ function names as registered in `co_qualname`:
     max_num_traces = 50
     tracing_rate   = 1
 
-# Inner function
+# Inner function (closure)
 [Lexgion(Python:main.<locals>.do_work)]
     max_num_traces = 100
     tracing_rate   = 5
@@ -280,13 +260,12 @@ function names as registered in `co_qualname`:
     max_num_traces = 200
     tracing_rate   = 1
 
-# Module-qualified name (filename stem + qualname, for disambiguation)
+# Disambiguate by filename stem (when same qualname appears in multiple files)
 [Lexgion(Python:solver.py:MyClass.compute)]
     max_num_traces = 50
 ```
 
-Full config capabilities apply: rate triple, `trace_mode_after`, event
-overrides, inheritance, and `REMOVE`:
+Inheritance and rate control work the same as address-based lexgions:
 
 ```ini
 # Rate limit the hot solver function
@@ -297,136 +276,11 @@ overrides, inheritance, and `REMOVE`:
     trace_mode_after = Python:MONITORING
 
 # Stop tracing a noisy utility function entirely
-[REMOVE Lexgion(Python:utils.log_debug)]
+[Lexgion(Python:utils.log_debug)]: Python.default
+    max_num_traces = 0
 ```
 
-### 2.3 How It Works — Implementation Design
-
-#### 2.3.1 Config Parse Time
-
-The parser detects the `Python:` prefix inside `Lexgion(...)`:
-
-```c
-// In parse_section_header(), inside the Lexgion(0x...) branch:
-if (strncmp(trimmed, "Python:", 7) == 0) {
-    // Named Python lexgion — store in a name-keyed table
-    const char *qualname = trimmed + 7;
-    lexgion_trace_config_t *lc = get_or_create_named_python_lexgion(qualname);
-    current_lexgion_configs[num_current_lexgion_configs++] = lc;
-} else {
-    // Existing address-based path
-    uint64_t addr = strtoull(trimmed, NULL, 0);
-    ...
-}
-```
-
-Named configs are stored in a separate hash table (keyed by `qualname` string),
-distinct from the address-keyed `all_lexgion_trace_config[]` array:
-
-```c
-// New data structure in trace_config.h
-#define MAX_NAMED_PYTHON_LEXGIONS 256
-
-typedef struct {
-    char qualname[256];             // co_qualname string key
-    char filename_prefix[128];      // optional: "solver.py:" prefix for disambiguation
-    lexgion_trace_config_t config;  // same config struct as address-based lexgions
-} named_python_lexgion_t;
-
-extern named_python_lexgion_t named_python_lexgion_table[MAX_NAMED_PYTHON_LEXGIONS];
-extern int num_named_python_lexgions;
-```
-
-#### 2.3.2 Runtime Lookup in on_py_start
-
-When a Python function is first encountered, after `lexgion_begin()` creates the
-lexgion entry, the callback checks the named table and **binds** the name to the
-`PyCodeObject*` address. Subsequent calls reuse the address-keyed entry directly
-(O(1) — no string comparison in the hot path):
-
-```c
-static PyObject *on_py_start(PyObject *self, PyObject *const *args, Py_ssize_t nargs) {
-    ...
-    const void *codeptr = (const void *)args[0];
-    lexgion_record_t *record = lexgion_begin(PYTHON_LEXGION, PYSYSMON_EVENT_PY_START, codeptr);
-    lexgion_t *lgp = record->lgp;
-
-    // First encounter for this PyCodeObject* — check named config table (once)
-    if (!lgp->name_resolved) {
-        pysysmon_resolve_named_config(lgp, args[0]);  // reads co_qualname, co_filename
-        lgp->name_resolved = 1;
-    }
-    ...
-}
-
-// Resolution: called exactly once per unique PyCodeObject*
-static void pysysmon_resolve_named_config(lexgion_t *lgp, PyObject *code) {
-    PyObject *qualname_obj = PyObject_GetAttrString(code, "co_qualname");
-    PyObject *filename_obj = PyObject_GetAttrString(code, "co_filename");
-    if (!qualname_obj) { Py_XDECREF(filename_obj); return; }
-
-    const char *qualname = PyUnicode_AsUTF8(qualname_obj);
-    const char *filename = filename_obj ? PyUnicode_AsUTF8(filename_obj) : "";
-
-    // Linear scan of named table (happens only once per unique function)
-    for (int i = 0; i < num_named_python_lexgions; i++) {
-        named_python_lexgion_t *entry = &named_python_lexgion_table[i];
-
-        // Check filename prefix if specified
-        if (entry->filename_prefix[0] != '\0') {
-            const char *base = strrchr(filename, '/');
-            base = base ? base + 1 : filename;
-            if (strncmp(base, entry->filename_prefix,
-                        strlen(entry->filename_prefix)) != 0)
-                continue;
-        }
-
-        // Check qualname match
-        if (strcmp(qualname, entry->qualname) == 0) {
-            // Bind: copy named config into the lexgion's trace config
-            lexgion_set_trace_config(lgp, Python_domain_index);
-            *lgp->trace_config = entry->config;
-            break;
-        }
-    }
-
-    Py_XDECREF(qualname_obj);
-    Py_XDECREF(filename_obj);
-}
-```
-
-This keeps the hot path (every Python function call after the first) at the
-same O(1) cost as today — a single `lgp->name_resolved` flag check.
-
-#### 2.3.3 The `name_resolved` Flag
-
-The `lexgion_t` struct needs one new field:
-
-```c
-// Addition to lexgion_t in pinsight.h
-typedef struct lexgion {
-    ...
-    int name_resolved;    // 1 after pysysmon_resolve_named_config() has run
-} lexgion_t;
-```
-
-Initialized to `0` by `lexgion_begin()` when a new lexgion is created. Reset
-to `0` on config reload (SIGUSR1) so new named configs take effect immediately.
-
-#### 2.3.4 Handling SIGUSR1 Config Reload
-
-On reload, the named table is rebuilt from scratch (the file is re-parsed).
-All `lexgion_t.name_resolved` flags are cleared so the next call to each
-Python function re-checks the updated table:
-
-```c
-// In pinsight_load_trace_config() after re-parsing the file:
-#ifdef PINSIGHT_PYTHON
-    pysysmon_clear_name_resolved_flags();  // reset all lexgion_t.name_resolved = 0
-#endif
-```
-
-### 2.4 Matching Semantics
+### 2.2 Matching Semantics
 
 | Config syntax | Matches |
 |---------------|---------|
@@ -434,35 +288,45 @@ Python function re-checks the updated table:
 | `[Lexgion(Python:MyClass.compute)]` | `MyClass.compute` in any file |
 | `[Lexgion(Python:solver.py:MyClass.compute)]` | `MyClass.compute` only in files named `solver.py` |
 | `[Lexgion(Python:main.<locals>.do_work)]` | The `do_work` closure defined inside `main` |
-| `[REMOVE Lexgion(Python:utils.log_debug)]` | Stops tracing `log_debug` in any file |
 
-**Disambiguation rule**: If a qualname matches multiple files, the first match
-in the named table wins. Add a `filename.py:` prefix to disambiguate.
-
-**Priority order** (same as existing address-based logic):
+**Priority order**:
 1. Named Python lexgion match (if found)
-2. `Lexgion(Python).default`
-3. `Lexgion.default`
+2. `[Lexgion(Python).default]`
+3. `[Lexgion.default]`
 
-### 2.5 Files to Modify
+**Config reload**: On SIGUSR1, names are re-resolved. Each function is re-matched
+against the updated named config table on its next call. This uses the
+`name_resolved_gen` generation counter in `lexgion_t` — no flag-clearing loop
+needed; stale entries are detected lazily per-function.
 
-| File | Change |
-|------|--------|
-| `src/trace_config.h` | Add `named_python_lexgion_t` struct, `named_python_lexgion_table[]`, `num_named_python_lexgions` |
-| `src/trace_config.c` | Initialize and reset `named_python_lexgion_table` |
-| `src/trace_config_parse.c` | Detect `Python:` prefix in `Lexgion(...)`, call `get_or_create_named_python_lexgion()` |
-| `src/pinsight.h` | Add `name_resolved` flag to `lexgion_t` |
-| `src/pinsight.c` | Reset `name_resolved = 0` in lexgion creation; clear all on SIGUSR1 reload |
-| `src/pysysmon_callback.c` | Add `pysysmon_resolve_named_config()`, call from `on_py_start` |
+### 2.3 How It Works (Implementation)
 
-### 2.6 Example: Full Python-Specific Config
+At `on_py_start`, the name is resolved once per unique function per config-reload
+cycle. The key check is:
+
+```c
+if (lgp->name_resolved_gen != trace_config_change_counter) {
+    // Extract co_qualname and co_filename (new references, safe to DECREF after storing)
+    // Store lgp->name (UTF-8 ptr) and lgp->filename_hint (basename)
+    // Set lgp->name_resolved_gen = trace_config_change_counter
+    // Force config re-resolve: lgp->trace_config_change_counter = (unsigned int)-1
+}
+```
+
+The stored `lgp->name` is used by `lexgion_set_top_trace_bit_domain_event()` to
+look up named lexgion configs. After the first call, subsequent calls are O(1) —
+no string operations unless the config is reloaded.
+
+**String lifetime**: `PyUnicode_AsUTF8()` returns a pointer into the Python
+object's internal buffer. The `PyCodeObject` (and thus its `co_qualname` /
+`co_filename` string objects) lives for the application's lifetime — the internal
+UTF-8 buffer is valid permanently. The new references from `PyObject_GetAttrString`
+are `Py_XDECREF`-ed immediately after storing the pointer; the parent code object
+retains ownership.
+
+### 2.4 Example: Full Named Config
 
 ```ini
-# ── Domain-wide ─────────────────────────────────────────────────────────
-[Python.global]
-    trace_mode    = TRACING
-    Python.thread = (0-7)      # 8-thread program
-
 # ── Domain event defaults ────────────────────────────────────────────────
 [Python.default]
     pysysmon_py_start  = on
@@ -473,54 +337,142 @@ in the named table wins. Add a `filename.py:` prefix to disambiguate.
 # ── Lexgion defaults ─────────────────────────────────────────────────────
 [Lexgion(Python).default]: Python.default
     trace_starts_at = 0
-    max_num_traces  = 50        # limit all functions to 50 traces
+    max_num_traces  = 50
     tracing_rate    = 1
-    trace_mode_after = Python:MONITORING  # auto-drop after enough data
+    trace_mode_after = Python:MONITORING
 
 # ── Named function overrides ─────────────────────────────────────────────
 
 # Hot solver — full C bridge tracing, high rate limit
 [Lexgion(Python:Solver.run)]: Python.default
-    pysysmon_c_start  = on      # enable C bridge for this function
+    pysysmon_c_start  = on
     pysysmon_c_return = on
     max_num_traces    = 200
     tracing_rate      = 1
 
-# Initialization — trace only once (always same path, no value in repeating)
+# Initialization — trace only once
 [Lexgion(Python:Solver.setup)]: Python.default
     max_num_traces = 1
 
-# Noisy logging helper — skip entirely
-[REMOVE Lexgion(Python:utils.log_debug)]
+# Suppress a noisy helper
+[Lexgion(Python:utils.log_debug)]: Python.default
+    max_num_traces = 0
 
-# Two functions with same settings — disambiguated by filename
+# Two functions with same settings, disambiguated by filename
 [Lexgion(Python:solver_a.py:compute, Python:solver_b.py:compute)]: Python.default
     max_num_traces = 100
     tracing_rate   = 5
 ```
 
-### 2.7 Limitations and Non-Goals
+### 2.5 Limitations
 
 | Item | Notes |
 |------|-------|
-| Wildcard matching | `Python:Solver.*` to match all methods — deferred; increases parser complexity |
-| Lambda tracing | Lambda `co_qualname` is `<lambda>` — not uniquely identifiable by name alone |
-| Decorator wrappers | Wrapped functions may have their wrapper's `co_qualname` instead of the original |
-| Pattern matching | No glob/regex — exact `co_qualname` match only in the initial implementation |
-| Cross-run stability | Names are stable across runs; config files can be written once and reused |
+| Wildcard matching | `Python:Solver.*` — deferred |
+| Lambda tracing | Lambda `co_qualname` is `<lambda>` — not uniquely identifiable by name |
+| Decorator wrappers | May show wrapper's `co_qualname` instead of original |
+| Pattern matching | Exact `co_qualname` match only |
+
+---
+
+## Part 3 — Thread/Punit Filtering
+
+Restrict tracing to specific Python threads by appending a punit constraint
+to a named or default lexgion config section:
+
+### 3.1 Syntax
+
+```ini
+[Lexgion(Python:funcname)] : Python.default : Python.thread(N-M)
+    max_num_traces = K
+```
+
+The `: Python.default` inherits domain event defaults. The `: Python.thread(N-M)`
+restricts this config entry to Python threads whose `pysysmon_get_thread_id()`
+returns a value in the range `[N, M]`.
+
+Thread IDs are assigned sequentially at first callback:
+- **Thread 0**: main Python thread (assigned before any `threading.Thread` is started)
+- **Threads 1-N**: worker threads (assigned at their first `on_py_start`)
+
+### 3.2 Examples
+
+```ini
+# Suppress all Python tracing by default, then selectively enable:
+[Lexgion(Python).default]
+    max_num_traces = 0
+
+# Trace "worker" function only on threads 1 and 2 (max 8 traces each)
+[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+    max_num_traces = 8
+
+# Trace "main_work" function only on the main thread (thread 0)
+[Lexgion(Python:main_work)] : Python.default : Python.thread(0)
+    max_num_traces = 5
+```
+
+```ini
+# Trace worker on threads 3 and 4 only
+[Lexgion(Python).default]
+    max_num_traces = 0
+
+[Lexgion(Python:worker)] : Python.default : Python.thread(3-4)
+    max_num_traces = 6
+```
+
+```ini
+# All 4 worker threads traced, max 5 per thread
+[Lexgion(Python).default]
+    max_num_traces = 0
+
+[Lexgion(Python:worker)] : Python.default : Python.thread(1-4)
+    max_num_traces = 5
+```
+
+### 3.3 How It Works
+
+The punit filter is checked inside `lexgion_set_top_trace_bit_domain_event()`.
+When a lexgion config entry has `domain_punit_set_set = 1`, the function calls
+`domain_punit_set_match(domain_punits, domain_index)` which reads the current
+thread's punit ID (via `pysysmon_get_thread_id()`) and checks the bitset.
+If the current thread ID is not in the set, `trace_bit` is cleared.
+
+The punit filter is stored per lexgion config entry, allowing different
+thread ranges for different named functions simultaneously.
+
+### 3.4 Combining Thread Filter with Other Config
+
+Named lexgion config, thread filter, rate control, and auto-trigger all compose:
+
+```ini
+[Lexgion(Python).default]
+    max_num_traces = 0      # suppress all functions by default
+
+# Worker traced only on threads 1-2, max 7 each, auto-drop after
+[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+    max_num_traces   = 7
+    trace_mode_after = Python:MONITORING
+
+# Main thread work, limit 5 traces, then INTROSPECT
+[Lexgion(Python:main_work)] : Python.default : Python.thread(0)
+    max_num_traces   = 5
+    trace_mode_after = INTROSPECT:30:analyze.sh:TRACING
+```
 
 ---
 
 ## Summary
 
-| Capability | Available Now | Future (Named Lexgion) |
-|------------|:-------------:|:---------------------:|
-| Domain ON/OFF/STANDBY | ✅ | ✅ |
-| Event enable/disable (c_start, py_start…) | ✅ | ✅ |
-| Per-thread filtering | ✅ | ✅ |
-| Rate control (all functions) | ✅ | ✅ |
-| INTROSPECT auto-pause | ✅ | ✅ |
-| SIGUSR1 reconfiguration | ✅ | ✅ |
-| Rate control **per named function** | ❌ | ✅ |
-| Enable C bridge for **one function only** | ❌ | ✅ |
-| Skip tracing a specific function | ❌ | ✅ |
+| Capability | Status |
+|------------|:------:|
+| Domain ON/OFF/STANDBY/MONITORING | ✅ |
+| Event enable/disable (`c_start`, `py_start`…) | ✅ |
+| Per-thread filtering (domain-level) | ✅ |
+| Rate control (all functions) | ✅ |
+| INTROSPECT auto-pause | ✅ |
+| SIGUSR1 reconfiguration | ✅ |
+| Rate control per named function | ✅ |
+| Enable C bridge for one function only | ✅ |
+| Suppress tracing for a specific function | ✅ |
+| Thread filter per named lexgion | ✅ |
+| Wildcard/regex name matching | Deferred |

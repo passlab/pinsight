@@ -25,17 +25,15 @@
 #include "pinsight.h"
 #include "pinsight_control_thread.h"
 #include "trace_config.h"
+#include "trace_domain_Python.h"
+
+/* pysysmon_thread_id is defined in pysysmon_globals.c (part of libpinsight.so).
+ * Accessed directly here for tracepoint field emission. */
+extern __thread int pysysmon_thread_id;
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "pysysmon_lttng_ust_tracepoint.h"
-
-/* ================================================================
- * Domain globals — defined here, declared extern in trace_domain_Python.h
- * ================================================================ */
-int Python_domain_index;
-domain_info_t *Python_domain_info;
-domain_trace_config_t *Python_trace_config;
 
 /* ================================================================
  * Event IDs — must match dense order in trace_domain_Python.h DSL
@@ -57,18 +55,8 @@ domain_trace_config_t *Python_trace_config;
  *   Starts at 3000 to avoid colliding with OpenMP (0+) and
  *   CUDA (2000+) thread IDs.
  * ================================================================ */
-static _Atomic int pysysmon_thread_counter = 0;
-static __thread int pysysmon_thread_id = -1;
-
 static _Atomic int pysysmon_global_thread_counter = 3000;
 static __thread int pysysmon_tls_inited = 0;
-
-int pysysmon_get_thread_id(void) {
-  if (__builtin_expect(pysysmon_thread_id < 0, 0))
-    pysysmon_thread_id =
-        __atomic_fetch_add(&pysysmon_thread_counter, 1, __ATOMIC_RELAXED);
-  return pysysmon_thread_id;
-}
 
 static inline void pysysmon_ensure_thread_init(void) {
   if (__builtin_expect(!pysysmon_tls_inited, 0)) {
@@ -158,6 +146,8 @@ static PyObject *on_py_start(PyObject *self, PyObject *const *args,
   /* 5. Lexgion begin (LRU lookup + push stack) */
   lexgion_record_t *record =
       lexgion_begin(PYTHON_LEXGION, PYSYSMON_EVENT_PY_START, codeptr);
+  if (!record)   /* stack overflow — silently skip this frame */
+    Py_RETURN_NONE;
   lexgion_t *lgp = record->lgp;
 
   /* 6. Name resolution for named lexgion config matching.
@@ -328,6 +318,42 @@ static PyObject *on_c_return(PyObject *self, PyObject *const *args,
 }
 
 /* ================================================================
+ * Domain mode control: set_trace_mode / reset_trace_mode
+ *
+ * set_trace_mode() — called by the launcher after all sys.monitoring
+ *   callbacks are registered (imports complete).  Restores the Python
+ *   domain to whatever mode the user configured via config file or env
+ *   (saved in last_mode by initial_setup_trace_config()).  If no
+ *   explicit config was given (last_mode == NONE or STANDBY), defaults
+ *   to TRACING.  This is the correct place to open the tracing window
+ *   because no lexgion cache slots are wasted on stdlib imports.
+ *
+ * reset_trace_mode() — called by deactivate() to return the domain to
+ *   STANDBY so the teardown path (callback unregistration, runpy exit
+ *   path) also produces no lexgion churn.
+ * ================================================================ */
+static PyObject *set_trace_mode(PyObject *self, PyObject *args) {
+  /* last_mode holds the config/env-resolved mode saved by
+   * initial_setup_trace_config().  Because starting_mode is TRACING,
+   * the default (no config, no env) is TRACING; any user-set value
+   * (OFF, STANDBY, MONITORING, TRACING) is reflected directly. */
+  pinsight_domain_mode_t target =
+      domain_default_trace_config[Python_domain_index].last_mode;
+  __atomic_store_n(&domain_default_trace_config[Python_domain_index].mode,
+                   target, __ATOMIC_SEQ_CST);
+  return PyLong_FromLong((long)target);
+}
+
+static PyObject *reset_trace_mode(PyObject *self, PyObject *args) {
+  /* Save current mode so set_trace_mode() can restore it if called again. */
+  domain_default_trace_config[Python_domain_index].last_mode =
+      domain_default_trace_config[Python_domain_index].mode;
+  __atomic_store_n(&domain_default_trace_config[Python_domain_index].mode,
+                   PINSIGHT_DOMAIN_STANDBY, __ATOMIC_SEQ_CST);
+  Py_RETURN_NONE;
+}
+
+/* ================================================================
  * Python module definition
  * ================================================================ */
 static PyMethodDef pysysmon_methods[] = {
@@ -339,6 +365,11 @@ static PyMethodDef pysysmon_methods[] = {
      "sys.monitoring CALL callback (C extension begin)"},
     {"on_c_return", (PyCFunction)on_c_return, METH_FASTCALL,
      "sys.monitoring C_RETURN callback (C extension end)"},
+    {"set_trace_mode", (PyCFunction)set_trace_mode, METH_NOARGS,
+     "Restore Python domain to configured mode (TRACING/MONITORING/OFF); "
+     "returns the mode applied as an integer"},
+    {"reset_trace_mode", (PyCFunction)reset_trace_mode, METH_NOARGS,
+     "Switch Python domain back to STANDBY"},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef pysysmon_module = {

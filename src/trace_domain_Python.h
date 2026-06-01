@@ -103,6 +103,11 @@ static inline struct domain_info *register_Python_trace_domain(void) {
 
   /* Return pointer to this domain's entry */
   Python_domain_info = &domain_info_table[Python_domain_index];
+  /* Starting mode is TRACING (the normal default).  initial_setup_trace_config()
+   * saves the config/env-resolved mode into last_mode and forces the domain
+   * back to STANDBY after applying config and env vars, so stdlib imports
+   * that happen before the launcher calls set_trace_mode() do not consume
+   * per-thread lexgion cache slots.  set_trace_mode() restores last_mode. */
   Python_domain_info->starting_mode = PINSIGHT_DOMAIN_TRACING;
   Python_trace_config = &domain_default_trace_config[Python_domain_index];
   return Python_domain_info;

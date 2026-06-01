@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "app_knob.h"
+#include "pinsight_config.h"
 #include "trace_config.h"
 #include "trace_domain_loader.h"
 
@@ -103,6 +104,9 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t a,
 #include "trace_domain_CUDA.h"
 #include "trace_domain_MPI.h"
 #include "trace_domain_OpenMP.h"
+#ifdef PINSIGHT_PYTHON
+#include "trace_domain_Python.h"
+#endif
 
 void test_parsing() {
   // Copy the example file to trace_config.txt (expected by parser)
@@ -187,12 +191,12 @@ void test_parsing() {
       // Overrides: schedule=off (redundant but explicit), task_create=on
       // Expected: create=ON, schedule=OFF
       int found_override_lexgion = 0;
-      for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-        if (lexgion_address_trace_config[i].codeptr ==
+      for (int i = 0; i < num_lexgion_trace_configs; i++) {
+        if (lexgion_trace_config[i].codeptr ==
             (void *)(uintptr_t)0x500000) {
           found_override_lexgion = 1;
           unsigned long lg_events =
-              lexgion_address_trace_config[i].domain_events[omp_idx].events;
+              lexgion_trace_config[i].domain_events[omp_idx].events;
           int lg_create_on = (lg_events >> id_task_create) & 1;
           int lg_schedule_on = (lg_events >> id_task_schedule) & 1;
 
@@ -280,19 +284,19 @@ void test_parsing() {
   // 3. Verify Lexgion
   int found_lexgion = 0;
   // Need to loop to find the one with matching codeptr
-  extern int num_lexgion_address_trace_configs;
+  extern int num_lexgion_trace_configs;
 
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    if (lexgion_address_trace_config[i].codeptr ==
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    if (lexgion_trace_config[i].codeptr ==
         (void *)(uintptr_t)0x4010bd) {
       found_lexgion = 1;
-      if (lexgion_address_trace_config[i].max_num_traces == 200 &&
-          lexgion_address_trace_config[i].tracing_rate == 10) {
+      if (lexgion_trace_config[i].max_num_traces == 200 &&
+          lexgion_trace_config[i].tracing_rate == 10) {
         printf("[PASS] Lexgion(0x4010bd): Config correct (max=200, rate=10)\n");
       } else {
         printf("[FAIL] Lexgion(0x4010bd): Incorrect values. Max=%d, Rate=%d\n",
-               lexgion_address_trace_config[i].max_num_traces,
-               lexgion_address_trace_config[i].tracing_rate);
+               lexgion_trace_config[i].max_num_traces,
+               lexgion_trace_config[i].tracing_rate);
       }
       break;
     }
@@ -381,16 +385,16 @@ void test_parsing() {
 
   // Check 0xABCDEF
   int found_default_valid = 0;
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    if (lexgion_address_trace_config[i].codeptr ==
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    if (lexgion_trace_config[i].codeptr ==
         (void *)(uintptr_t)0xABCDEF) {
-      if (lexgion_address_trace_config[i].tracing_rate == 99) {
+      if (lexgion_trace_config[i].tracing_rate == 99) {
         printf("[PASS] Lexgion.default inheritance works (rate=99).\n");
         found_default_valid = 1;
       } else {
         printf(
             "[FAIL] Lexgion.default inheritance failed. rate=%d, expected 99\n",
-            lexgion_address_trace_config[i].tracing_rate);
+            lexgion_trace_config[i].tracing_rate);
       }
     }
   }
@@ -447,16 +451,16 @@ void test_parsing() {
 
   // Check if 0x999999 is in list.
   int found_bad = 0;
-  for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-    if (lexgion_address_trace_config[i].codeptr ==
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    if (lexgion_trace_config[i].codeptr ==
         (void *)(uintptr_t)0x999999) {
       found_bad = 1;
       // Check events. If implicit inheritance inheritance worked, they should
       // be ON We know OpenMP default events are usually non-zero.
-      if (lexgion_address_trace_config[i].domain_events[omp_idx].events != 0) {
+      if (lexgion_trace_config[i].domain_events[omp_idx].events != 0) {
         printf("[PASS] Implicit Inheritance Succeeded (used system/current "
                "defaults). Events=%lx\n",
-               lexgion_address_trace_config[i].domain_events[omp_idx].events);
+               lexgion_trace_config[i].domain_events[omp_idx].events);
       } else {
         printf("[FAIL] Implicit Inheritance Failed (Events are 0). Expected "
                "inheritance.\n");
@@ -477,6 +481,9 @@ void setup_and_test_env() {
     register_OpenMP_trace_domain();
     register_MPI_trace_domain();
     register_CUDA_trace_domain();
+#ifdef PINSIGHT_PYTHON
+    register_Python_trace_domain();
+#endif
   }
 
   // register_CUDA_trace_domain();
@@ -759,9 +766,9 @@ void test_reload() {
   // 3. REMOVE: Remove a Lexgion
   // Setup a lexgion manually since get_or_create is static
   // We can use index 1 (0 is default)
-  if (num_lexgion_address_trace_configs < 2)
-    num_lexgion_address_trace_configs = 2;
-  lexgion_trace_config_t *lg = &lexgion_address_trace_config[1];
+  if (num_lexgion_trace_configs < 2)
+    num_lexgion_trace_configs = 2;
+  lexgion_trace_config_t *lg = &lexgion_trace_config[1];
   lg->codeptr = (void *)0x999;
   lg->tracing_rate = 100;
   lg->max_num_traces = 50;
@@ -1077,17 +1084,17 @@ void test_actions_and_features() {
     int found = 0;
     uint64_t addrs[] = {0xAA0001, 0xAA0002, 0xAA0003};
     for (int a = 0; a < 3; a++) {
-      for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-        if (lexgion_address_trace_config[i].codeptr ==
+      for (int i = 0; i < num_lexgion_trace_configs; i++) {
+        if (lexgion_trace_config[i].codeptr ==
             (void *)(uintptr_t)addrs[a]) {
-          if (lexgion_address_trace_config[i].max_num_traces == 77 &&
-              lexgion_address_trace_config[i].tracing_rate == 3) {
+          if (lexgion_trace_config[i].max_num_traces == 77 &&
+              lexgion_trace_config[i].tracing_rate == 3) {
             found++;
           } else {
             printf(
                 "[FAIL] T5: Lexgion(0x%lx) max=%d rate=%d (expected 77, 3)\n",
-                addrs[a], lexgion_address_trace_config[i].max_num_traces,
-                lexgion_address_trace_config[i].tracing_rate);
+                addrs[a], lexgion_trace_config[i].max_num_traces,
+                lexgion_trace_config[i].tracing_rate);
           }
           break;
         }
@@ -1113,17 +1120,17 @@ void test_actions_and_features() {
 
     int removed_count = 0;
     int kept_count = 0;
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].codeptr ==
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr ==
               (void *)(uintptr_t)0xAA0001 ||
-          lexgion_address_trace_config[i].codeptr ==
+          lexgion_trace_config[i].codeptr ==
               (void *)(uintptr_t)0xAA0002) {
-        if (lexgion_address_trace_config[i].removed)
+        if (lexgion_trace_config[i].removed)
           removed_count++;
       }
-      if (lexgion_address_trace_config[i].codeptr ==
+      if (lexgion_trace_config[i].codeptr ==
           (void *)(uintptr_t)0xAA0003) {
-        if (!lexgion_address_trace_config[i].removed)
+        if (!lexgion_trace_config[i].removed)
           kept_count++;
       }
     }
@@ -1274,16 +1281,16 @@ void test_actions_and_features() {
 
     // Check that the Lexgion config was NOT reset (still has max=55)
     int found = 0;
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].codeptr ==
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr ==
           (void *)(uintptr_t)0xBB0001) {
         found = 1;
-        if (lexgion_address_trace_config[i].max_num_traces == 55) {
+        if (lexgion_trace_config[i].max_num_traces == 55) {
           printf("[PASS] T9b: [RESET Lexgion(0xBB0001)] ignored "
                  "(max_num_traces unchanged)\n");
         } else {
           printf("[FAIL] T9b: max_num_traces=%d (expected 55, unchanged)\n",
-                 lexgion_address_trace_config[i].max_num_traces);
+                 lexgion_trace_config[i].max_num_traces);
         }
         break;
       }
@@ -1315,16 +1322,16 @@ void test_actions_and_features() {
     parse_trace_config_file("test_snapshot.txt");
 
     unsigned long events_0xCC0001 = 0, events_0xCC0002 = 0;
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].codeptr ==
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr ==
           (void *)(uintptr_t)0xCC0001) {
         events_0xCC0001 =
-            lexgion_address_trace_config[i].domain_events[omp_idx].events;
+            lexgion_trace_config[i].domain_events[omp_idx].events;
       }
-      if (lexgion_address_trace_config[i].codeptr ==
+      if (lexgion_trace_config[i].codeptr ==
           (void *)(uintptr_t)0xCC0002) {
         events_0xCC0002 =
-            lexgion_address_trace_config[i].domain_events[omp_idx].events;
+            lexgion_trace_config[i].domain_events[omp_idx].events;
       }
     }
 
@@ -1591,9 +1598,9 @@ void test_trace_mode_after() {
 
     // Find the address config
     int found = 0;
-    for (int i = 0; i < num_lexgion_address_trace_configs; i++) {
-      if (lexgion_address_trace_config[i].codeptr == (void *)0x400500) {
-        lexgion_trace_config_t *lc = &lexgion_address_trace_config[i];
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr == (void *)0x400500) {
+        lexgion_trace_config_t *lc = &lexgion_trace_config[i];
         // Shorthand OFF sets mode for all registered domains
         int all_off = 1;
         for (int d = 0; d < num_domain; d++) {
@@ -2108,6 +2115,590 @@ void test_knob_config() {
   unlink("knob_test.txt");
 }
 
+#ifdef PINSIGHT_PYTHON
+
+/* Helper: find a named lexgion config entry (codeptr==NULL, name set).
+ * domain_idx: exact domain_index to match (-1 means domain-agnostic entry).
+ * filename_hint: if non-NULL and non-empty, must also match. */
+static lexgion_trace_config_t *find_named_lexgion_config(
+    const char *name, int domain_idx, const char *filename_hint) {
+  for (int i = 0; i < num_lexgion_trace_configs; i++) {
+    lexgion_trace_config_t *c = &lexgion_trace_config[i];
+    if (c->codeptr != NULL || !c->name[0])
+      continue;
+    if (strcmp(c->name, name) != 0)
+      continue;
+    if (c->domain_index != domain_idx)
+      continue;
+    if (filename_hint && filename_hint[0] &&
+        strcmp(c->filename_hint, filename_hint) != 0)
+      continue;
+    return c;
+  }
+  return NULL;
+}
+
+void test_python_config() {
+  printf("\n===== Python Config Tests =====\n");
+
+  int py_idx = find_domain_index("Python");
+  if (py_idx < 0) {
+    printf("[FAIL] PY0: Python domain not registered — skipping all Python tests\n");
+    return;
+  }
+  printf("[PASS] PY0: Python domain registered at index %d\n", py_idx);
+
+  domain_info_t *py = &domain_info_table[py_idx];
+
+  /* ------------------------------------------------------------------ */
+  /* PY1: Domain structure — events, punit, defaults                     */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY1: Python domain structure --\n");
+  {
+    int id_py_start = -1, id_py_return = -1, id_c_start = -1,
+        id_c_return = -1, id_import = -1;
+    for (int k = 0; k < py->num_events; k++) {
+      if (strcmp(py->event_table[k].name, "pysysmon_py_start")  == 0) id_py_start  = k;
+      if (strcmp(py->event_table[k].name, "pysysmon_py_return") == 0) id_py_return = k;
+      if (strcmp(py->event_table[k].name, "pysysmon_c_start")   == 0) id_c_start   = k;
+      if (strcmp(py->event_table[k].name, "pysysmon_c_return")  == 0) id_c_return  = k;
+      if (strcmp(py->event_table[k].name, "pysysmon_import")    == 0) id_import    = k;
+    }
+    if (id_py_start >= 0 && id_py_return >= 0 && id_c_start >= 0 && id_c_return >= 0)
+      printf("[PASS] PY1a: all 4 main Python events registered\n");
+    else
+      printf("[FAIL] PY1a: py_start=%d py_return=%d c_start=%d c_return=%d\n",
+             id_py_start, id_py_return, id_c_start, id_c_return);
+    if (id_import >= 0)
+      printf("[PASS] PY1b: pysysmon_import event registered\n");
+    else
+      printf("[FAIL] PY1b: pysysmon_import not found\n");
+
+    /* punit 'thread' with range 0-255 */
+    int tpunit = -1;
+    for (int k = 0; k < py->num_punits; k++)
+      if (strcmp(py->punits[k].name, "thread") == 0) { tpunit = k; break; }
+    if (tpunit >= 0 && py->punits[tpunit].high >= 255)
+      printf("[PASS] PY1c: punit 'thread' range 0-%d\n", py->punits[tpunit].high);
+    else
+      printf("[FAIL] PY1c: punit 'thread' not found or range too small\n");
+
+    /* pysysmon_py_start ON by default; pysysmon_import OFF */
+    unsigned long def_ev = domain_default_trace_config[py_idx].events;
+    if (id_py_start >= 0 && ((def_ev >> id_py_start) & 1))
+      printf("[PASS] PY1d: pysysmon_py_start is ON by default\n");
+    else
+      printf("[FAIL] PY1d: pysysmon_py_start not ON by default (events=0x%lx)\n", def_ev);
+    if (id_import >= 0 && !((def_ev >> id_import) & 1))
+      printf("[PASS] PY1e: pysysmon_import is OFF by default\n");
+    else
+      printf("[FAIL] PY1e: pysysmon_import not OFF by default\n");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY2: [Python.global] trace_mode                                    */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY2: [Python.global] trace_mode = MONITORING --\n");
+  {
+    pinsight_domain_mode_t saved = domain_default_trace_config[py_idx].mode;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Python.global]\n    trace_mode = MONITORING\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+    if (domain_default_trace_config[py_idx].mode == PINSIGHT_DOMAIN_MONITORING)
+      printf("[PASS] PY2: Python.global trace_mode=MONITORING\n");
+    else
+      printf("[FAIL] PY2: mode=%d (expected MONITORING=%d)\n",
+             domain_default_trace_config[py_idx].mode, PINSIGHT_DOMAIN_MONITORING);
+    domain_default_trace_config[py_idx].mode = saved;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY3: [Python.default] event disable                                */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY3: [Python.default] pysysmon_py_start = off --\n");
+  {
+    int id_py_start = -1;
+    for (int k = 0; k < py->num_events; k++)
+      if (strcmp(py->event_table[k].name, "pysysmon_py_start") == 0)
+        { id_py_start = k; break; }
+
+    unsigned long saved_ev = domain_default_trace_config[py_idx].events;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Python.default]\n    pysysmon_py_start = off\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    unsigned long new_ev = domain_default_trace_config[py_idx].events;
+    if (id_py_start >= 0 && !((new_ev >> id_py_start) & 1))
+      printf("[PASS] PY3: pysysmon_py_start disabled via Python.default\n");
+    else
+      printf("[FAIL] PY3: id=%d events=0x%lx (bit should be 0)\n", id_py_start, new_ev);
+    domain_default_trace_config[py_idx].events = saved_ev;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY4: [Python.punit.thread(0-3)] punit config                       */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY4: [Python.punit.thread(0-3)] punit config --\n");
+  {
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Python.thread(0-3)]\n    pysysmon_py_start = on\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    punit_trace_config_t *pc = domain_punit_trace_config[py_idx];
+    if (pc) {
+      printf("[PASS] PY4a: Python punit config created\n");
+      int tpunit = -1;
+      for (int k = 0; k < py->num_punits; k++)
+        if (strcmp(py->punits[k].name, "thread") == 0) { tpunit = k; break; }
+      if (tpunit >= 0 && pc->domain_punits[py_idx].punit[tpunit].set) {
+        int h0 = bitset_test(&pc->domain_punits[py_idx].punit[tpunit].punit_ids, 0);
+        int h3 = bitset_test(&pc->domain_punits[py_idx].punit[tpunit].punit_ids, 3);
+        int h4 = bitset_test(&pc->domain_punits[py_idx].punit[tpunit].punit_ids, 4);
+        if (h0 && h3 && !h4)
+          printf("[PASS] PY4b: thread punit covers 0-3, excludes 4\n");
+        else
+          printf("[FAIL] PY4b: thread bits 0=%d 3=%d 4=%d\n", h0, h3, h4);
+      } else {
+        printf("[FAIL] PY4c: thread punit kind not set in config\n");
+      }
+    } else {
+      printf("[FAIL] PY4a: no punit config created for Python domain\n");
+    }
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY5: [Lexgion(Python:compute)] simple named lexgion                */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY5: [Lexgion(Python:compute)] simple named lexgion --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:compute)]\n");
+    fprintf(fp, "    max_num_traces = 50\n");
+    fprintf(fp, "    tracing_rate = 5\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("compute", py_idx, NULL);
+    if (lc) {
+      printf("[PASS] PY5a: named entry 'compute' (Python) found\n");
+      if (lc->codeptr == NULL)
+        printf("[PASS] PY5b: codeptr is NULL (named entry, not address-based)\n");
+      else
+        printf("[FAIL] PY5b: codeptr not NULL for named entry\n");
+      if (lc->max_num_traces == 50)
+        printf("[PASS] PY5c: max_num_traces=50\n");
+      else
+        printf("[FAIL] PY5c: max_num_traces=%d (expected 50)\n", lc->max_num_traces);
+      if (lc->tracing_rate == 5)
+        printf("[PASS] PY5d: tracing_rate=5\n");
+      else
+        printf("[FAIL] PY5d: tracing_rate=%d (expected 5)\n", lc->tracing_rate);
+      if (lc->domain_index == py_idx)
+        printf("[PASS] PY5e: domain_index=%d matches Python domain\n", lc->domain_index);
+      else
+        printf("[FAIL] PY5e: domain_index=%d (expected %d)\n", lc->domain_index, py_idx);
+    } else {
+      printf("[FAIL] PY5: named entry 'compute' (Python) not found\n");
+    }
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY6: [Lexgion(Python:MyClass.compute)] class method name           */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY6: [Lexgion(Python:MyClass.compute)] class method --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:MyClass.compute)]\n");
+    fprintf(fp, "    max_num_traces = 100\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("MyClass.compute", py_idx, NULL);
+    if (lc && lc->max_num_traces == 100)
+      printf("[PASS] PY6: 'MyClass.compute' named entry found with max=100\n");
+    else
+      printf("[FAIL] PY6: %s\n", lc ? "wrong max_num_traces" : "entry not found");
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY7: [Lexgion(Python:main.<locals>.do_work)] closure/inner func    */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY7: [Lexgion(Python:main.<locals>.do_work)] closure --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:main.<locals>.do_work)]\n");
+    fprintf(fp, "    max_num_traces = 20\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc =
+        find_named_lexgion_config("main.<locals>.do_work", py_idx, NULL);
+    if (lc && lc->max_num_traces == 20)
+      printf("[PASS] PY7: 'main.<locals>.do_work' found with max=20\n");
+    else
+      printf("[FAIL] PY7: %s\n", lc ? "wrong max" : "entry not found");
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY8: [Lexgion(Python:solver.py:compute)] filename hint             */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY8: [Lexgion(Python:solver.py:compute)] filename hint --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:solver.py:compute)]\n");
+    fprintf(fp, "    max_num_traces = 30\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("compute", py_idx, "solver.py");
+    if (lc) {
+      if (lc->max_num_traces == 30)
+        printf("[PASS] PY8a: 'compute' with hint 'solver.py' found, max=30\n");
+      else
+        printf("[FAIL] PY8a: max_num_traces=%d (expected 30)\n", lc->max_num_traces);
+      if (strcmp(lc->filename_hint, "solver.py") == 0)
+        printf("[PASS] PY8b: filename_hint='solver.py' stored\n");
+      else
+        printf("[FAIL] PY8b: filename_hint='%s' (expected 'solver.py')\n",
+               lc->filename_hint);
+    } else {
+      printf("[FAIL] PY8: 'compute' with hint 'solver.py' not found\n");
+    }
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY9: [Lexgion(compute)] domain-agnostic named lexgion              */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY9: [Lexgion(compute)] domain-agnostic (domain_index=-1) --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(compute)]\n");
+    fprintf(fp, "    max_num_traces = 200\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    /* domain-agnostic entries have domain_index == -1 */
+    lexgion_trace_config_t *lc = find_named_lexgion_config("compute", -1, NULL);
+    if (lc) {
+      if (lc->domain_index == -1)
+        printf("[PASS] PY9a: domain-agnostic entry has domain_index=-1\n");
+      else
+        printf("[FAIL] PY9a: domain_index=%d (expected -1)\n", lc->domain_index);
+      if (lc->max_num_traces == 200)
+        printf("[PASS] PY9b: max_num_traces=200\n");
+      else
+        printf("[FAIL] PY9b: max_num_traces=%d (expected 200)\n", lc->max_num_traces);
+    } else {
+      printf("[FAIL] PY9: domain-agnostic 'compute' not found\n");
+    }
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY10: [Lexgion(Python:foo, Python:bar)] multi-named                */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY10: [Lexgion(Python:foo, Python:bar)] multi-named --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:foo, Python:bar)]\n");
+    fprintf(fp, "    max_num_traces = 77\n");
+    fprintf(fp, "    tracing_rate = 3\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lfoo = find_named_lexgion_config("foo", py_idx, NULL);
+    lexgion_trace_config_t *lbar = find_named_lexgion_config("bar", py_idx, NULL);
+    if (lfoo && lbar)
+      printf("[PASS] PY10a: both 'foo' and 'bar' named entries created\n");
+    else
+      printf("[FAIL] PY10a: foo=%p bar=%p\n", (void *)lfoo, (void *)lbar);
+    if (lfoo && lfoo->max_num_traces == 77 && lfoo->tracing_rate == 3)
+      printf("[PASS] PY10b: 'foo' max=77 rate=3\n");
+    else if (lfoo)
+      printf("[FAIL] PY10b: 'foo' max=%d rate=%d\n",
+             lfoo->max_num_traces, lfoo->tracing_rate);
+    if (lbar && lbar->max_num_traces == 77 && lbar->tracing_rate == 3)
+      printf("[PASS] PY10c: 'bar' max=77 rate=3\n");
+    else if (lbar)
+      printf("[FAIL] PY10c: 'bar' max=%d rate=%d\n",
+             lbar->max_num_traces, lbar->tracing_rate);
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY11: trace_mode_after = Python:MONITORING on named Python lexgion  */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY11: trace_mode_after = Python:MONITORING on named lexgion --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:hotloop)]\n");
+    fprintf(fp, "    max_num_traces = 10\n");
+    fprintf(fp, "    trace_mode_after = Python:MONITORING\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("hotloop", py_idx, NULL);
+    if (lc) {
+      if (lc->mode_after.mode[py_idx] == PINSIGHT_DOMAIN_MONITORING)
+        printf("[PASS] PY11: trace_mode_after Python:MONITORING stored\n");
+      else
+        printf("[FAIL] PY11: mode_after.mode[py]=%d (expected MONITORING=%d)\n",
+               lc->mode_after.mode[py_idx], PINSIGHT_DOMAIN_MONITORING);
+    } else {
+      printf("[FAIL] PY11: 'hotloop' named entry not found\n");
+    }
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY12: INTROSPECT on a named Python lexgion                          */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY12: INTROSPECT:30:analyze.sh:Python:MONITORING on named lexgion --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:expensive)]\n");
+    fprintf(fp, "    max_num_traces = 5\n");
+    fprintf(fp, "    trace_mode_after = INTROSPECT:30:analyze.sh:Python:MONITORING\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("expensive", py_idx, NULL);
+    if (lc) {
+      trace_mode_after_t *ma = &lc->mode_after;
+      int pass = 1;
+      if (!ma->introspect)
+        { printf("[FAIL] PY12: introspect flag not set\n"); pass = 0; }
+      if (ma->introspect_timeout != 30)
+        { printf("[FAIL] PY12: timeout=%d (expected 30)\n", ma->introspect_timeout); pass = 0; }
+      if (strcmp(ma->introspect_script, "analyze.sh") != 0)
+        { printf("[FAIL] PY12: script='%s' (expected 'analyze.sh')\n",
+                 ma->introspect_script); pass = 0; }
+      if (ma->mode[py_idx] != PINSIGHT_DOMAIN_MONITORING)
+        { printf("[FAIL] PY12: resume mode[py]=%d (expected MONITORING)\n",
+                 ma->mode[py_idx]); pass = 0; }
+      if (pass)
+        printf("[PASS] PY12: INTROSPECT:30:analyze.sh:Python:MONITORING parsed\n");
+    } else {
+      printf("[FAIL] PY12: 'expensive' named entry not found\n");
+    }
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY13: Reload — named entry restored after re-parse                  */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY13: reload restores named entry (removed=0 after re-parse) --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:reload_func)]\n    max_num_traces = 15\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    /* Simulate SIGUSR1 reload: mark all named entries removed */
+    for (int i = 0; i < num_lexgion_trace_configs; i++)
+      if (lexgion_trace_config[i].name[0])
+        lexgion_trace_config[i].removed = 1;
+
+    /* Re-parse the same config — entry should be found and restored */
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("reload_func", py_idx, NULL);
+    if (lc && !lc->removed)
+      printf("[PASS] PY13: 'reload_func' restored after reload (removed=0)\n");
+    else
+      printf("[FAIL] PY13: lc=%p removed=%d\n", (void *)lc, lc ? lc->removed : -1);
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY14: [REMOVE Lexgion(Python:noisyFunc)] not recreated on reload    */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY14: [REMOVE Lexgion(Python:noisyFunc)] not recreated --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+
+    /* Initial config: create noisyFunc entry */
+    FILE *fp = fopen("test_py_init.txt", "w");
+    fprintf(fp, "[Lexgion(Python:noisyFunc)]\n    max_num_traces = 5\n");
+    fclose(fp);
+    parse_trace_config_file("test_py_init.txt");
+
+    /* Simulate reload: mark named entries removed */
+    for (int i = 0; i < num_lexgion_trace_configs; i++)
+      if (lexgion_trace_config[i].name[0])
+        lexgion_trace_config[i].removed = 1;
+
+    /* Reload config: explicitly remove noisyFunc */
+    fp = fopen("test_py_reload.txt", "w");
+    fprintf(fp, "[REMOVE Lexgion(Python:noisyFunc)]\n");
+    fclose(fp);
+    parse_trace_config_file("test_py_reload.txt");
+
+    /* Entry should still be marked removed (not recreated) */
+    lexgion_trace_config_t *lc = NULL;
+    for (int i = 0; i < num_lexgion_trace_configs; i++) {
+      if (lexgion_trace_config[i].codeptr == NULL &&
+          lexgion_trace_config[i].name[0] &&
+          strcmp(lexgion_trace_config[i].name, "noisyFunc") == 0) {
+        lc = &lexgion_trace_config[i];
+        break;
+      }
+    }
+    if (!lc || lc->removed)
+      printf("[PASS] PY14: 'noisyFunc' not recreated after REMOVE\n");
+    else
+      printf("[FAIL] PY14: 'noisyFunc' was recreated despite REMOVE\n");
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py_init.txt");
+    remove("test_py_reload.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY15: [Lexgion(Python).default] domain-specific lexgion default     */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY15: [Lexgion(Python).default] domain lexgion default --\n");
+  {
+    lexgion_trace_config_t saved_dlg = lexgion_domain_default_trace_config[py_idx];
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python).default]\n");
+    fprintf(fp, "    max_num_traces = 99\n");
+    fprintf(fp, "    tracing_rate = 7\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[py_idx];
+    if (dlg->max_num_traces == 99)
+      printf("[PASS] PY15a: Lexgion(Python).default max_num_traces=99\n");
+    else
+      printf("[FAIL] PY15a: max_num_traces=%d (expected 99)\n", dlg->max_num_traces);
+    if (dlg->tracing_rate == 7)
+      printf("[PASS] PY15b: Lexgion(Python).default tracing_rate=7\n");
+    else
+      printf("[FAIL] PY15b: tracing_rate=%d (expected 7)\n", dlg->tracing_rate);
+
+    lexgion_domain_default_trace_config[py_idx] = saved_dlg;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY16: PINSIGHT_TRACE_PYTHON env var                                 */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY16: PINSIGHT_TRACE_PYTHON=MONITORING env var --\n");
+  {
+    pinsight_domain_mode_t saved = domain_default_trace_config[py_idx].mode;
+    setenv("PINSIGHT_TRACE_PYTHON", "MONITORING", 1);
+    setup_trace_config_env();
+    unsetenv("PINSIGHT_TRACE_PYTHON");
+    if (domain_default_trace_config[py_idx].mode == PINSIGHT_DOMAIN_MONITORING)
+      printf("[PASS] PY16: PINSIGHT_TRACE_PYTHON=MONITORING applied\n");
+    else
+      printf("[FAIL] PY16: mode=%d (expected MONITORING=%d)\n",
+             domain_default_trace_config[py_idx].mode, PINSIGHT_DOMAIN_MONITORING);
+    domain_default_trace_config[py_idx].mode = saved;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY17: Mixed Python + address config in one file                     */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY17: Mixed named Python + address-based lexgion in one file --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:solver)]\n    max_num_traces = 40\n");
+    fprintf(fp, "[Lexgion(0x4010bd)]\n    max_num_traces = 88\n");
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    lexgion_trace_config_t *named = find_named_lexgion_config("solver", py_idx, NULL);
+    lexgion_trace_config_t *addr  = NULL;
+    for (int i = 0; i < num_lexgion_trace_configs; i++)
+      if (lexgion_trace_config[i].codeptr == (void *)(uintptr_t)0x4010bd)
+        { addr = &lexgion_trace_config[i]; break; }
+
+    if (named && named->max_num_traces == 40)
+      printf("[PASS] PY17a: named 'solver' max=40\n");
+    else
+      printf("[FAIL] PY17a: named=%p max=%d\n",
+             (void *)named, named ? named->max_num_traces : -1);
+    if (addr && addr->max_num_traces == 88)
+      printf("[PASS] PY17b: address 0x4010bd max=88\n");
+    else
+      printf("[FAIL] PY17b: addr=%p max=%d\n",
+             (void *)addr, addr ? addr->max_num_traces : -1);
+    if (named && addr && named != addr)
+      printf("[PASS] PY17c: named and address entries are distinct slots\n");
+    else
+      printf("[FAIL] PY17c: named/addr collision or missing\n");
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PY18: idempotency — duplicate [Lexgion(Python:compute)] sections   */
+  /* ------------------------------------------------------------------ */
+  printf("\n  -- PY18: duplicate [Lexgion(Python:compute)] idempotency --\n");
+  {
+    int saved_n = num_lexgion_trace_configs;
+    FILE *fp = fopen("test_py.txt", "w");
+    fprintf(fp, "[Lexgion(Python:compute)]\n    max_num_traces = 50\n");
+    fprintf(fp, "[Lexgion(Python:compute)]\n    max_num_traces = 75\n"); /* override */
+    fclose(fp);
+    parse_trace_config_file("test_py.txt");
+
+    /* Should be exactly one entry named "compute" for Python */
+    int count = 0;
+    for (int i = 0; i < num_lexgion_trace_configs; i++)
+      if (lexgion_trace_config[i].codeptr == NULL &&
+          lexgion_trace_config[i].name[0] &&
+          strcmp(lexgion_trace_config[i].name, "compute") == 0 &&
+          lexgion_trace_config[i].domain_index == py_idx)
+        count++;
+    if (count == 1)
+      printf("[PASS] PY18a: exactly one 'compute' entry (no duplicate)\n");
+    else
+      printf("[FAIL] PY18a: found %d 'compute' entries (expected 1)\n", count);
+
+    lexgion_trace_config_t *lc = find_named_lexgion_config("compute", py_idx, NULL);
+    if (lc && lc->max_num_traces == 75)
+      printf("[PASS] PY18b: second section overwrote max_num_traces to 75\n");
+    else
+      printf("[FAIL] PY18b: max_num_traces=%d (expected 75)\n",
+             lc ? lc->max_num_traces : -1);
+    num_lexgion_trace_configs = saved_n;
+    remove("test_py.txt");
+  }
+}
+
+#endif /* PINSIGHT_PYTHON */
+
 int main() {
   // Setup mock domain info
   // ... (This part was in original file, assuming it's still there)
@@ -2126,6 +2717,9 @@ int main() {
   test_trace_mode_after_env();
   test_introspect_config();
   test_knob_config();
+#ifdef PINSIGHT_PYTHON
+  test_python_config();
+#endif
 
   return 0;
 }

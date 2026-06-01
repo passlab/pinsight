@@ -64,14 +64,30 @@ def activate(events=("function", "c_call")):
             TOOL_ID, sys.monitoring.events.C_RETURN,
             _pinsight_python.on_c_return)
         event_mask |= sys.monitoring.events.CALL
-        event_mask |= sys.monitoring.events.C_RETURN
+        # C_RETURN and C_RAISE are "dependent" events in Python 3.12+:
+        # they fire automatically when CALL is enabled and a callback is
+        # registered. They must NOT be set explicitly in the event mask
+        # (doing so raises ValueError on Python 3.14+).
 
     sys.monitoring.set_events(TOOL_ID, event_mask)
+
+    # Open the tracing window: restore the Python domain to the mode specified
+    # by config file or env (saved in last_mode during library init).  The
+    # domain was held in STANDBY until now so stdlib imports did not consume
+    # per-thread lexgion cache slots.
+    _pinsight_python.set_trace_mode()
 
 def deactivate():
     """
     Deactivates LTTng tracing for Python.
     """
+    # Return the domain to STANDBY before tearing down callbacks.
+    _pinsight_python.reset_trace_mode()
+    # Unregister dependent-event callbacks before clearing the event mask.
+    # Python 3.14+ raises ValueError if C_RETURN/C_RAISE are still registered
+    # when set_events(TOOL_ID, 0) is called.
+    sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.C_RETURN, None)
+    sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.C_RAISE,  None)
     sys.monitoring.set_events(TOOL_ID, 0)
     sys.monitoring.free_tool_id(TOOL_ID)
 

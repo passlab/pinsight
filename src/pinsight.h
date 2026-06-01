@@ -225,19 +225,13 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
   // Auto-trigger: fire mode changes when max_num_traces is reached
   lexgion_trace_config_t *tc = lgp->trace_config;
   if (tc && tc->max_num_traces != (unsigned int)-1) {
-    /* Generation check: if the control thread advanced the generation
-     * (cyclic INTROSPECT completed), all lexgions must reset their
-     * counter to start a fresh tracing window. This ensures evenly
-     * spaced cycles regardless of per-lexgion invocation rates. */
-    unsigned int cur_gen = tc->mode_after.generation;
-    if (lgp->introspect_gen != cur_gen) {
-      lgp->trace_counter = 1; /* this trace is the first of the new cycle */
-      lgp->introspect_gen = cur_gen;
-    }
-
     if (lgp->trace_counter >= tc->max_num_traces) {
       pinsight_fire_mode_triggers(tc);
-      lgp->trace_counter = 0;
+      /* Do NOT reset trace_counter here. Keeping it at max_num_traces
+       * permanently stops tracing when there is no trace_mode_after.
+       * For INTROSPECT cycling, the counter is reset via the generation
+       * check in lexgion_set_top_trace_bit_domain_event when the
+       * control thread advances mode_after.generation after each cycle. */
     }
   }
 }

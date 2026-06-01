@@ -32,9 +32,32 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
     return; /* Already fired by another lexgion in this cycle */
   }
 
-  /* Delegate all auto-trigger mode switching to the control thread.
-   * The control thread handles script execution/pause (if introspect)
-   * and subsequently applies the mode_after modes. */
+  /* For non-INTROSPECT triggers, apply domain mode changes immediately in
+   * the calling thread. This avoids a race window where the app continues
+   * executing (and tracing) before the asynchronous control thread wakes up
+   * and applies the change. The volatile + atomic write ensures other
+   * threads see the new mode on their next PINSIGHT_SHOULD_TRACE check.
+   * The control thread is still notified so it can run control_apply_all_modes()
+   * (e.g. disable callbacks for zero-overhead MONITORING). */
+  if (!ma->introspect) {
+    for (int d = 0; d < MAX_NUM_DOMAINS; d++) {
+      pinsight_domain_mode_t new_mode = ma->mode[d];
+      if (new_mode == PINSIGHT_DOMAIN_NONE) continue;
+      if (!domain_default_trace_config[d].mode_change_fired &&
+          new_mode != (pinsight_domain_mode_t)domain_default_trace_config[d].mode) {
+        domain_default_trace_config[d].last_mode =
+            (pinsight_domain_mode_t)domain_default_trace_config[d].mode;
+        __atomic_store_n(&domain_default_trace_config[d].mode, new_mode,
+                         __ATOMIC_SEQ_CST);
+        domain_default_trace_config[d].mode_change_fired = 1;
+        fprintf(stderr, "PInsight: Auto-trigger (immediate): %s mode -> %s\n",
+                domain_info_table[d].name, pinsight_mode_str(new_mode));
+      }
+    }
+  }
+
+  /* Delegate to the control thread for INTROSPECT (script/pause/resume)
+   * and for control_apply_all_modes() (callback re-registration). */
   pinsight_control_set_pending_action(ma);
 
   if (ma->introspect) {
@@ -309,6 +332,19 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
     }
   }
 
+  /* INTROSPECT cycling: if the control thread advanced the generation
+   * (cyclic INTROSPECT completed), reset trace_counter so the new
+   * tracing window can start. Checked here (before trace_bit) so the
+   * reset fires even when the counter is currently >= max_num_traces
+   * and no trace is being emitted. */
+  if (trace_config->max_num_traces != (unsigned int)-1) {
+    unsigned int cur_gen = trace_config->mode_after.generation;
+    if (lgp->introspect_gen != cur_gen) {
+      lgp->trace_counter = 0;
+      lgp->introspect_gen = cur_gen;
+    }
+  }
+
   /* Compute the rate-based trace bit */
   lgp->trace_bit =
       (trace_config->trace_starts_at <= (lgp->counter - 1) &&
@@ -386,6 +422,18 @@ lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
  */
 int lexgion_set_rate_trace_bit(lexgion_t *lgp) {
   lexgion_trace_config_t *trace_config = lgp->trace_config;
+
+  /* INTROSPECT cycling: reset trace_counter when the control thread has
+   * advanced the generation (same logic as lexgion_set_top_trace_bit_domain_event).
+   * Required for OpenMP/MPI domains that go through this function. */
+  if (trace_config->max_num_traces != (unsigned int)-1) {
+    unsigned int cur_gen = trace_config->mode_after.generation;
+    if (lgp->introspect_gen != cur_gen) {
+      lgp->trace_counter = 0;
+      lgp->introspect_gen = cur_gen;
+    }
+  }
+
   lgp->trace_bit =
       (trace_config->trace_starts_at <= (lgp->counter - 1) &&
        ((trace_config->max_num_traces == -1) ||

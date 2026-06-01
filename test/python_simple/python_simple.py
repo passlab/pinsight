@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 def do_work(thread_id):
     print(f"Thread {thread_id}: Hello! Starting my work...")
     # Simulate work with delay
-    time.sleep(thread_id + 1)
+    time.sleep(0.1)
     print(f"Thread {thread_id}: Done with my work!")
 
 def main():

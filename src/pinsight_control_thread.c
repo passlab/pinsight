@@ -209,6 +209,9 @@ static void *pinsight_control_loop(void *arg) {
         /* 1. Config reload (SIGUSR1 or inotify) */
         if (reason & PINSIGHT_WAKEUP_CONFIG_RELOAD) {
             fprintf(stderr, "PInsight: Control thread reloading config\n");
+            /* Force re-parse even if mtime is unchanged (file may have been
+             * overwritten in-place within the same second). */
+            pinsight_invalidate_config_mtime();
             pinsight_load_trace_config(NULL);
             /* Note: we intentionally do NOT reset mode_change_fired here.
              * Config reload updates configuration (modes, rates, events)
