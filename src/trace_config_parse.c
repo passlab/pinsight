@@ -301,7 +301,7 @@ static int parse_section_header(char *line) {
   // --- Determine if this is a default-kind section (for action validation) ---
   int is_default_section = 0;
 
-  // Case 1: Lexgion.default, Lexgion(Domain).default, or Lexgion(0x...)
+  // Case 1: Lexgion.default, Lexgion(Domain).default, or Lexgion(address/name)
   if (strncmp(target, "Lexgion", 7) == 0) {
     lexgion_trace_config_t *lg = NULL;
     if (strcmp(target, "Lexgion.default") == 0) {
