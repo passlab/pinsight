@@ -61,7 +61,7 @@ struct hip_dimension_t {
     lttng_ust_field_integer(unsigned int, devId,             devId)           \
     lttng_ust_field_integer(uint64_t,     correlation_id,    correlation_id)  \
     lttng_ust_field_integer(uint64_t,     hip_timeStamp,     hip_timeStamp)   \
-    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, codeptr)      \
+    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, (unsigned long int)(codeptr)) \
     lttng_ust_field_string(hip_func, func_name)
 #elif defined(PINSIGHT_MPI) && !defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_HIP                                        \
@@ -71,7 +71,7 @@ struct hip_dimension_t {
     lttng_ust_field_integer(unsigned int, devId,          devId)              \
     lttng_ust_field_integer(uint64_t,     correlation_id, correlation_id)     \
     lttng_ust_field_integer(uint64_t,     hip_timeStamp,  hip_timeStamp)      \
-    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, codeptr)      \
+    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, (unsigned long int)(codeptr)) \
     lttng_ust_field_string(hip_func, func_name)
 #elif !defined(PINSIGHT_MPI) && defined(PINSIGHT_OPENMP)
 #define COMMON_LTTNG_UST_TP_FIELDS_HIP                                        \
@@ -82,7 +82,7 @@ struct hip_dimension_t {
     lttng_ust_field_integer(unsigned int, devId,             devId)           \
     lttng_ust_field_integer(uint64_t,     correlation_id,    correlation_id)  \
     lttng_ust_field_integer(uint64_t,     hip_timeStamp,     hip_timeStamp)   \
-    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, codeptr)      \
+    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, (unsigned long int)(codeptr)) \
     lttng_ust_field_string(hip_func, func_name)
 #else
 #define COMMON_LTTNG_UST_TP_FIELDS_HIP                                        \
@@ -90,7 +90,7 @@ struct hip_dimension_t {
     lttng_ust_field_integer(unsigned int, devId,          devId)              \
     lttng_ust_field_integer(uint64_t,     correlation_id, correlation_id)     \
     lttng_ust_field_integer(uint64_t,     hip_timeStamp,  hip_timeStamp)      \
-    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, codeptr)      \
+    lttng_ust_field_integer_hex(unsigned long int, hip_codeptr, (unsigned long int)(codeptr)) \
     lttng_ust_field_string(hip_func, func_name)
 #endif
 
@@ -118,8 +118,8 @@ LTTNG_UST_TRACEPOINT_EVENT(
     ),
     LTTNG_UST_TP_FIELDS(
         COMMON_LTTNG_UST_TP_FIELDS_HIP
-        lttng_ust_field_integer(unsigned long int, dst,   dst)
-        lttng_ust_field_integer(unsigned long int, src,   src)
+        lttng_ust_field_integer(unsigned long int, dst,   (unsigned long int)(dst))
+        lttng_ust_field_integer(unsigned long int, src,   (unsigned long int)(src))
         lttng_ust_field_integer(unsigned int,      count, count)
         lttng_ust_field_enum(roctracer_pinsight_lttng_ust, hipMemcpyKind_enum,
                              int, hipMemcpyKind, kind)
@@ -153,8 +153,8 @@ LTTNG_UST_TRACEPOINT_EVENT(
     ),
     LTTNG_UST_TP_FIELDS(
         COMMON_LTTNG_UST_TP_FIELDS_HIP
-        lttng_ust_field_integer(unsigned long int, dst,   dst)
-        lttng_ust_field_integer(unsigned long int, src,   src)
+        lttng_ust_field_integer(unsigned long int, dst,   (unsigned long int)(dst))
+        lttng_ust_field_integer(unsigned long int, src,   (unsigned long int)(src))
         lttng_ust_field_integer(unsigned int,      count, count)
         lttng_ust_field_enum(roctracer_pinsight_lttng_ust, hipMemcpyKind_enum,
                              int, hipMemcpyKind, kind)
@@ -320,7 +320,7 @@ LTTNG_UST_TRACEPOINT_EVENT(
         lttng_ust_field_integer(uint64_t, begin_ns,       begin_ns)
         lttng_ust_field_integer(uint64_t, end_ns,         end_ns)
         lttng_ust_field_integer(uint32_t, queueId,        queueId)
-        lttng_ust_field_string(kernelName, kernelName)
+        lttng_ust_field_string(kernel_name, kernelName)
     )
 )
 

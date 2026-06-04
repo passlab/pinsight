@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <stdint.h>
 #ifdef PINSIGHT_MPI
 #include "trace_domain_MPI.h"
 #endif

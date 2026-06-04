@@ -103,7 +103,8 @@ static inline void hip_emit_clock_calibration_once(void) {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
         uint64_t mono_ns = (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-        uint64_t roc_ts  = roctracer_get_timestamp();
+        roctracer_timestamp_t roc_ts = 0;
+        roctracer_get_timestamp(&roc_ts);
         roctracer_clock_offset_ns = (int64_t)roc_ts - (int64_t)mono_ns;
         __atomic_store_n(&fast_timestamp_ready, 1, __ATOMIC_RELEASE);
         lttng_ust_tracepoint(roctracer_pinsight_lttng_ust, hip_clock_calibration,
@@ -145,7 +146,7 @@ static void hip_activity_callback(const char *begin, const char *end,
                                      rec->begin_ns,
                                      rec->end_ns,
                                      rec->bytes,
-                                     (int)rec->memcpy_info.kind,
+                                     0, /* copyKind not in activity_record_t; available only in callback API */
                                      rec->queue_id);
                 break;
             default:
@@ -166,7 +167,10 @@ static void hip_activity_init_once(void) {
         props.buffer_size         = 0x200000; /* 2 MB */
         props.buffer_callback_fun = hip_activity_callback;
         roctracer_open_pool_expl(&props, &activity_pool);
-        roctracer_enable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
+        /* Must use _expl variant to route records into our pool.
+         * roctracer_enable_domain_activity() (no pool arg) sends records
+         * to the default pool which has no callback. */
+        roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
     }
 }
 
@@ -209,9 +213,9 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
     if (cid == HIP_API_ID_hipLaunchKernel) {
         /* Use the host-side kernel function pointer as lexgion codeptr.
          * Unique per kernel definition, stable for the process lifetime. */
-        const void *codeptr = (const void *)api_data->args.hipLaunchKernel.f;
+        const void *codeptr = (const void *)api_data->args.hipLaunchKernel.function_address;
         const char *kernelName = hipKernelNameRefByPtr(
-            api_data->args.hipLaunchKernel.f,
+            api_data->args.hipLaunchKernel.function_address,
             api_data->args.hipLaunchKernel.stream);
 
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
@@ -305,7 +309,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
             lexgion_t *lgp = lexgion_end(NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
-                int rv      = *(const int *)api_data->retval;
+                int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
                 lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
                                      hipMemcpy_end,
@@ -358,7 +362,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
             lexgion_t *lgp = lexgion_end(NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
-                int rv      = *(const int *)api_data->retval;
+                int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
                 lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
                                      hipMemcpyAsync_end,
@@ -405,7 +409,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
             lexgion_t *lgp = lexgion_end(NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
-                int rv      = *(const int *)api_data->retval;
+                int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
                 lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
                                      hipDeviceSync_end,
@@ -456,7 +460,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
             lexgion_t *lgp = lexgion_end(NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
-                int rv      = *(const int *)api_data->retval;
+                int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
                 lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
                                      hipStreamSync_end,
