@@ -1,15 +1,17 @@
 # PInsight: In-Situ Performance Analysis for HPC Applications
 
-PInsight is a lightweight, dynamic tracing and in-situ performance analysis framework for parallel applications using **OpenMP**, **MPI**, and **CUDA**. It intercepts runtime events via standard APIs (OMPT, PMPI, CUPTI), redirects them to [LTTng UST][lttng] for high-performance asynchronous trace collection, and provides a closed-loop **introspection** mechanism that lets applications analyze their own performance and adapt at runtime — without stopping the program.
+PInsight is a lightweight, dynamic tracing and in-situ performance analysis framework for parallel applications using **OpenMP**, **MPI**, **CUDA**, **AMD HIP/ROCm**, and **Python**. It intercepts runtime events via standard APIs (OMPT, PMPI, CUPTI, ROCTracer, and Python's [`sys.monitoring`][sysmon]), redirects them to [LTTng UST][lttng] for high-performance asynchronous trace collection, and provides a closed-loop **introspection** mechanism that lets applications analyze their own performance and adapt at runtime — without stopping the program.
 
    [lttng]: https://lttng.org
    [ompt]: https://www.openmp.org/wp-content/uploads/ompt-tr.pdf
    [pmpi]: https://www.open-mpi.org/faq/?category=perftools#PMPI
    [cupti]: https://docs.nvidia.com/cuda/cupti/index.html
+   [roctracer]: https://rocm.docs.amd.com/projects/roctracer/en/latest/
+   [sysmon]: https://docs.python.org/3/library/sys.monitoring.html
 
 ## Key Features
 
-- **Multi-domain tracing** — Unified tracing of OpenMP ([OMPT][ompt]), MPI ([PMPI][pmpi]), and CUDA ([CUPTI][cupti]) events on a single LTTng timeline
+- **Multi-domain tracing** — Unified tracing of OpenMP ([OMPT][ompt]), MPI ([PMPI][pmpi]), CUDA ([CUPTI][cupti]), AMD HIP/ROCm ([ROCTracer][roctracer]), and Python ([`sys.monitoring`][sysmon]) events on a single LTTng timeline
 - **Asynchronous trace collection** — LTTng UST ring buffers decouple trace emission from disk I/O; near-zero overhead when no session is active
 - **4-mode trace hierarchy** — OFF → STANDBY → MONITORING → TRACING, each adding exactly one layer of cost
 - **Rate-limited tracing** — Per-region sampling (trace N-of-M executions) to reduce redundant data by orders of magnitude
@@ -38,25 +40,25 @@ The design and evaluation of PInsight is described in:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   HPC Application                               │
-│     OpenMP regions    MPI calls    CUDA kernels                 │
-├────────┬──────────────┬────────────┬────────────────────────────┤
-│  OMPT  │    PMPI      │   CUPTI    │  Callback / Wrapper APIs   │
-│callbacks│  wrappers    │subscribers │                            │
-├────────┴──────────────┴────────────┴────────────────────────────┤
-│  PInsight Library (libpinsight.so)                              │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │ Lexgion directory  │ Rate control │ 4-mode domain config  │ │
-│  │ (per-thread LRU)   │ (per-region) │ (OFF/STANDBY/MON/TRC) │ │
-│  ├────────────────────┴──────────────┴───────────────────────┤ │
-│  │ Control Thread                                            │ │
-│  │ • SIGUSR1 config reload  • INTROSPECT (pause/script/tune) │ │
-│  │ • Automatic mode switch  • Cyclic generation counter      │ │
-│  └───────────────────────────────────────────────────────────┘ │
-├──────────────────────────────────────────────────────────────────┤
-│  LTTng UST → per-CPU ring buffers → CTF trace files             │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                       HPC / Python Application                          │
+│   OpenMP regions   MPI calls   CUDA kernels   HIP kernels   Python     │
+├──────────┬─────────┬───────────┬─────────────┬─────────────────────────┤
+│   OMPT   │  PMPI   │   CUPTI   │  ROCTracer  │  sys.monitoring (PEP669) │
+│ callbacks│ wrappers│subscribers│  callbacks  │  + Callback/Wrapper APIs │
+├──────────┴─────────┴───────────┴─────────────┴─────────────────────────┤
+│  PInsight Library (libpinsight.so)                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │ Lexgion directory  │ Rate control │ 4-mode domain config        │  │
+│  │ (per-thread LRU)   │ (per-region) │ (OFF/STANDBY/MON/TRC)       │  │
+│  ├────────────────────┴──────────────┴─────────────────────────────┤  │
+│  │ Control Thread                                                  │  │
+│  │ • SIGUSR1 config reload  • INTROSPECT (pause/script/tune)       │  │
+│  │ • Automatic mode switch  • Cyclic generation counter            │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+├──────────────────────────────────────────────────────────────────────┤
+│  LTTng UST → per-CPU ring buffers → CTF trace files                   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -74,6 +76,8 @@ sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev babeltrace2
 - **OpenMP**: Clang/LLVM with OMPT support (provides `omp.h`, `omp-tools.h`, `libomp.so`)
 - **CUDA**: NVIDIA CUDA SDK with CUPTI (default: `/usr/local/cuda`)
 - **MPI**: Any MPI implementation supporting PMPI (OpenMPI, MPICH, etc.)
+- **AMD HIP/ROCm**: ROCm with ROCTracer (`libroctracer64.so`, default: `/opt/rocm`); set `ROCM_PATH` for a non-default install
+- **Python**: CPython 3.12+ (uses [`sys.monitoring`][sysmon], PEP 669)
 
 ### Build the PInsight Library
 
@@ -93,12 +97,21 @@ This produces `build/libpinsight.so`.
 | `PINSIGHT_OPENMP` | TRUE | OpenMP OMPT event tracing |
 | `PINSIGHT_MPI` | FALSE | MPI PMPI event tracing |
 | `PINSIGHT_CUDA` | TRUE | CUDA CUPTI event tracing |
+| `PINSIGHT_HIP` | FALSE | AMD HIP/ROCm ROCTracer event tracing |
+| `PINSIGHT_PYTHON` | FALSE | Python `sys.monitoring` event tracing (CPython 3.12+) |
 | `PINSIGHT_ENERGY` | FALSE | Intel RAPL energy monitoring |
 | `PINSIGHT_BACKTRACE` | TRUE | Stack backtrace in trace records |
 
 Pass options to cmake, e.g.:
 ```bash
+# CUDA (NVIDIA)
 cmake -DPINSIGHT_MPI=TRUE -DPINSIGHT_CUDA=TRUE -DCUDA_INSTALL=/usr/local/cuda ..
+
+# AMD HIP/ROCm
+cmake -DPINSIGHT_CUDA=FALSE -DPINSIGHT_HIP=TRUE -DROCM_PATH=/opt/rocm ..
+
+# Python
+cmake -DPINSIGHT_PYTHON=TRUE ..
 ```
 
 For OpenMP tracing, the PInsight `src/` folder contains copies of `omp.h` and `omp-tools.h`
@@ -147,10 +160,13 @@ bash scripts/trace.sh \
 # 1. Create session
 lttng create my-session --output=./my-traces
 
-# 2. Enable PInsight events
-lttng enable-event --userspace 'ompt_pinsight_lttng_ust:*'
-lttng enable-event --userspace 'pmpi_pinsight_lttng_ust:*'
-lttng enable-event --userspace 'cupti_pinsight_lttng_ust:*'
+# 2. Enable PInsight events (enable only the providers you built)
+lttng enable-event --userspace 'ompt_pinsight_lttng_ust:*'       # OpenMP
+lttng enable-event --userspace 'pmpi_pinsight_lttng_ust:*'       # MPI
+lttng enable-event --userspace 'cupti_pinsight_lttng_ust:*'      # CUDA
+lttng enable-event --userspace 'roctracer_pinsight_lttng_ust:*'  # AMD HIP/ROCm
+lttng enable-event --userspace 'pysysmon_pinsight_lttng_ust:*'   # Python
+lttng enable-event --userspace 'pinsight_enter_exit_lttng_ust:*' # process enter/exit
 
 # 3. Start tracing
 lttng start
@@ -194,6 +210,8 @@ Each domain can operate in one of four modes:
 PINSIGHT_TRACE_OPENMP=<MODE>     # OFF | STANDBY | MONITORING | TRACING (default: TRACING)
 PINSIGHT_TRACE_MPI=<MODE>
 PINSIGHT_TRACE_CUDA=<MODE>
+PINSIGHT_TRACE_HIP=<MODE>
+PINSIGHT_TRACE_PYTHON=<MODE>
 
 # Rate-based sampling: trace_starts_at:max_num_traces:tracing_rate[:mode_after]
 PINSIGHT_TRACE_RATE=0:100:1:MONITORING
@@ -324,6 +342,16 @@ Cycle 3: ...
 - Memory: malloc, free, memcpy (HtoD, DtoH, DtoD), memset
 - Streams, events, context, device, synchronization
 
+### AMD HIP/ROCm Events (via ROCTracer)
+- Kernel launch (Callback API) + actual GPU execution timing (Activity API)
+- Memory: memcpy (HtoD, DtoH, DtoD, HtoH) sync/async + GPU-side transfer timing
+- Device/stream synchronization, device reset
+- Callback and Activity records linked by `correlation_id`; CPU↔GPU clocks aligned via a one-shot calibration anchor
+
+### Python Events (via `sys.monitoring`, PEP 669)
+- Function call/return (PyFunction), named-lexgion filtering by qualified name
+- Per-thread tracing with rate control, integrating into the same lexgion/mode hierarchy
+
 ---
 
 ## Analysis and Visualization
@@ -346,8 +374,10 @@ Cycle 3: ...
 | [`doc/control_thread_design.md`](doc/control_thread_design.md) | Control thread and INTROSPECT architecture |
 | [`doc/domain_trace_modes.md`](doc/domain_trace_modes.md) | Domain mode benchmark results |
 | [`doc/rate-limit-tracing.md`](doc/rate-limit-tracing.md) | Rate-based sampling design |
-| [`doc/python_tracing_design.md`](doc/python_tracing_design.md) | Python domain support design (planned) |
 | [`doc/cuda_support_design.md`](doc/cuda_support_design.md) | CUDA/CUPTI tracing design |
+| [`doc/python_tracing_design.md`](doc/python_tracing_design.md) | Python domain support design |
+| [`doc/python_tracing_implementation.md`](doc/python_tracing_implementation.md) | Python domain implementation notes |
+| [`doc/python_trace_config.md`](doc/python_trace_config.md) | Python tracing configuration reference |
 
 ---
 
