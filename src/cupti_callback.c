@@ -110,7 +110,7 @@ static inline void cuda_cache_context_device(CUcontext ctx, unsigned int *cxtId,
  * rate, so the offset is constant for the process lifetime.
  * ================================================================ */
 static int64_t cupti_clock_offset_ns = 0; /* cupti_ts - monotonic_ns */
-static _Atomic int fast_timestamp_ready = 0;
+static int     clock_calibration_done = 0; /* plain int for __atomic builtins */
 
 static inline uint64_t cuda_fast_timestamp(void) {
   struct timespec ts;
@@ -156,25 +156,31 @@ static void cupti_activity_init_once(void) {
   }
 }
 
-/* Fired exactly once on the first CUDA API call, guaranteeing LTTng probes
- * are registered and the session is active.  Records both CLOCK_MONOTONIC
- * and cuptiGetTimestamp() at the same instant so analysis tools can compute
- * the constant clock offset and align GPU activity records with CPU events.
- * Also caches the offset for fast_timestamp use. */
-static _Atomic int clock_calibration_done = 0;
-
-static inline void cuda_emit_clock_calibration_once(void) {
-  if (!clock_calibration_done &&
-      __atomic_exchange_n(&clock_calibration_done, 1, __ATOMIC_SEQ_CST) == 0) {
+/* Compute the CLOCK_MONOTONIC -> cuptiGetTimestamp offset and emit the
+ * calibration anchor, exactly once, on the first callback.  Records both clocks
+ * at the same instant so analysis tools can align GPU activity records with CPU
+ * events.
+ *
+ * This MUST be deferred to a callback, not done at init: emitting a tracepoint
+ * from a library constructor is unreliable (the LTTng provider may not be
+ * registered yet) and cuptiGetTimestamp may not be valid before the CUDA
+ * runtime initializes.  Both are ready by the first callback.  (Verified on the
+ * HIP side that the analogous init-time approach drops the anchor and yields a
+ * bogus offset.) */
+static inline void cuda_calibrate_once(void) {
+  /* Fast path: plain read, predicted taken once calibrated — no atomic cost.
+   * A racing thread that still sees 0 is caught by the atomic exchange below,
+   * so at most one thread ever does the calibration. */
+  if (__builtin_expect(clock_calibration_done, 1))
+    return;
+  if (__atomic_exchange_n(&clock_calibration_done, 1, __ATOMIC_SEQ_CST) == 0) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     uint64_t monotonic_ns =
         (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
     uint64_t cupti_ts;
     cuptiGetTimestamp(&cupti_ts);
-    /* Cache offset for cuda_fast_timestamp() */
     cupti_clock_offset_ns = (int64_t)cupti_ts - (int64_t)monotonic_ns;
-    __atomic_store_n(&fast_timestamp_ready, 1, __ATOMIC_RELEASE);
     lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cuda_clock_calibration,
                          monotonic_ns, cupti_ts);
   }
@@ -223,12 +229,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     return;
 
   /* 4. Ensure thread data initialized + deferred Activity API init +
-   *    one-shot clock calibration.
+   *    one-shot clock calibration (first callback only).
    *    cupti_activity_init_once() is safe here: a CUDA context exists
    *    (this is a CUDA API callback), making cuptiActivityEnable valid. */
   cuda_ensure_thread_init();
   cupti_activity_init_once();
-  cuda_emit_clock_calibration_once();
+  cuda_calibrate_once();
 
   /* ----------------------------------------------------------
    * 5. Extract common callback info
@@ -548,14 +554,6 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     }
     return;
   }
-
-  /* Remaining stubs — deprecated or not useful for perf analysis */
-  if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaThreadSynchronize_v3020 ||
-      cbid == CUPTI_RUNTIME_TRACE_CBID_cudaStreamCreate_v3020 ||
-      cbid == CUPTI_RUNTIME_TRACE_CBID_cudaThreadExit_v3020 ||
-      cbid == CUPTI_RUNTIME_TRACE_CBID_cudaConfigureCall_v3020) {
-    return;
-  }
 }
 
 /* ================================================================
@@ -642,16 +640,13 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
  * cuptiEnableCallback is process-global and thread-safe.
  * ================================================================ */
 static void cupti_set_all_callbacks(int enable) {
+  /* Only enable the cbids the callback actually handles.  Deprecated/no-op
+   * cbids (cudaConfigureCall, cudaThreadSynchronize, cudaStreamCreate,
+   * cudaThreadExit) are intentionally left disabled so they never fire. */
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000);
-  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                      CUPTI_RUNTIME_TRACE_CBID_cudaConfigureCall_v3020);
-  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                      CUPTI_RUNTIME_TRACE_CBID_cudaThreadSynchronize_v3020);
-  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                      CUPTI_RUNTIME_TRACE_CBID_cudaStreamCreate_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaStreamSynchronize_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
@@ -662,8 +657,6 @@ static void cupti_set_all_callbacks(int enable) {
                       CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaDeviceReset_v3020);
-  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
-                      CUPTI_RUNTIME_TRACE_CBID_cudaThreadExit_v3020);
 }
 
 /**
@@ -676,9 +669,40 @@ static void cupti_set_all_callbacks(int enable) {
  */
 static int cuda_permanently_off = 0; /* Once set, never apply again */
 
+/* Called once from LTTNG_CUPTI_Init before the control thread starts.
+ * Subscribes and enables callbacks if the starting mode is active; skips
+ * subscribe entirely if starting OFF (no overhead).
+ * Sets last_mode = starting mode so apply_mode never sees NONE. */
+static void pinsight_cuda_init(void) {
+  pinsight_domain_mode_t mode =
+      domain_default_trace_config[CUDA_domain_index].mode;
+
+  if (mode == PINSIGHT_DOMAIN_OFF) {
+    cuda_permanently_off = 1;
+    fprintf(stderr, "PInsight: CUDA domain starting OFF — not subscribing\n");
+    domain_default_trace_config[CUDA_domain_index].last_mode = mode;
+    return;
+  }
+
+  /* Subscribe once — safe before any CUDA context exists */
+  cuptiSubscribe(&subscriber, (CUpti_CallbackFunc)CUPTI_callback_lttng, NULL);
+
+  /* Clock calibration is deferred to the first callback (cuptiGetTimestamp and
+   * the LTTng provider are not reliably ready at constructor time). */
+  if (PINSIGHT_DOMAIN_ACTIVE(mode))
+    cupti_set_all_callbacks(1);
+  /* STANDBY: subscriber live, individual callbacks off */
+
+  domain_default_trace_config[CUDA_domain_index].last_mode = mode;
+}
+
+/* Called by the control thread for runtime mode transitions.
+ * Precondition: pinsight_cuda_init() has run, so last_mode is never NONE
+ * and subscriber is always registered when we reach here (cuda_permanently_off
+ * gate handles the OFF case). */
 void pinsight_control_cuda_apply_mode(void) {
   if (cuda_permanently_off)
-    return; /* Already torn down */
+    return;
 
   pinsight_domain_mode_t mode =
       domain_default_trace_config[CUDA_domain_index].mode;
@@ -686,42 +710,32 @@ void pinsight_control_cuda_apply_mode(void) {
       domain_default_trace_config[CUDA_domain_index].last_mode;
 
   if (mode == last)
-    return; /* No transition — skip */
+    return;
 
   if (mode == PINSIGHT_DOMAIN_OFF) {
-    /* Permanent teardown — flush and unsubscribe */
-    cuptiActivityFlushAll(1);
+    if (PINSIGHT_DOMAIN_ACTIVE(last))
+      cuptiActivityFlushAll(1);
     cuptiUnsubscribe(subscriber);
     cuda_permanently_off = 1;
-    fprintf(stderr, "PInsight: CUDA domain permanently OFF "
-                    "(cuptiUnsubscribe)\n");
+    fprintf(stderr, "PInsight: CUDA domain permanently OFF\n");
   } else if (mode == PINSIGHT_DOMAIN_STANDBY) {
-    /* Dispatch off, subscriber alive — fast re-activation */
-    cupti_set_all_callbacks(0);
+    if (PINSIGHT_DOMAIN_ACTIVE(last))
+      cupti_set_all_callbacks(0);
   } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
-    /* Transitioning FROM OFF/STANDBY TO MONITORING/TRACING — enable */
+    /* STANDBY → MONITORING/TRACING */
     cupti_set_all_callbacks(1);
   }
-  /* MONITORING↔TRACING: no CUPTI action needed — callbacks already enabled,
-   * the mode flag in the callback itself distinguishes the two. */
+  /* MONITORING↔TRACING: mode flag in callback handles it */
 }
 
 void LTTNG_CUPTI_Init(void) {
-  /* Register the CUPTI subscriber (safe before any CUDA context exists —
-   * it only registers a function pointer with the CUPTI library). */
-  cuptiSubscribe(&subscriber, (CUpti_CallbackFunc)CUPTI_callback_lttng, NULL);
-
-  /* Enable callbacks based on initial CUDA domain mode.
-   * When starting in OFF mode, no callbacks are enabled — zero overhead.
-   * Control thread will re-enable them on mode change. */
-  pinsight_control_cuda_apply_mode();
-
+  pinsight_cuda_init();
   /* NOTE: Activity API (cuptiActivityEnable) requires an active CUDA
    * context and MUST NOT be called at library load time in multi-GPU
    * MPI runs where no context exists yet.  It is deferred to
    * cupti_activity_init_once(), called from the first CUPTI callback.
-   * Clock calibration similarly deferred — see
-   * cuda_emit_clock_calibration_once(). */
+   * Clock calibration is likewise deferred to the first callback via
+   * cuda_calibrate_once(). */
 }
 
 void LTTNG_CUPTI_Fini(void) {

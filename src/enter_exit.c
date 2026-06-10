@@ -11,8 +11,11 @@
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "enter_exit_lttng_ust_tracepoint.h"
 
-void enter_pinsight_func() __attribute__((constructor(102)));
-void exit_pinsight_func() __attribute__((destructor(102)));
+/* Priority 200 (> LTTng-UST's provider-registration priority of 150) so the
+ * enter/exit tracepoints emitted here fire after providers are registered and
+ * before they are torn down.  A lower priority drops these events. */
+void enter_pinsight_func() __attribute__((constructor(200)));
+void exit_pinsight_func() __attribute__((destructor(200)));
 
 #pragma startup enter_pinsight_func 100
 #pragma exit exit_pinsight_func 100
@@ -39,10 +42,7 @@ void enter_pinsight_func() {
   // printf("entering pinsight at host: %s by process: %d\n", hostname, pid);
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 
-  /* Start the control thread — installs SIGUSR1 handler and begins
-   * listening for config reload / mode change requests. */
-  pinsight_control_thread_start();
-  pinsight_install_signal_handler();
+  initial_setup_trace_config();
 
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Init();
@@ -50,6 +50,11 @@ void enter_pinsight_func() {
 #ifdef PINSIGHT_HIP
   LTTNG_ROCTRACER_Init();
 #endif
+
+  /* Start the control thread after all domain callbacks are registered so
+   * the control thread never races with the initial enable calls. */
+  pinsight_control_thread_start();
+  pinsight_install_signal_handler();
 #ifdef PINSIGHT_ENERGY
 #endif
 #ifdef PINSIGHT_BACKTRACE

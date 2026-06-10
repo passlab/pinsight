@@ -44,7 +44,7 @@ int main(void) {
     const size_t sz = N * sizeof(float);
 
     /* Create a HIP context before Init (needed for activity pool) */
-    HIP_CHECK(hipSetDevice(0));
+    ///HIP_CHECK(hipSetDevice(0));
 
     /* ----- Phase 2/3: start ROCTracer interception ----- */
     ROCTRACER_Init();

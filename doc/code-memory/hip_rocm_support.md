@@ -1,6 +1,6 @@
 ---
 name: hip-rocm-support
-description: "HIP/ROCm tracing domain for El Capitan (AMD MI300A APU): Phase 1-3 implemented on hip-rocm-support branch, pending build on El Capitan"
+description: "HIP/ROCm tracing domain for El Capitan (AMD MI300A APU): built + trace-validated on Tuolumne (2026-06-10). Key gotchas: LTTng provider prio 150, lazy clock calibration, pool needs no context."
 metadata: 
   node_type: memory
   type: project
@@ -18,6 +18,41 @@ especially important — the motivation is the same as for Python + HIP on one t
 **How to apply:** Mirror CUDA patterns; be aware of the ROCTracer pool model
 difference (push vs CUPTI's pull). MI300A memcpy events fire but have near-zero
 duration — don't treat them as bandwidth indicators.
+
+## VALIDATED on Tuolumne (2026-06-10) — and three hard-won gotchas
+
+HIP support is now **built and end-to-end trace-validated** on Tuolumne (4× MI300A
+gfx942, ROCm 7.2.1). Build dir `build_hip/` (gcc, `-DPINSIGHT_HIP=TRUE`). Test:
+`test/rocm/` — `vecadd_pinsight` under LD_PRELOAD produces correct traces
+(enter/exit_pinsight, hip_clock_calibration, kernel/memcpy/sync begin/end +
+GPU activity records, all counts correct). See [[tuolumne-build]] for the exact
+`module load rocm/7.2.1` + lttng-sessiond test procedure.
+
+**GOTCHA 1 — LTTng-UST provider registration priority is 150.**
+`LTTNG_UST_CONSTRUCTOR_PRIO = 150` (ust-compiler.h). Any `lttng_ust_tracepoint()`
+emitted from a constructor with priority **< 150** is a silent no-op (provider not
+registered yet). `enter_pinsight_func`/`exit_pinsight_func` were `constructor(102)`/
+`destructor(102)` → both events were ALWAYS silently dropped. Fixed to **200**
+(constructor 200 runs after provider-150; destructor 200 runs before provider
+teardown). Any new constructor-time tracepoint must use priority > 150.
+
+**GOTCHA 2 — clock calibration MUST be lazy (first callback), not at init.**
+`roctracer_get_timestamp()` returns **0** at library-constructor time (HSA runtime
+not initialized until first HIP call). Computing the offset at init yields a bogus
+huge-negative offset → callback timestamps land on the wrong scale (~1e9) and
+cannot correlate with GPU activity records (~1.3e15 HSA clock). So `hip_calibrate_once()`
+computes offset AND emits the anchor on the first callback (atomic one-shot guard).
+Same applies to CUDA (`cuda_calibrate_once`, untested — no NVIDIA HW here).
+On MI300A the real offset is tiny (~4µs), confirming shared CPU/GPU clock domain.
+
+**GOTCHA 3 — the activity pool does NOT need a HIP context.**
+Contradicts the old "deferred activity init" belief (that was copied from CUPTI
+caution). `roctracer_open_pool_expl` + `roctracer_enable_domain_activity_expl` work
+at init with no context (verified in experiment/lttng_roctracer). Pool open is now
+done in `LTTNG_ROCTRACER_Init` alongside callback enable, and callback+pool are
+enabled/disabled as a PAIR in `pinsight_control_hip_apply_mode` across all mode
+transitions. NOTE: CUPTI's Activity API is the opposite — `cuptiActivityEnable`
+genuinely requires a context, so `cupti_activity_init_once` stays deferred.
 
 ## Hardware context
 - El Capitan node: AMD EPYC 9654 (Genoa, 96 cores/socket) + AMD Instinct MI300A APU
@@ -55,13 +90,12 @@ codeptr — unique per kernel, stable for process lifetime. Same role as
   `props.buffer_callback_fun = flush_cb`; always use `roctracer_next_record()`
   to advance (records are variable-length)
 
-**Deferred activity init:** `hip_activity_init_once()` called on first callback
-(same pattern as CUPTI) — a HIP context must exist before
-`roctracer_enable_domain_activity()`.
+**Activity init (UPDATED 2026-06-10):** `hip_activity_init_once()` is GONE — the
+pool is opened in `LTTNG_ROCTRACER_Init` (no context needed; see GOTCHA 3 above).
 
-**Clock calibration:** `hip_clock_calibration` tracepoint fired once. On MI300A,
-CPU and GPU share the same clock; offset is expected to be ~0 but still emitted
-for analysis tool alignment.
+**Clock calibration (UPDATED 2026-06-10):** `hip_calibrate_once()` computes offset
+AND emits `hip_clock_calibration` on the first callback (NOT at init; see GOTCHA 2).
+On MI300A offset ≈ 4µs (shared clock domain).
 
 ## Event ID map (dense, TRACE_EVENT_ID_INTERNAL)
 

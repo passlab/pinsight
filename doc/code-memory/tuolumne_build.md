@@ -11,6 +11,24 @@ Tuolumne is an LLNL El Capitan early-access system (RHEL 8.10, AMD EPYC Trento, 
 
 **Why:** The system LTTng UST (2.8.1) is too old for PInsight's API (needs 2.13+). No NVIDIA GPU — no CUDA. ROCm 7.2.1 available at `/opt/rocm-7.2.1`.
 
+## HIP testing DOES work on this node (4× MI300A gfx942)
+
+Despite "no CUDA", the node HAS 4 MI300A GPUs and a working ROCm toolchain via
+modules — HIP can be built AND trace-tested here. Procedure:
+```bash
+module load rocm/7.2.1            # provides hipcc, rocminfo, libroctracer64.so
+export LTTNG_HOME=$HOME/local; export PATH=$LTTNG_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$LTTNG_HOME/lib:/opt/rocm-7.2.1/lib:$LD_LIBRARY_PATH
+# build lib: cd build_hip && make   (build_hip already cmake-configured, -DPINSIGHT_HIP=TRUE, gcc)
+# test:     cd test/rocm; export PINSIGHT_TRACE_CONFIG_FILE=$PWD/HIP_trace_config.install
+```
+- `lttng-sessiond --daemonize` in the Claude Bash tool exits 144 (SIGSTKFLT to
+  parent); launch it detached: `( setsid lttng-sessiond --daemonize & )` then `exit 0`.
+- `verify_trace.sh` gives FALSE failures under the Claude Bash tool: its
+  `set -euo pipefail` + the tool's shell-snapshot referencing unbound `$ZSH_VERSION`
+  makes the babeltrace2 wrapper exit 127. The trace is fine — grep a dumped file instead.
+See [[hip-rocm-support]] for what the validated trace looks like.
+
 **How to apply:** Use these flags and rules for all PInsight builds on this system.
 
 ## LTTng stack — built from source into ~/local

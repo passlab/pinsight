@@ -86,7 +86,7 @@ static inline int hip_get_cached_device(void) {
  * near zero — but we still calibrate once for analysis tool alignment.
  * ================================================================ */
 static int64_t  roctracer_clock_offset_ns = 0;
-static _Atomic int fast_timestamp_ready = 0;
+static int      calib_done = 0; /* plain int for __atomic builtins */
 
 static inline uint64_t hip_fast_timestamp(void) {
     struct timespec ts;
@@ -95,20 +95,29 @@ static inline uint64_t hip_fast_timestamp(void) {
     return (uint64_t)((int64_t)mono_ns + roctracer_clock_offset_ns);
 }
 
-static _Atomic int clock_calibration_done = 0;
-
-static inline void hip_emit_clock_calibration_once(void) {
-    if (!clock_calibration_done &&
-        __atomic_exchange_n(&clock_calibration_done, 1, __ATOMIC_SEQ_CST) == 0) {
+/* Compute the CLOCK_MONOTONIC -> roctracer/HSA clock offset and emit the
+ * calibration anchor, exactly once, on the first callback.
+ *
+ * This MUST be deferred to a callback, not done at init: roctracer_get_timestamp()
+ * returns 0 until the HSA runtime is initialized (which happens on the first HIP
+ * call), and the LTTng provider is likewise not registered at library-constructor
+ * time.  Both are ready by the first callback.  Records both clocks at the same
+ * instant so analysis tools can align GPU activity records with CPU events. */
+static inline void hip_calibrate_once(void) {
+    /* Fast path: plain read, predicted taken once calibrated — no atomic cost.
+     * A racing thread that still sees 0 is caught by the atomic exchange below,
+     * so at most one thread ever does the calibration. */
+    if (__builtin_expect(calib_done, 1))
+        return;
+    if (__atomic_exchange_n(&calib_done, 1, __ATOMIC_SEQ_CST) == 0) {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
         uint64_t mono_ns = (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
         roctracer_timestamp_t roc_ts = 0;
         roctracer_get_timestamp(&roc_ts);
         roctracer_clock_offset_ns = (int64_t)roc_ts - (int64_t)mono_ns;
-        __atomic_store_n(&fast_timestamp_ready, 1, __ATOMIC_RELEASE);
         lttng_ust_tracepoint(roctracer_pinsight_lttng_ust, hip_clock_calibration,
-                             mono_ns, roc_ts);
+                             mono_ns, (uint64_t)roc_ts);
     }
 }
 
@@ -157,22 +166,6 @@ static void hip_activity_callback(const char *begin, const char *end,
     }
 }
 
-static _Atomic int activity_init_done = 0;
-
-static void hip_activity_init_once(void) {
-    if (!activity_init_done &&
-        __atomic_exchange_n(&activity_init_done, 1, __ATOMIC_SEQ_CST) == 0) {
-        roctracer_properties_t props;
-        memset(&props, 0, sizeof(props));
-        props.buffer_size         = 0x200000; /* 2 MB */
-        props.buffer_callback_fun = hip_activity_callback;
-        roctracer_open_pool_expl(&props, &activity_pool);
-        /* Must use _expl variant to route records into our pool.
-         * roctracer_enable_domain_activity() (no pool arg) sends records
-         * to the default pool which has no callback. */
-        roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
-    }
-}
 
 /* ================================================================
  * Main ROCTracer callback
@@ -195,17 +188,32 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
             domain_default_trace_config[HIP_domain_index].mode))
         return;
 
-    if (domain != ACTIVITY_DOMAIN_HIP_API)
+    /* 3. Fast reject: the callback fires for every HIP API call, but only a
+     * handful do real work.  Skip thread init, clock calibration, and the
+     * device query for everything else. */
+    if (cid != HIP_API_ID_hipLaunchKernel      &&
+        cid != HIP_API_ID_hipMemcpy            &&
+        cid != HIP_API_ID_hipMemcpyAsync       &&
+        cid != HIP_API_ID_hipDeviceSynchronize &&
+        cid != HIP_API_ID_hipStreamSynchronize &&
+        cid != HIP_API_ID_hipDeviceReset       &&
+        cid != HIP_API_ID_hipSetDevice)
         return;
 
     const hip_api_data_t *api_data = (const hip_api_data_t *)callback_data;
-    if (!api_data)
-        return;
 
-    /* 3. Thread init + one-shot deferred setup */
+    /* ========== hipSetDevice — invalidate the per-thread device cache so the
+     * next traced event re-queries the (now changed) device.  Handled before
+     * thread init / clock calibration / device query since none are needed. */
+    if (cid == HIP_API_ID_hipSetDevice) {
+        if (api_data->phase == ACTIVITY_API_PHASE_EXIT)
+            hip_tls_dev_cached = 0;
+        return;
+    }
+
+    /* 4. Thread init + one-shot clock calibration (first callback only) */
     hip_ensure_thread_init();
-    hip_activity_init_once();
-    hip_emit_clock_calibration_once();
+    hip_calibrate_once();
 
     int devId = hip_get_cached_device();
 
@@ -472,7 +480,9 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         return;
     }
 
-    /* ========== hipDeviceReset — flush activity before context teardown ========== */
+    /* ========== hipDeviceReset — flush pending activity records before the
+     * context is destroyed, then keep the pool open for the new implicit
+     * context that the next HIP call will create. ========== */
     if (cid == HIP_API_ID_hipDeviceReset) {
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER && activity_pool)
             roctracer_flush_activity_expl(activity_pool);
@@ -486,6 +496,9 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
 
 static int hip_permanently_off = 0;
 
+/* Called by the control thread for runtime mode transitions.
+ * Precondition: pinsight_hip_init() has run, so last_mode is never NONE.
+ * Callback and activity pool are always enabled/disabled as a pair. */
 void pinsight_control_hip_apply_mode(void) {
     if (hip_permanently_off)
         return;
@@ -498,24 +511,34 @@ void pinsight_control_hip_apply_mode(void) {
     if (mode == last)
         return;
 
-    if (mode == PINSIGHT_DOMAIN_OFF) {
-        if (activity_pool) {
-            roctracer_flush_activity_expl(activity_pool);
-            roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
-            roctracer_close_pool_expl(activity_pool);
-            activity_pool = NULL;
+    if (mode == PINSIGHT_DOMAIN_OFF || mode == PINSIGHT_DOMAIN_STANDBY) {
+        if (PINSIGHT_DOMAIN_ACTIVE(last)) {
+            /* ACTIVE → STANDBY/OFF: disable both together */
+            if (activity_pool) {
+                roctracer_flush_activity_expl(activity_pool);
+                roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
+                roctracer_close_pool_expl(activity_pool);
+                activity_pool = NULL;
+            }
+            roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
         }
-        roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
-        hip_permanently_off = 1;
-        fprintf(stderr, "PInsight: HIP domain permanently OFF\n");
-    } else if (mode == PINSIGHT_DOMAIN_STANDBY) {
-        roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
+        /* STANDBY→OFF or STANDBY→STANDBY: both already torn down, nothing to do */
+        if (mode == PINSIGHT_DOMAIN_OFF) {
+            hip_permanently_off = 1;
+            fprintf(stderr, "PInsight: HIP domain permanently OFF\n");
+        }
     } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
-        /* Transitioning from OFF/STANDBY to MONITORING/TRACING */
+        /* STANDBY → MONITORING/TRACING: enable both together */
         roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API,
                                          hip_api_callback, NULL);
+        roctracer_properties_t props;
+        memset(&props, 0, sizeof(props));
+        props.buffer_size         = 0x200000; /* 2 MB */
+        props.buffer_callback_fun = hip_activity_callback;
+        roctracer_open_pool_expl(&props, &activity_pool);
+        roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
     }
-    /* MONITORING↔TRACING: callback already enabled; mode flag distinguishes them */
+    /* MONITORING↔TRACING: callback and pool already active; mode flag distinguishes them */
 }
 
 /* ================================================================
@@ -523,12 +546,30 @@ void pinsight_control_hip_apply_mode(void) {
  * ================================================================ */
 
 void LTTNG_ROCTRACER_Init(void) {
-    roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API,
-                                     hip_api_callback, NULL);
-    /* Activity pool is deferred to hip_activity_init_once() on first callback,
-     * matching CUPTI's deferred activation pattern — a HIP context must exist
-     * before roctracer_enable_domain_activity() is called. */
-    pinsight_control_hip_apply_mode();
+    pinsight_domain_mode_t mode =
+        domain_default_trace_config[HIP_domain_index].mode;
+
+    if (mode == PINSIGHT_DOMAIN_OFF) {
+        hip_permanently_off = 1;
+        fprintf(stderr, "PInsight: HIP domain starting OFF\n");
+    } else {
+        /* Clock calibration is deferred to the first callback (roctracer
+         * timestamp + LTTng provider are not ready at constructor time). */
+        if (PINSIGHT_DOMAIN_ACTIVE(mode)) {
+            roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API,
+                                             hip_api_callback, NULL);
+            roctracer_properties_t props;
+            memset(&props, 0, sizeof(props));
+            props.buffer_size         = 0x200000; /* 2 MB */
+            props.buffer_callback_fun = hip_activity_callback;
+            roctracer_open_pool_expl(&props, &activity_pool);
+            /* _expl routes records into our pool; the no-arg variant sends to
+             * the default pool which has no callback and drops records. */
+            roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+        }
+        /* STANDBY: callback and pool stay unregistered until first active transition */
+    }
+    domain_default_trace_config[HIP_domain_index].last_mode = mode;
 }
 
 void LTTNG_ROCTRACER_Fini(void) {
@@ -541,4 +582,5 @@ void LTTNG_ROCTRACER_Fini(void) {
         activity_pool = NULL;
     }
     roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
+    hip_permanently_off = 1;
 }

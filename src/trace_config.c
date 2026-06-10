@@ -49,6 +49,9 @@ unsigned int trace_config_change_counter = 0;
 #ifdef PINSIGHT_CUDA
 static inline int pinsight_cuda_runtime_available(void);
 #endif
+#ifdef PINSIGHT_HIP
+static inline int pinsight_hip_runtime_available(void);
+#endif
 
 /**
  * Check whether the current execution punit id's are in the punit id set or not
@@ -243,7 +246,7 @@ void pinsight_load_trace_config(char *filepath) {
   }
 }
 
-__attribute__((constructor(101))) void initial_setup_trace_config() {
+void initial_setup_trace_config() {
 #ifdef PINSIGHT_OPENMP
   register_OpenMP_trace_domain();
   // OpenMP support is initialized by ompt_start_tool() callback that is
@@ -261,7 +264,9 @@ __attribute__((constructor(101))) void initial_setup_trace_config() {
   register_Python_trace_domain();
 #endif
 #ifdef PINSIGHT_HIP
-  register_HIP_trace_domain();
+  if (pinsight_hip_runtime_available()) {
+    register_HIP_trace_domain();
+  }
 #endif
 
   // Initialize the default domain trace configs by copying from
@@ -341,6 +346,30 @@ static inline int pinsight_cuda_runtime_available(void) {
         stderr,
         "[PInsight WARNING] CUDA support was compiled in, but libcuda.so is "
         "not available on this system. CUDA tracing will be disabled.\n");
+    cached = 0;
+    return 0;
+  }
+  dlclose(handle);
+  cached = 1;
+  return 1;
+}
+#endif
+
+#ifdef PINSIGHT_HIP
+static inline int pinsight_hip_runtime_available(void) {
+  static int cached = -1;
+  if (cached != -1) {
+    return cached;
+  }
+  void *handle = dlopen("libroctracer64.so", RTLD_LAZY | RTLD_LOCAL);
+  if (!handle) {
+    handle = dlopen("libroctracer64.so.4", RTLD_LAZY | RTLD_LOCAL);
+  }
+  if (!handle) {
+    fprintf(
+        stderr,
+        "[PInsight WARNING] HIP support was compiled in, but libroctracer64.so "
+        "is not available on this system. HIP tracing will be disabled.\n");
     cached = 0;
     return 0;
   }

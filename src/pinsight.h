@@ -274,6 +274,7 @@ retrieve_lexgion_trace_config(const void *codeptr);
 // read env or config file at runtime to allow for user to provide new config
 // for tracing
 extern void lexgion_trace_reconfig();
+extern void initial_setup_trace_config();
 
 #ifdef __cplusplus
 };

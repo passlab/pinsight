@@ -91,10 +91,19 @@ void pinsight_control_set_pending_action(trace_mode_after_t *ma);
  * Implemented in each domain's source file and linked via extern.
  * ================================================================ */
 
+#ifdef PINSIGHT_HIP
+/**
+ * Enable/disable ROCTracer callbacks based on current HIP domain mode.
+ * Called by the control thread; pinsight_hip_init() must have run first.
+ */
+extern void pinsight_control_hip_apply_mode(void);
+#endif
+
 #ifdef PINSIGHT_CUDA
 /**
  * Enable/disable all CUPTI callbacks based on current CUDA domain mode.
  * Calls cuptiEnableCallback() — process-global, thread-safe.
+ * Called by the control thread; pinsight_cuda_init() must have run first.
  */
 extern void pinsight_control_cuda_apply_mode(void);
 #endif
