@@ -1,8 +1,19 @@
 # Energy/Power Measurement Implementation Plan
 
-**Date:** 2026-05-29
+**Date:** 2026-05-29 (verified & corrected against source 2026-06-10)
 **Author:** Yonghong Yan
-**Status:** Planning
+**Status:** Planning — reviewed, ready to implement
+
+> **2026-06-10 review note.** The plan was checked against the current tree. The
+> architecture stands as written. Five corrections were folded in inline (each marked
+> **Correction** / note where it applies):
+> 1. The `ompt_callback.c` cleanup is a **full-file sweep of ~30 sites**, not 4 blocks.
+> 2. Masks should use the existing **`BitSet`** type + `bitset_parse_ranges()`, not
+>    hand-rolled `uint64_t` — the range/list parser already exists.
+> 3. **Config must be parsed before `pinsight_energy_init()`** for default masks to work
+>    (holds today via the constructor; flagged so it stays that way).
+> 4. The tracepoint layout has a hard **4-CPU / 4-GPU ceiling**; fits one MI300A node.
+> 5. Dev order (Intel CPU first) ≠ payoff order (**AMD APU path is the real deliverable**).
 
 ---
 
@@ -63,16 +74,29 @@ The three macros that must be removed are:
 And their empty `#else` counterparts at ~lines 80–82. Also remove the `package_energy`
 global variable declaration referenced in the comment at ~line 76.
 
-### 4. `src/ompt_callback.c` — the four energy blocks to delete
+### 4. `src/ompt_callback.c` — the energy sweep (NOT four blocks — ~30 sites)
 
-Four `#ifdef PINSIGHT_ENERGY` blocks to remove (search for `PINSIGHT_ENERGY`):
-- `thread_begin` (~line 234): `rapl_sysfs_read_packages(package_energy)`
-- `thread_end` (~line 324): same call
-- `parallel_begin` (~line 451): guarded by `if (global_thread_num == 0)`
-- `parallel_end` (~line 488): guarded by `if (global_thread_num == 0)`
+**Correction (verified 2026-06-10):** energy is not confined to four callbacks. It is
+piggy-backed onto **nearly every OMPT tracepoint** in this 1800-line file. As of this
+writing the file contains:
+- **~33** `#ifdef PINSIGHT_ENERGY` blocks (`grep -c` confirms)
+- **30** `rapl_sysfs_read_packages(package_energy)` calls — one before most tracepoints
+- **32** `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS` usages appended to tracepoint call sites
 
-Also remove the `package_energy[]` global array declaration wherever it lives in
-`ompt_callback.h` or at the top of `ompt_callback.c`.
+Each callback does the same two things: `rapl_sysfs_read_packages(package_energy)` to
+refresh the global array, then passes `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS` (which
+expands to `,package_energy[0],...,package_energy[3]`) as the trailing tracepoint args.
+
+So the cleanup is a **full-file sweep**, not a 4-block edit:
+- Remove every `#ifdef PINSIGHT_ENERGY ... rapl_sysfs_read_packages(...) ... #endif` block
+- Remove every `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS` token from tracepoint call sites
+  (these become hard compile errors once the macro is deleted — that is the safety net)
+- Remove the `#include "rapl.h"` + `static long long package_energy[MAX_PACKAGES];`
+  declaration block near the top (~line 22)
+
+Mechanical but large. Do it as one isolated commit and confirm a clean build before/after.
+The fact that removing the macros breaks compilation at every leftover site is a feature —
+lean on the compiler to find any missed sites.
 
 ### 5. `src/enter_exit.c` — exact wiring points
 
@@ -344,6 +368,19 @@ typedef struct {
 extern energy_power_config_t energy_power_config;
 ```
 
+> **Correction (verified 2026-06-10):** the `uint64_t socket_mask` / `device_mask` /
+> `power_*_mask` fields above should be **`BitSet`** to match the existing config code
+> (`bitset_parse_ranges`, punit masks). The `uint64_t` form is shown only because it makes
+> the bit-test logic in later snippets easy to read. Implement with `BitSet` + its
+> accessors. See "parse_index_list" under Supplementary Details.
+
+> **Ordering invariant:** `pinsight_energy_init()` (wired into `enter_pinsight_func`) reads
+> the discovered socket/device counts and applies the "default = all when mask unset"
+> fallback (see "Default socket/device mask"). This requires the config file to have been
+> **fully parsed and `energy_power_config_finalize()` already called** before enter runs.
+> The library constructor parses config before `enter_pinsight_func`, so this holds — but
+> if init is ever moved, preserve this ordering or the masks will be empty.
+
 Config parser populates the struct in two passes:
 
 1. **Parse `[Energy]`** — set `enabled`, `socket_mask` / `device_mask`; copy to
@@ -565,6 +602,14 @@ Fixed fields up to 4 sockets and 4 GPU devices — extend if needed. Unmeasured 
 0, which the analysis tool uses to skip them. `poll_seq` is a monotonic counter for
 ordering samples and detecting missed ticks.
 
+> **Per-node ceiling:** 4 CPU/4 GPU slots is the hard limit of this layout. A Tuolumne/
+> El Capitan node = 4× MI300A APUs, so `gpu0_mj..gpu3_mj` exactly covers one node's APUs —
+> fine for the target hardware, but note there is no headroom beyond 4. On MI300A the APU
+> reports **combined CPU+GPU+HBM package energy** via AMD-SMI (one number per APU), so the
+> four `gpu*_mj` slots are the meaningful signal there and the `cpu*_uj` sysfs slots may be
+> empty/redundant — label the field `apu_package_energy_mj` accordingly. If a future node
+> exposes >4 measurable sockets or devices, widen the field set (and the analysis tool).
+
 ### 1.5 Wire into `enter_exit.c`
 
 ```c
@@ -617,9 +662,18 @@ The energy delta slightly over-counts PInsight teardown overhead — negligible.
 
 - Delete `src/rapl.c` and `src/rapl.h`
 - Remove `ENERGY_LTTNG_UST_TP_ARGS`, `ENERGY_LTTNG_UST_TP_FIELDS`,
-  `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS` macros from `src/ompt_lttng_ust_tracepoint.h`
-- Remove all `#ifdef PINSIGHT_ENERGY` blocks from `src/ompt_callback.c`
-- Remove `package_energy` global variable from `src/ompt_callback.h` / `ompt_callback.c`
+  `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS` macros (and their empty `#else` counterparts)
+  from `src/ompt_lttng_ust_tracepoint.h` (~lines 62–84). These macros also appear in the
+  `LTTNG_UST_TRACEPOINT_EVENT_*` field/arg definitions further down the file — remove
+  every `ENERGY_LTTNG_UST_TP_ARGS` / `ENERGY_LTTNG_UST_TP_FIELDS` reference there too.
+- Sweep `src/ompt_callback.c`: remove all ~33 `#ifdef PINSIGHT_ENERGY` blocks, all 30
+  `rapl_sysfs_read_packages()` calls, and all 32 `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS`
+  tokens (see "Files to Read First" §4 — this is a full-file sweep, not a 4-block edit)
+- Remove the `#include "rapl.h"` and `static long long package_energy[MAX_PACKAGES];`
+  declaration (~line 22 of `ompt_callback.c`); check `ompt_callback.h` too
+- Recommended sequence: delete the three macros from `ompt_lttng_ust_tracepoint.h` first,
+  then let the compiler enumerate every leftover `ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS`
+  site as a build error and clean each one.
 
 ### 1.7 Analysis — what `PINSIGHT_ENERGY` gives you
 
@@ -815,6 +869,14 @@ expose per-component breakdown. Tracepoint field labeled `apu_package_energy_mj`
 
 ## Implementation Order
 
+> **Dev order vs. payoff order.** The steps below start with Intel CPU sysfs because it is
+> the fastest to validate (any Intel Linux box, no library deps) and proves the whole
+> pipeline — `energy.c` → dedicated tracepoint → `lttng view`. But the **deliverable for
+> this project's target hardware (Tuolumne/El Capitan MI300A) is the AMD GPU / APU path**
+> (`PINSIGHT_ENERGY_AMD_GPU` via AMD-SMI, step 6), which yields the combined APU package
+> energy. Don't treat steps 1–5 as the goal; they are scaffolding to de-risk step 6. On
+> MI300A the CPU-sysfs snapshots (steps 1–2) may be absent or redundant.
+
 ### `PINSIGHT_ENERGY` steps
 
 1. Write `src/energy.h` + `src/energy.c` — Intel CPU sysfs path only, no GPU.
@@ -935,33 +997,42 @@ void energy_power_config_finalize(void) {
 Call `energy_power_config_finalize()` after parsing the entire config file, not after
 each section — both sections must be fully parsed before resolving defaults.
 
-### `parse_index_list` — converting "0,2-4" to a bitmask
+### `parse_index_list` — converting "0,2-4" to a mask
+
+**Correction (verified 2026-06-10): reuse the existing parser; do NOT hand-roll `uint64_t`.**
+
+`trace_config_parse.c` already parses exactly this "0,2-4,6" / range syntax via
+`parse_range_list()` → `bitset_parse_ranges(BitSet *mask, const char *str)`
+([trace_config_parse.c:188](src/trace_config_parse.c#L188)). The codebase's mask type is
+`BitSet`, not `uint64_t`. Reuse it directly:
+- Consistency with how punits are already parsed and stored
+- Removes the silent 64-index cap baked into the `uint64_t` sketch below
+- `"all"` handling and comma/range tokenizing already implemented and tested
+
+Therefore the runtime config struct (see "Runtime Config Structure") should use `BitSet`
+for `socket_mask` / `device_mask` / `power_socket_mask` / `power_device_mask` rather than
+`uint64_t`, and the read/poll loops should test membership with the `BitSet` accessor
+(e.g. `bitset_test(&mask, s)`) instead of `mask & (1ULL << s)`. The `uint64_t` snippets
+throughout this plan are illustrative of the *logic* only — implement them against `BitSet`.
+
+The original `uint64_t` sketch (kept for reference — **do not implement as-is**):
 
 ```c
+/* SUPERSEDED by bitset_parse_ranges() — illustrative only */
 uint64_t parse_index_list(const char *s) {
-    /* "all" or absent → all bits set */
     if (strcmp(s, "all") == 0) return ~0ULL;
     uint64_t mask = 0;
-    /* tokenize by comma, then handle "N" or "N-M" per token */
     char buf[64]; strncpy(buf, s, sizeof(buf));
     char *tok = strtok(buf, ",");
     while (tok) {
         char *dash = strchr(tok, '-');
-        if (dash) {
-            int lo = atoi(tok), hi = atoi(dash + 1);
-            for (int i = lo; i <= hi && i < 64; i++) mask |= (1ULL << i);
-        } else {
-            int idx = atoi(tok);
-            if (idx >= 0 && idx < 64) mask |= (1ULL << idx);
-        }
+        if (dash) { int lo=atoi(tok), hi=atoi(dash+1); for(int i=lo;i<=hi&&i<64;i++) mask|=(1ULL<<i); }
+        else      { int idx=atoi(tok); if(idx>=0&&idx<64) mask|=(1ULL<<idx); }
         tok = strtok(NULL, ",");
     }
     return mask;
 }
 ```
-
-Check whether the existing punit range parser in `trace_config_parse.c` already does
-this — if so, reuse it directly rather than reimplementing.
 
 ### Default socket/device mask at `pinsight_energy_init()`
 
