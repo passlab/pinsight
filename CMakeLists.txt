@@ -120,8 +120,10 @@ if (PINSIGHT_BACKTRACE)
 endif()
 
 ## Energy tracing
+## NOTE: the new energy/power implementation (src/energy.c, dedicated tracepoint
+## provider) is added here once landed. The old RAPL piggy-back code (src/rapl.*)
+## has been removed.
 if (PINSIGHT_ENERGY)
-    list(APPEND SOURCE_FILES src/rapl.c src/rapl.h)
 endif()
 
 

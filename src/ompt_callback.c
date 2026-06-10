@@ -19,12 +19,6 @@
 // Configuration settings.
 static int debug_on;
 
-#ifdef PINSIGHT_ENERGY
-#include "rapl.h"
-// --------------------------------------------------------
-// RAPL package values.
-static long long package_energy[MAX_PACKAGES];
-#endif
 
 #include "ompt_callback.h"
 #include "pinsight_control_thread.h"
@@ -231,13 +225,10 @@ void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
                                    ompt_data_t *thread_data) {
   thread_data->ptr =
       (void *)init_thread_data(get_global_thread_num() /*, thread_type */);
-#ifdef PINSIGHT_ENERGY
-  rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-#endif
   if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
     lttng_ust_tracepoint(
         ompt_pinsight_lttng_ust, thread_begin,
-        (short)thread_type ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+        (short)thread_type);
   }
 
   // For initial thread, we need to setup the initial parallel region, which is
@@ -260,7 +251,7 @@ void on_ompt_callback_thread_begin(ompt_thread_t thread_type,
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_begin, 1,
                            ompt_parallel_team || ompt_parallel_invoker_runtime,
-                           NULL ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                           NULL);
     }
 
     // As if the initial parallel region starts/started
@@ -316,17 +307,14 @@ void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end,
                            ompt_parallel_team ||
                                ompt_parallel_invoker_runtime
-                                   ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                                  );
     }
     // lexgion_post_trace_update(lgp);
   } else {
   }
-#ifdef PINSIGHT_ENERGY
-  rapl_sysfs_read_packages(package_energy); // Read package energy counters.
-#endif
   if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index)) {
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, thread_end,
-                         0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                         0);
   }
 
 thread_end_report:
@@ -448,12 +436,6 @@ void on_ompt_callback_parallel_begin(
         /* this is redundant check since parallel_begin event should be
          * always enabled in the trace config */
     ) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
       void *enter_frame_ptr = (parent_task_frame == NULL)
                                   ? NULL
                                   : parent_task_frame->enter_frame.ptr;
@@ -462,7 +444,7 @@ void on_ompt_callback_parallel_begin(
 #endif
       lttng_ust_tracepoint(
           ompt_pinsight_lttng_ust, parallel_begin, requested_team_size, flag,
-          enter_frame_ptr ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+          enter_frame_ptr);
     }
   } else { // The MONITORING mode does not need to do anything
   }
@@ -484,17 +466,12 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
   assert(parallel_data->ptr == enclosing_parallel_lexgion_record);
   lgp->end_codeptr_ra = codeptr_ra;
   if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit) {
-#ifdef PINSIGHT_ENERGY
-    if (global_thread_num == 0) {
-      rapl_sysfs_read_packages(package_energy);
-    }
-#endif
 
 #ifdef PINSIGHT_BACKTRACE
     retrieve_backtrace();
 #endif
     lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_end,
-                         flag ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                         flag);
     /* Rate-limit only if this parallel region has address-specific config
      * or is the topmost (outermost) parallel region.  After lexgion_end()
      * popped the current record, current_record points to the parent.
@@ -582,17 +559,11 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
     if (lgp != NULL && PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_implicit_task)) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
 #ifdef PINSIGHT_BACKTRACE
       retrieve_backtrace();
 #endif
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_begin,
-                           team_size ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                           team_size);
     }
     break;
   }
@@ -616,17 +587,11 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
         PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && parallel_lgp->trace_bit &&
         lexgion_check_event_enabled(parallel_lgp, OpenMP_domain_index,
                                     ompt_callback_implicit_task)) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
 #ifdef PINSIGHT_BACKTRACE
       retrieve_backtrace();
 #endif
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, implicit_task_end,
-                           team_size ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                           team_size);
       /* No lexgion_post_trace_update here: implicit_task is associated
        * with the enclosing parallel region.  Rate-limiting for the
        * parallel region is enforced by the master thread at parallel_end.
@@ -684,18 +649,12 @@ void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_work)) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
 #ifdef PINSIGHT_BACKTRACE
       retrieve_backtrace();
 #endif
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_begin, (short)wstype,
                            codeptr_ra, (void *)0x000000, record->record_id,
-                           count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                           count);
     }
 
     switch (wstype) {
@@ -733,18 +692,12 @@ void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_work)) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
 #ifdef PINSIGHT_BACKTRACE
       retrieve_backtrace();
 #endif
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, work_end, (short)wstype,
                            lgp->codeptr_ra, codeptr_ra, record_id,
-                           count ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                           count);
       /* Rate-limit only if work region has its own lexgion, meaning user
        * provided an address-specific config for this work region. */
       if (work_has_own_lexgion) {
@@ -784,18 +737,12 @@ void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_masked)) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
 #ifdef PINSIGHT_BACKTRACE
       retrieve_backtrace();
 #endif
       lttng_ust_tracepoint(
           ompt_pinsight_lttng_ust, masked_begin, codeptr_ra, (void *)0x000000,
-          record->record_id ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+          record->record_id);
     }
     break;
   case ompt_scope_end:;
@@ -817,18 +764,12 @@ void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
     if (PINSIGHT_SHOULD_TRACE(OpenMP_domain_index) && lgp->trace_bit &&
         lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                     ompt_callback_masked)) {
-#ifdef PINSIGHT_ENERGY
-      if (global_thread_num == 0) {
-        rapl_sysfs_read_packages(
-            package_energy); // Read package energy counters.
-      }
-#endif
 #ifdef PINSIGHT_BACKTRACE
       retrieve_backtrace();
 #endif
       lttng_ust_tracepoint(ompt_pinsight_lttng_ust, masked_end, lgp->codeptr_ra,
                            codeptr_ra,
-                           record_id ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                           record_id);
       /* Rate-limit only if masked region has its own lexgion, meaning user
        * provided an address-specific config for this masked region. */
       if (masked_has_own_lexgion) {
@@ -879,34 +820,24 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * master thread */
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
           retrieve_backtrace();
 #endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                                parallel_join_sync_begin,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0)
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
         retrieve_backtrace();
 #endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                              barrier_explicit_sync_begin, (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
     case ompt_sync_region_barrier_implementation:
@@ -919,17 +850,12 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0)
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
         retrieve_backtrace();
 #endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                              barrier_implicit_sync_begin, (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
 #else // LLVM OpenMP runtime does not fully implement the different kinds of
@@ -950,17 +876,12 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         lexgion_record_t *record = (lexgion_record_t *)parallel_data->ptr;
         lgp = record->lgp;
         if (lgp->trace_bit) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
           retrieve_backtrace();
 #endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                                parallel_join_sync_begin,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit
@@ -974,18 +895,13 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
           retrieve_backtrace();
 #endif
           lttng_ust_tracepoint(
               ompt_pinsight_lttng_ust, barrier_implicit_sync_begin,
               (unsigned short)kind,
-              codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+              codeptr_ra);
         }
       }
       break;
@@ -1013,33 +929,23 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * implicit task */
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
           retrieve_backtrace();
 #endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_end,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0)
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
         retrieve_backtrace();
 #endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_explicit_sync_end,
                              (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
     case ompt_sync_region_barrier_implementation:
@@ -1052,17 +958,12 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0)
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
         retrieve_backtrace();
 #endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust, barrier_implicit_sync_end,
                              (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       enclosing_work_lgp = NULL; /* barrier done, clear work lgp */
       break;
@@ -1087,16 +988,11 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
          * implicit task */
         lgp = enclosing_parallel_lexgion_record->lgp;
         if (lgp->trace_bit) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
           retrieve_backtrace();
 #endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust, parallel_join_sync_end,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit
@@ -1110,18 +1006,13 @@ void on_ompt_callback_sync_region(ompt_sync_region_t kind,
         if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
 #ifdef PINSIGHT_BACKTRACE
           retrieve_backtrace();
 #endif
           lttng_ust_tracepoint(
               ompt_pinsight_lttng_ust, barrier_implicit_sync_end,
               (unsigned short)kind,
-              codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+              codeptr_ra);
         }
         enclosing_work_lgp = NULL; /* barrier done, clear work lgp */
       }
@@ -1161,29 +1052,19 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * master thread */
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                                parallel_join_sync_wait_begin,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0)
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-#endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                              barrier_explicit_sync_wait_begin,
                              (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
     case ompt_sync_region_barrier_implementation:
@@ -1197,15 +1078,10 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0)
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-#endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                              barrier_implicit_sync_wait_begin,
                              (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
 #else
@@ -1225,14 +1101,9 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         lexgion_record_t *record = (lexgion_record_t *)parallel_data->ptr;
         lgp = record->lgp;
         if (lgp->trace_bit) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                                parallel_join_sync_wait_begin,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit
@@ -1247,15 +1118,10 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
           lttng_ust_tracepoint(
               ompt_pinsight_lttng_ust, barrier_implicit_sync_wait_begin,
               (unsigned short)kind,
-              codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+              codeptr_ra);
         }
       }
       break;
@@ -1283,30 +1149,19 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
          * implicit task */
         if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                                parallel_join_sync_wait_end,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       }
       break;
     case ompt_sync_region_barrier_explicit: // barrier (explicit)
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0) {
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-        }
-#endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                              barrier_explicit_sync_wait_end,
                              (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
     case ompt_sync_region_barrier_implementation:
@@ -1319,16 +1174,10 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         lgp = enclosing_work_lgp;
       if (lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                       ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-        if (global_thread_num == 0) {
-          rapl_sysfs_read_packages(
-              package_energy); // Read package energy counters.
-        }
-#endif
         lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                              barrier_implicit_sync_wait_end,
                              (unsigned short)kind,
-                             codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                             codeptr_ra);
       }
       break;
 #else
@@ -1354,14 +1203,9 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         if (lgp == NULL)
           break; /* Safety: no valid lexgion context */
         if (lgp->trace_bit) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0)
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-#endif
           lttng_ust_tracepoint(ompt_pinsight_lttng_ust,
                                parallel_join_sync_wait_end,
-                               0 ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+                               0);
         }
       } else {
         /* implicit barrier in worksharing, single, sections, and explicit
@@ -1375,16 +1219,10 @@ void on_ompt_callback_sync_region_wait(ompt_sync_region_t kind,
         if (lgp->trace_bit &&
             lexgion_check_event_enabled(lgp, OpenMP_domain_index,
                                         ompt_callback_sync_region_wait)) {
-#ifdef PINSIGHT_ENERGY
-          if (global_thread_num == 0) {
-            rapl_sysfs_read_packages(
-                package_energy); // Read package energy counters.
-          }
-#endif
           lttng_ust_tracepoint(
               ompt_pinsight_lttng_ust, barrier_implicit_sync_wait_end,
               (unsigned short)kind,
-              codeptr_ra ENERGY_LTTNG_UST_TRACEPOINT_CALL_ARGS);
+              codeptr_ra);
         }
       }
       break;
@@ -1808,10 +1646,6 @@ int ompt_initialize(ompt_function_lookup_t lookup, int initial_device_num,
     printf("0: NULL_POINTER=%p\n", NULL);
   }
 
-#ifdef PINSIGHT_ENERGY
-  // Initialize RAPL subsystem.
-  rapl_sysfs_discover_valid();
-#endif
 
   // get_parallel_task_info();
   return 1; // success
