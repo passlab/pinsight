@@ -21,10 +21,27 @@ Examples:
     trace.sh ./traces/jacobi jacobi \\
       /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib \\
       ./test/jacobi 2048 2048
-    
+
     trace.sh ./traces/LULESH LULESH \\
       /opt/pinsight/lib/libpinsight.so /opt/llvm-install/lib:/opt/openmpi-install/lib \\
       mpirun -np 8 test/LULESH/build/lulesh2.0 -s 20
+
+    # AMD HIP/ROCm app with energy (lib built with PINSIGHT_HIP and/or
+    # PINSIGHT_ENERGY_AMD_GPU): prepend the ROCm lib dir for libroctracer64/libamd_smi.
+    trace.sh ./traces/vecadd vecadd \\
+      \$HOME/tools/pinsight/build_hip/libpinsight.so /opt/rocm-7.2.1/lib \\
+      ./test/rocm/vecadd_pinsight
+
+    # Python app (lib built with PINSIGHT_PYTHON): launch via "python3 -m pinsight"
+    # and export PYTHONPATH to the PInsight build dir (pinsight.py + _pinsight_python*.so)
+    # before calling this script.
+    #   export PYTHONPATH=\$HOME/tools/pinsight/build_omp
+    trace.sh ./traces/pyapp pyapp \\
+      \$HOME/tools/pinsight/build_omp/libpinsight.so : \\
+      python3 -m pinsight ./app.py
+
+Note: energy tracing needs no special launch — energy_enter/energy_exit are
+emitted automatically when the library is built with PINSIGHT_ENERGY[_AMD_GPU].
 EOF
 )
 
@@ -52,7 +69,8 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH_PREPEND}:$LD_LIBRARY_PATH
 
 echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
-# Clean the trace folder first (disabled: let caller manage trace dirs)\n# rm -rf ${TRACING_OUTPUT_DEST}
+# Clean the trace folder first (disabled: let caller manage trace dirs)
+# rm -rf ${TRACING_OUTPUT_DEST}
 
 # --------------------------------------------------------
 # Main tracing commands
@@ -61,11 +79,16 @@ echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 #lttng create ${TRACE_NAME}-tracing-session --snapshot --output="${TRACING_OUTPUT_DEST}"
 lttng create ${TRACE_NAME}-tracing-session --output="${TRACING_OUTPUT_DEST}"
 
-# Create and enable event rules.
+# Create and enable event rules — one per PInsight tracepoint provider.
+# (The catch-all "enable-event -u -a" below also captures these; this explicit
+# list keeps every PInsight domain traced even if that catch-all is disabled.)
 lttng enable-event --userspace pinsight_enter_exit_lttng_ust:'*'
 lttng enable-event --userspace ompt_pinsight_lttng_ust:'*'
 lttng enable-event --userspace pmpi_pinsight_lttng_ust:'*'
 lttng enable-event --userspace cupti_pinsight_lttng_ust:'*'
+lttng enable-event --userspace roctracer_pinsight_lttng_ust:'*'   # AMD HIP/ROCm
+lttng enable-event --userspace pysysmon_pinsight_lttng_ust:'*'    # Python sys.monitoring
+lttng enable-event --userspace energy_pinsight_lttng_ust:'*'      # Energy/power
 
 # Experimental kernel trace events
 #lttng enable-event --kernel --syscall open,write,read,close
