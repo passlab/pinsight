@@ -5,9 +5,13 @@
 // or disabled independently in an LTTng session
 // (e.g. `lttng enable-event -u 'energy_pinsight_lttng_ust:*'`).
 //
-// All energy events share one field layout: the common global fields plus a
-// fixed 4 CPU sockets + 4 GPU devices (unmeasured slots carry 0) and a `seq`
-// field (0 for enter/exit; a monotonic counter for the future energy_sample).
+// All energy events share one field layout: the common global fields plus two
+// dynamic-length sequences — one per-CPU-socket (microjoules), one per-GPU-device
+// (millijoules) — and a `seq` field (0 for enter/exit; a monotonic counter for the
+// future energy_sample). Using LTTng sequences instead of fixed cpuN/gpuN scalars
+// removes any ceiling on socket/device count: the sequence length is the number of
+// discovered sockets/devices, the element position is the socket/device index, and
+// an element is 0 when that index was not measured.
 //
 #undef LTTNG_UST_TRACEPOINT_PROVIDER
 #define LTTNG_UST_TRACEPOINT_PROVIDER energy_pinsight_lttng_ust
@@ -26,22 +30,18 @@
 #include "common_tp_fields_global_lttng_ust_tracepoint.h"
 #endif
 
-/* Shared argument and field lists for every energy event. */
+/* Shared argument and field lists for every energy event.
+ * cpu_uj / gpu_mj are pointers to the per-index arrays; num_cpu / num_gpu are
+ * their lengths (number of discovered sockets / devices). */
 #define ENERGY_LTTNG_UST_TP_ARGS \
-        uint64_t, cpu0_uj, uint64_t, cpu1_uj, uint64_t, cpu2_uj, uint64_t, cpu3_uj, \
-        uint64_t, gpu0_mj, uint64_t, gpu1_mj, uint64_t, gpu2_mj, uint64_t, gpu3_mj, \
+        unsigned int, num_cpu, uint64_t *, cpu_uj, \
+        unsigned int, num_gpu, uint64_t *, gpu_mj, \
         uint64_t, seq
 
 #define ENERGY_LTTNG_UST_TP_FIELDS \
         COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
-        lttng_ust_field_integer(uint64_t, cpu0_uj, cpu0_uj) \
-        lttng_ust_field_integer(uint64_t, cpu1_uj, cpu1_uj) \
-        lttng_ust_field_integer(uint64_t, cpu2_uj, cpu2_uj) \
-        lttng_ust_field_integer(uint64_t, cpu3_uj, cpu3_uj) \
-        lttng_ust_field_integer(uint64_t, gpu0_mj, gpu0_mj) \
-        lttng_ust_field_integer(uint64_t, gpu1_mj, gpu1_mj) \
-        lttng_ust_field_integer(uint64_t, gpu2_mj, gpu2_mj) \
-        lttng_ust_field_integer(uint64_t, gpu3_mj, gpu3_mj) \
+        lttng_ust_field_sequence(uint64_t, cpu_uj, cpu_uj, unsigned int, num_cpu) \
+        lttng_ust_field_sequence(uint64_t, gpu_mj, gpu_mj, unsigned int, num_gpu) \
         lttng_ust_field_integer(uint64_t, seq, seq)
 
 #define LTTNG_UST_TRACEPOINT_EVENT_ENERGY(event_name)        \

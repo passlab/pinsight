@@ -116,16 +116,14 @@ void pinsight_energy_snapshot_enter(void) {
   pinsight_energy_t e;
   pinsight_energy_read(&e);
   lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_enter,
-                       e.cpu_energy_uj[0], e.cpu_energy_uj[1], e.cpu_energy_uj[2],
-                       e.cpu_energy_uj[3], e.gpu_energy_mj[0], e.gpu_energy_mj[1],
-                       e.gpu_energy_mj[2], e.gpu_energy_mj[3], (uint64_t)0);
+                       (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
+                       (unsigned int)e.num_gpu_devices, e.gpu_energy_mj, (uint64_t)0);
 }
 
 void pinsight_energy_snapshot_exit(void) {
   pinsight_energy_t e;
   pinsight_energy_read(&e);
   lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_exit,
-                       e.cpu_energy_uj[0], e.cpu_energy_uj[1], e.cpu_energy_uj[2],
-                       e.cpu_energy_uj[3], e.gpu_energy_mj[0], e.gpu_energy_mj[1],
-                       e.gpu_energy_mj[2], e.gpu_energy_mj[3], (uint64_t)0);
+                       (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
+                       (unsigned int)e.num_gpu_devices, e.gpu_energy_mj, (uint64_t)0);
 }
