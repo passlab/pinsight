@@ -1,8 +1,45 @@
 # Energy/Power Measurement Implementation Plan
 
-**Date:** 2026-05-29 (verified & corrected against source 2026-06-10)
+**Date:** 2026-05-29 (verified 2026-06-10; Feature 1 implemented 2026-06-11)
 **Author:** Yonghong Yan
-**Status:** Planning — reviewed, ready to implement
+**Status:** Feature 1 (enter/exit energy) implemented & validated on Tuolumne MI300A;
+Feature 2 (power polling) and the `[Energy]`/`[Power]` config sections still TODO
+
+> **2026-06-11 implementation note (Feature 1).** Built on branch
+> `energy-power-cleanup`. Several design points evolved during implementation — where this
+> note conflicts with the older plan body below, this note wins:
+>
+> - **Pluggable backends, not one inline `energy.c`.** A small seam (`energy_backend.h`)
+>   with a coordinator (`energy.c`) + backends: `energy_sysfs.c` (powercap + amd_energy
+>   CPU), `energy_amd_smi.c` (`PINSIGHT_ENERGY_AMD_GPU`), `energy_variorum.c` (NODE stub,
+>   `PINSIGHT_ENERGY_VARIORUM`). Activation policy: NODE supersedes; ≤1 CPU; all GPU.
+> - **AMD-SMI is the working Tuolumne path.** On MI300A the native RAPL/amd_energy sysfs is
+>   root-locked (CVE-2020-8694) and the *system* Variorum returns `UNSUPPORTED_PLATFORM`.
+>   AMD-SMI (`amdsmi_get_energy_count`, ROCm 7.2.1) reads real per-APU combined CPU+GPU+HBM
+>   package energy as a non-root user (~120 W idle/APU). Variorum stays a stub.
+> - **Tracepoint fields are LTTng sequences (`cpu_uj`, `gpu_uj`, µJ)** — no 4-CPU/4-GPU
+>   ceiling (supersedes review-note #4 and the fixed-scalar layout below). Unit unified to µJ.
+> - **AMD-SMI teardown constraint.** Reading amdsmi on the main thread during DSO teardown
+>   *after* the constructor's read corrupts the heap (its gpu_metrics path). So `energy_enter`
+>   is read in the constructor, but **`energy_exit` is emitted from the control thread as it
+>   shuts down** (inside `pinsight_control_thread_stop`, after the `exit_pinsight` marker) —
+>   not the library destructor, and not `atexit` (a DSO's atexit runs during `_dl_fini`).
+>   `amdsmi_shut_down()` is never called (unsafe at teardown; the OS reclaims).
+> - **Config sections deferred.** Per-socket/device masks (`[Energy]`/`[Power]`) are not yet
+>   parsed; for now every discovered/readable source is read. The `BitSet` reuse (review
+>   note #2) still applies when that lands.
+
+> **2026-06-10 review note.** The plan was checked against the current tree. The
+> architecture stands as written. Five corrections were folded in inline (each marked
+> **Correction** / note where it applies):
+> 1. The `ompt_callback.c` cleanup is a **full-file sweep of ~30 sites**, not 4 blocks.
+> 2. Masks should use the existing **`BitSet`** type + `bitset_parse_ranges()`, not
+>    hand-rolled `uint64_t` — the range/list parser already exists.
+> 3. **Config must be parsed before `pinsight_energy_init()`** for default masks to work
+>    (holds today via the constructor; flagged so it stays that way).
+> 4. The tracepoint layout has a hard **4-CPU / 4-GPU ceiling**; fits one MI300A node.
+>    *(Superseded 2026-06-11: now LTTng sequences, no ceiling.)*
+> 5. Dev order (Intel CPU first) ≠ payoff order (**AMD APU path is the real deliverable**).
 
 > **2026-06-10 review note.** The plan was checked against the current tree. The
 > architecture stands as written. Five corrections were folded in inline (each marked
