@@ -155,12 +155,14 @@ if (PINSIGHT_ENERGY)
                 set(ROCM_PATH "/opt/rocm")
             endif()
         endif()
-        find_library(AMD_SMI_LIB amd_smi HINTS ${ROCM_PATH}/lib ${ROCM_PATH}/lib64)
-        if (NOT AMD_SMI_LIB)
-            message(FATAL_ERROR "PINSIGHT_ENERGY_AMD_GPU=TRUE but libamd_smi not found under ${ROCM_PATH}")
+        # Only the amdsmi.h header is needed at build time — libamd_smi is loaded
+        # at runtime with dlopen(RTLD_LOCAL) (see energy_amd_smi.c) to avoid its
+        # amd::smi:: symbols colliding with the host stack's librocm_smi64 (hwloc).
+        if (NOT EXISTS "${ROCM_PATH}/include/amd_smi/amdsmi.h")
+            message(FATAL_ERROR "PINSIGHT_ENERGY_AMD_GPU=TRUE but ${ROCM_PATH}/include/amd_smi/amdsmi.h not found")
         endif()
         include_directories(${ROCM_PATH}/include)
-        list(APPEND ENERGY_LIBS ${AMD_SMI_LIB})
+        list(APPEND ENERGY_LIBS ${CMAKE_DL_LIBS})  # dlopen/dlsym
     endif()
     if (PINSIGHT_ENERGY_VARIORUM)
         find_library(VARIORUM_LIB variorum)
