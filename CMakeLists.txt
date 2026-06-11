@@ -21,6 +21,14 @@ option(PINSIGHT_ENERGY_VARIORUM "Node energy via Variorum (portable, stub)" FALS
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
 option(PINSIGHT_PYTHON       "Build with Python tracing support" FALSE)
 
+# Backend-specific energy options imply the master PINSIGHT_ENERGY flag.
+# This MUST happen before configure_file() below, or pinsight_config.h is
+# generated from the stale cached value and the energy code is compiled in
+# but never invoked (enter_exit.c's #ifdef PINSIGHT_ENERGY sees it undefined).
+if (PINSIGHT_ENERGY_AMD_GPU OR PINSIGHT_ENERGY_VARIORUM)
+    set(PINSIGHT_ENERGY TRUE)
+endif()
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/pinsight_config.h.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/src/pinsight_config.h" @ONLY)
 
@@ -126,12 +134,9 @@ endif()
 ##   CPU (powercap/amd_energy) : sysfs, no external library
 ##   AMD GPU/APU               : AMD-SMI  (PINSIGHT_ENERGY_AMD_GPU)
 ##   Node (Variorum, stub)     : libvariorum (PINSIGHT_ENERGY_VARIORUM)
-## GPU/Variorum options imply PINSIGHT_ENERGY. The old RAPL piggy-back code
-## (src/rapl.*) has been removed.
-if (PINSIGHT_ENERGY_AMD_GPU OR PINSIGHT_ENERGY_VARIORUM)
-    set(PINSIGHT_ENERGY TRUE)
-endif()
-
+## GPU/Variorum options imply PINSIGHT_ENERGY (enforced before configure_file,
+## near the option() declarations). The old RAPL piggy-back code (src/rapl.*)
+## has been removed.
 if (PINSIGHT_ENERGY)
     list(APPEND SOURCE_FILES
             src/energy.c
