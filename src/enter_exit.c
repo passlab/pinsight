@@ -7,6 +7,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef PINSIGHT_ENERGY
+#include "energy.h"
+#endif
+
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "enter_exit_lttng_ust_tracepoint.h"
@@ -40,6 +44,11 @@ void enter_pinsight_func() {
   pid = getpid();
   gethostname(hostname, 48);
   // printf("entering pinsight at host: %s by process: %d\n", hostname, pid);
+#ifdef PINSIGHT_ENERGY
+  /* Baseline energy snapshot precedes the enter_pinsight app-start marker. */
+  pinsight_energy_init();
+  pinsight_energy_snapshot_enter();
+#endif
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 
   initial_setup_trace_config();
@@ -55,8 +64,6 @@ void enter_pinsight_func() {
    * the control thread never races with the initial enable calls. */
   pinsight_control_thread_start();
   pinsight_install_signal_handler();
-#ifdef PINSIGHT_ENERGY
-#endif
 #ifdef PINSIGHT_BACKTRACE
 #endif
 }
@@ -72,4 +79,9 @@ void exit_pinsight_func() {
 #endif
   /* Stop the control thread after domain finalization */
   pinsight_control_thread_stop();
+#ifdef PINSIGHT_ENERGY
+  /* Final energy snapshot follows the exit_pinsight app-end marker. */
+  pinsight_energy_snapshot_exit();
+  pinsight_energy_fini();
+#endif
 }

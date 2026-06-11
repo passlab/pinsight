@@ -119,11 +119,16 @@ if (PINSIGHT_BACKTRACE)
             )
 endif()
 
-## Energy tracing
-## NOTE: the new energy/power implementation (src/energy.c, dedicated tracepoint
-## provider) is added here once landed. The old RAPL piggy-back code (src/rapl.*)
-## has been removed.
+## Energy tracing — dedicated energy.c + its own LTTng provider.
+## CPU energy (Intel/AMD via powercap sysfs) needs no external library.
+## GPU paths (NVML / AMD-SMI / Level-Zero) are added under their own options
+## in later steps. The old RAPL piggy-back code (src/rapl.*) has been removed.
 if (PINSIGHT_ENERGY)
+    list(APPEND SOURCE_FILES
+            src/energy.c
+            src/energy.h
+            src/energy_lttng_ust_tracepoint.h
+            )
 endif()
 
 
