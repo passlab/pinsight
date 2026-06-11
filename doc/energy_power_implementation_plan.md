@@ -41,16 +41,90 @@ Feature 2 (power polling) and the `[Energy]`/`[Power]` config sections still TOD
 >    *(Superseded 2026-06-11: now LTTng sequences, no ceiling.)*
 > 5. Dev order (Intel CPU first) ≠ payoff order (**AMD APU path is the real deliverable**).
 
-> **2026-06-10 review note.** The plan was checked against the current tree. The
-> architecture stands as written. Five corrections were folded in inline (each marked
-> **Correction** / note where it applies):
-> 1. The `ompt_callback.c` cleanup is a **full-file sweep of ~30 sites**, not 4 blocks.
-> 2. Masks should use the existing **`BitSet`** type + `bitset_parse_ranges()`, not
->    hand-rolled `uint64_t` — the range/list parser already exists.
-> 3. **Config must be parsed before `pinsight_energy_init()`** for default masks to work
->    (holds today via the constructor; flagged so it stays that way).
-> 4. The tracepoint layout has a hard **4-CPU / 4-GPU ceiling**; fits one MI300A node.
-> 5. Dev order (Intel CPU first) ≠ payoff order (**AMD APU path is the real deliverable**).
+---
+
+## Current Status (2026-06-11) — read this first to continue the work
+
+All work is on branch `energy-power-cleanup`. Implementation commits, in order:
+
+| Commit | What |
+|--------|------|
+| `5abef0d` | Removed old RAPL piggy-back (rapl.c/h, ~30-site ompt_callback.c sweep, ENERGY macros) |
+| `6cf7258` | Feature 1: enter/exit snapshots, dedicated `energy_pinsight_lttng_ust` provider, powercap CPU |
+| `658d3d9` | Tracepoint fields → LTTng dynamic sequences (`cpu_uj`/`gpu_uj`), no socket/device ceiling |
+| `509dc7e` | Pluggable backends: AMD-SMI (APU/GPU, **the working MI300A path**), amd_energy CPU, Variorum stub; energy_exit moved to control thread |
+
+### What works today
+
+- **`PINSIGHT_ENERGY`** (Feature 1): `energy_enter` at library constructor, `energy_exit`
+  from the control thread at shutdown. Two µJ sequences per event; delta/duration gives
+  total J and average W per source.
+- **Backends** (`src/energy_backend.h` seam, `src/energy.c` coordinator; activation:
+  NODE supersedes → ≤1 CPU → all GPU):
+  - `energy_sysfs.c` — powercap(intel-rapl) + amd_energy(hwmon). Root-locked on LC
+    (CVE-2020-8694) → auto-skipped with a stderr note. Value-validation still needs a
+    root/group-permitted machine.
+  - `energy_amd_smi.c` — `PINSIGHT_ENERGY_AMD_GPU`, links libamd_smi (ROCm). **Validated
+    on Tuolumne as non-root**: 4× MI300A per-APU combined CPU+GPU+HBM package energy,
+    ~120 W idle/APU, correct deltas.
+  - `energy_variorum.c` — `PINSIGHT_ENERGY_VARIORUM`, placeholder stub (system Variorum
+    doesn't support MI300A).
+- **Validated end-to-end** on tuolumne2151: LD_PRELOAD → lttng session → babeltrace2 shows
+  both events, non-zero `gpu_uj`, clean exit.
+
+### TODO queue (dependency order)
+
+1. `[Energy]` config section — per-platform on/off + socket/device `BitSet` masks
+   (parser notes in this doc; `bitset_parse_ranges()` exists).
+2. Feature 2 `PINSIGHT_POWER` — control-thread timed polling + `energy_sample` (§2.x);
+   on/off design decided: `enabled` master switch + `follow_mode` + `pinsight_power_on/off()` API.
+3. `pinsight_energy_marker(label)` — arbitrary-point snapshots; primitive for the future
+   `pinsight_trace_begin/end` user-region API (layered approach agreed).
+4. NVML / Level-Zero GPU backends; real Variorum backend if a supporting build appears.
+5. Analysis-side: per-source J/W summary, Intel wraparound correction
+   (`max_energy_range_uj` is already captured at init).
+
+### Hard-won constraints — do not regress
+
+- **AMD-SMI teardown**: never call amdsmi (read or `amdsmi_shut_down()`) on the main
+  thread during DSO teardown after the constructor has read it — heap corruption in its
+  gpu_metrics path. `atexit` does NOT help (DSO atexit runs in `_dl_fini`). The exit read
+  must stay on a **live thread** → it lives at the end of `pinsight_control_loop()`.
+- **Fresh CMake on Tuolumne picks the system LTTng 2.8** and fails; reconfigure the
+  existing `build_omp/`/`build_hip/` (they carry the ~/local LTTng 2.13 paths).
+
+### Running an application evaluation on Tuolumne (current procedure)
+
+```bash
+# 1. Build (once): reconfigure the existing build dir, do NOT cmake from scratch
+cd build_omp   # or build_hip for HIP-traced apps
+cmake -DPINSIGHT_ENERGY_AMD_GPU=TRUE -DROCM_PATH=/opt/rocm-7.2.1 . && make
+
+# 2. Environment
+export PATH=$HOME/local/bin:$PATH
+export LD_LIBRARY_PATH=$HOME/local/lib:/opt/rocm-7.2.1/lib:$LD_LIBRARY_PATH
+
+# 3. Trace session
+lttng create esess --output=$PWD/energy_trace
+lttng enable-event -u 'energy_pinsight_lttng_ust:*'   # add other providers as needed
+lttng start
+LD_PRELOAD=/path/to/libpinsight.so <app> <args>
+lttng stop && lttng destroy
+
+# 4. Read out (per source i): J = (exit.gpu_uj[i] - enter.gpu_uj[i]) / 1e6
+#                             W = J / ((exit.ts - enter.ts) in seconds)
+babeltrace2 energy_trace | grep energy_
+```
+
+Evaluation caveats:
+- **MI300A semantics**: `gpu_uj[i]` is APU *i*'s **combined CPU+GPU+HBM package** energy —
+  there is no CPU/GPU split on this hardware. `cpu_uj` is empty (RAPL root-locked).
+- **Multi-rank nodes**: every rank's libpinsight reads the same 4 node-local APU counters.
+  For node energy, use **one rank per hostname** (events carry `hostname` + `pid`);
+  summing across ranks on the same node multiple-counts.
+- **Baseline**: idle is ~120 W/APU — subtract an idle-run baseline if you want
+  application-attributable energy rather than wall-clock node energy.
+- **Short runs**: counters update at ~ms scale; runs ≪ 1 s give noisy W estimates.
 
 ---
 
