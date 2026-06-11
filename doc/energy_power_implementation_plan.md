@@ -238,12 +238,25 @@ intel_gpu           = off       # requires PINSIGHT_ENERGY_INTEL_GPU
 
 ### `[Power]` section — per-platform poll intervals + independent socket/device selection
 
-`0` for an interval disables polling for that platform — the interval is the enable/
-disable control, no separate flag needed. Socket/device keys are **optional**: if absent,
-the value from `[Energy]` is inherited; if present, it applies to polling only.
+Two granularities of on/off:
+- **Per-platform:** `*_poll_interval_ms = 0` disables polling for that one platform — the
+  interval is the enable/disable control, no separate per-platform flag needed.
+- **Whole-feature:** `enabled = off` disables *all* polling at once (forces `tick_ms = 0`,
+  control thread reverts to the blocking `sem_wait` path with zero overhead) regardless of
+  the per-platform intervals. This is the natural switch to flip live (see "Runtime on/off
+  control" below) without having to zero six interval keys. **Default when the key is
+  absent: `on`** — so an existing `[Power]` section with only intervals keeps working
+  (the parser must initialize `power_enabled = 1`).
+
+Socket/device keys are **optional**: if absent, the value from `[Energy]` is inherited; if
+present, it applies to polling only.
 
 ```ini
 [Power]
+enabled      = on        # whole-feature master switch; off → no polling at all
+follow_mode  = off       # on → poll only while some domain is MONITORING/TRACING
+                         #      (phase-gated power; reuses region-of-interest config)
+
 # Per-platform poll interval in ms; 0 = disabled for that platform
 # Per-platform socket/device selection (optional — inherits from [Energy] if absent)
 intel_cpu_poll_interval_ms   = 10
@@ -362,7 +375,14 @@ typedef struct {
     gpu_energy_config_t nvidia_gpu;
     gpu_energy_config_t amd_gpu;
     gpu_energy_config_t intel_gpu;
-    int                 tick_ms;   /* GCD of all active poll_interval_ms; 0 = no polling */
+
+    /* PINSIGHT_POWER — whole-feature on/off control ([Power] section) */
+    int      power_enabled;        /* [Power] enabled; 0 forces tick_ms=0 (no polling) */
+    int      follow_mode;          /* [Power] follow_mode; 1 = poll only when a domain
+                                      is MONITORING/TRACING (phase-gated power) */
+
+    int      tick_ms;              /* GCD of all active poll_interval_ms; 0 = no polling.
+                                      Forced to 0 when power_enabled == 0. */
 } energy_power_config_t;
 
 extern energy_power_config_t energy_power_config;
@@ -577,61 +597,63 @@ hardware does not expose per-component breakdown. Tracepoint field should be lab
 New file: `src/energy_lttng_ust_tracepoint.h`. Separate provider — decoupled from OpenMP,
 MPI, CUDA, HIP, and Python providers. Can be enabled/disabled in LTTng independently.
 
-Three tracepoints share the same field layout:
+Three tracepoints share the same field layout. **Implemented (2026-06-10) with LTTng
+dynamic-length sequences, not fixed cpuN/gpuN scalars** — this removes any ceiling on
+socket/device count:
 
 ```c
-/* Fields carried by energy_enter, energy_exit, and energy_sample */
+/* Fields carried by energy_enter, energy_exit, and energy_sample.
+ * TP_ARGS pass (count, array_ptr) pairs:
+ *   unsigned int num_cpu, uint64_t *cpu_uj,
+ *   unsigned int num_gpu, uint64_t *gpu_mj,
+ *   uint64_t seq                                              */
 LTTNG_UST_TP_FIELDS(
-    COMMON_LTTNG_UST_TP_FIELDS_GLOBAL          /* pid, hostname, timestamp */
-    /* CPU — one field per socket slot, 0 if not measured */
-    lttng_ust_field_integer(uint64_t, cpu0_uj, cpu0_uj)
-    lttng_ust_field_integer(uint64_t, cpu1_uj, cpu1_uj)
-    lttng_ust_field_integer(uint64_t, cpu2_uj, cpu2_uj)
-    lttng_ust_field_integer(uint64_t, cpu3_uj, cpu3_uj)
-    /* GPU — one field per device slot, 0 if not measured */
-    lttng_ust_field_integer(uint64_t, gpu0_mj, gpu0_mj)
-    lttng_ust_field_integer(uint64_t, gpu1_mj, gpu1_mj)
-    lttng_ust_field_integer(uint64_t, gpu2_mj, gpu2_mj)
-    lttng_ust_field_integer(uint64_t, gpu3_mj, gpu3_mj)
-    /* PINSIGHT_POWER only — 0 in energy_enter/exit */
-    lttng_ust_field_integer(uint64_t, poll_seq, poll_seq)
+    COMMON_LTTNG_UST_TP_FIELDS_GLOBAL          /* hostname, pid (+ LTTng timestamp) */
+    /* per-CPU-socket microjoules; length = num discovered sockets, position = socket index */
+    lttng_ust_field_sequence(uint64_t, cpu_uj, cpu_uj, unsigned int, num_cpu)
+    /* per-GPU-device millijoules; length = num discovered devices, position = device index */
+    lttng_ust_field_sequence(uint64_t, gpu_mj, gpu_mj, unsigned int, num_gpu)
+    /* 0 in energy_enter/exit; monotonic counter for energy_sample (PINSIGHT_POWER) */
+    lttng_ust_field_integer(uint64_t, seq, seq)
 )
 ```
 
-Fixed fields up to 4 sockets and 4 GPU devices — extend if needed. Unmeasured slots carry
-0, which the analysis tool uses to skip them. `poll_seq` is a monotonic counter for
-ordering samples and detecting missed ticks.
+LTTng emits the length automatically as a hidden field (`_cpu_uj_length` / `_gpu_mj_length`),
+so analysis reads `cpu_uj[s]` for socket `s` over `range(_cpu_uj_length)`. An element is 0
+when that index was not measured (unselected or unreadable). `seq` orders samples and
+detects missed ticks.
 
-> **Per-node ceiling:** 4 CPU/4 GPU slots is the hard limit of this layout. A Tuolumne/
-> El Capitan node = 4× MI300A APUs, so `gpu0_mj..gpu3_mj` exactly covers one node's APUs —
-> fine for the target hardware, but note there is no headroom beyond 4. On MI300A the APU
-> reports **combined CPU+GPU+HBM package energy** via AMD-SMI (one number per APU), so the
-> four `gpu*_mj` slots are the meaningful signal there and the `cpu*_uj` sysfs slots may be
-> empty/redundant — label the field `apu_package_energy_mj` accordingly. If a future node
-> exposes >4 measurable sockets or devices, widen the field set (and the analysis tool).
+> **No per-node ceiling.** Sequences scale to any socket/device count — an 8-socket NUMA
+> node or 8-GPU node just emits a longer sequence, no code change. On MI300A the APU
+> reports **combined CPU+GPU+HBM package energy** via AMD-SMI (one number per APU); a
+> 4-APU node emits `_gpu_mj_length = 4`. Label that value `apu_package_energy_mj` in the
+> analysis layer; on MI300A the `cpu_uj` sysfs sequence may be empty/redundant.
 
 ### 1.5 Wire into `enter_exit.c`
+
+**As implemented (2026-06-10):** the tracepoint emission lives in `energy.c`
+(`pinsight_energy_snapshot_enter/exit()`), so the dedicated provider is defined in a
+single translation unit and `enter_exit.c` never touches it — cleaner than emitting the
+tracepoint inline, and it keeps the sequence-arg marshalling in one place.
 
 ```c
 void enter_pinsight_func() {
     pid = getpid(); gethostname(hostname, 48);
 #ifdef PINSIGHT_ENERGY
+    /* Baseline energy snapshot precedes the enter_pinsight app-start marker. */
     pinsight_energy_init();
-    pinsight_energy_t e = {0};
-    pinsight_energy_read(&e);
-    lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_enter,
-        e.cpu_energy_uj[0], e.cpu_energy_uj[1], e.cpu_energy_uj[2], e.cpu_energy_uj[3],
-        e.gpu_energy_mj[0], e.gpu_energy_mj[1], e.gpu_energy_mj[2], e.gpu_energy_mj[3], 0);
+    pinsight_energy_snapshot_enter();   /* reads + emits energy_enter (cpu_uj/gpu_mj seqs) */
 #endif
     lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
-    pinsight_control_thread_start();
-    pinsight_install_signal_handler();
+    initial_setup_trace_config();
 #ifdef PINSIGHT_CUDA
     LTTNG_CUPTI_Init();
 #endif
 #ifdef PINSIGHT_HIP
     LTTNG_ROCTRACER_Init();
 #endif
+    pinsight_control_thread_start();
+    pinsight_install_signal_handler();
 }
 
 void exit_pinsight_func() {
@@ -644,14 +666,22 @@ void exit_pinsight_func() {
 #endif
     pinsight_control_thread_stop();
 #ifdef PINSIGHT_ENERGY
-    pinsight_energy_t e = {0};
-    pinsight_energy_read(&e);
-    lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_exit,
-        e.cpu_energy_uj[0], e.cpu_energy_uj[1], e.cpu_energy_uj[2], e.cpu_energy_uj[3],
-        e.gpu_energy_mj[0], e.gpu_energy_mj[1], e.gpu_energy_mj[2], e.gpu_energy_mj[3], 0);
+    /* Final energy snapshot follows the exit_pinsight app-end marker. */
+    pinsight_energy_snapshot_exit();    /* reads + emits energy_exit */
     pinsight_energy_fini();
 #endif
 }
+
+/* in energy.c — the provider is DEFINEd here and nowhere else:
+ *   #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
+ *   #define LTTNG_UST_TRACEPOINT_DEFINE
+ *   #include "energy_lttng_ust_tracepoint.h"
+ * void pinsight_energy_snapshot_enter(void) {
+ *     pinsight_energy_t e; pinsight_energy_read(&e);
+ *     lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_enter,
+ *         (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
+ *         (unsigned int)e.num_gpu_devices, e.gpu_energy_mj, (uint64_t)0);
+ * }                                                                          */
 ```
 
 `energy_enter` fires before `enter_pinsight` (baseline precedes app-start marker).
@@ -682,13 +712,14 @@ enter = trace.find_event("energy_pinsight_lttng_ust:energy_enter")
 exit  = trace.find_event("energy_pinsight_lttng_ust:energy_exit")
 duration_s = (exit.timestamp - enter.timestamp) / 1e9
 
-for s in range(4):
-    delta_uj = exit[f"cpu{s}_uj"] - enter[f"cpu{s}_uj"]
+# cpu_uj / gpu_mj are sequences; iterate over their length (no fixed 0..3 loop)
+for s in range(len(enter["cpu_uj"])):
+    delta_uj = exit["cpu_uj"][s] - enter["cpu_uj"][s]
     if delta_uj > 0:
         print(f"CPU socket {s}: {delta_uj/1e6:.3f} J, avg {delta_uj/1e6/duration_s:.2f} W")
 
-for d in range(4):
-    delta_mj = exit[f"gpu{d}_mj"] - enter[f"gpu{d}_mj"]
+for d in range(len(enter["gpu_mj"])):
+    delta_mj = exit["gpu_mj"][d] - enter["gpu_mj"][d]
     if delta_mj > 0:
         print(f"GPU device {d}: {delta_mj/1e3:.3f} J, avg {delta_mj/1e3/duration_s:.2f} W")
 ```
@@ -788,6 +819,12 @@ static void pinsight_control_energy_sample(uint64_t tick) {
     int tick_ms = cfg->tick_ms;
     pinsight_energy_t e = {0};
 
+    /* follow_mode: skip the whole sample unless some domain is actively
+       MONITORING/TRACING — phase-gated power, reuses region-of-interest config.
+       This is a one-way READ of the domain mode flags; energy stays non-domain. */
+    if (cfg->follow_mode && !pinsight_any_domain_active())
+        return;
+
 #define SHOULD_POLL(platform_ms) \
     ((platform_ms) > 0 && (tick % ((platform_ms) / tick_ms) == 0))
 
@@ -801,11 +838,9 @@ static void pinsight_control_energy_sample(uint64_t tick) {
     if (SHOULD_POLL(cfg->intel_gpu.poll_interval_ms))   pinsight_energy_poll_intel_gpu(&e);
 
     lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_sample,
-        e.cpu_energy_uj[0], e.cpu_energy_uj[1],
-        e.cpu_energy_uj[2], e.cpu_energy_uj[3],
-        e.gpu_energy_mj[0], e.gpu_energy_mj[1],
-        e.gpu_energy_mj[2], e.gpu_energy_mj[3],
-        tick);
+        (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
+        (unsigned int)e.num_gpu_devices, e.gpu_energy_mj,
+        tick);   /* same sequence-based signature as energy_enter/exit */
 }
 ```
 
@@ -816,11 +851,63 @@ read cost matters at ~10 ms intervals, unlike the twice-per-run `PINSIGHT_ENERGY
 ### 2.4 SIGUSR1 reload interaction
 
 On config reload: re-parse `[Energy]` and `[Power]` sections, update
-`energy_power_config`, recompute `tick_ms = GCD(all active intervals)`. The next loop
-iteration picks up the new `tick_ms` naturally — enabling or disabling platforms, changing
-intervals, or changing socket/device masks all take effect without restart.
+`energy_power_config`, recompute `tick_ms = GCD(all active intervals)` **and force
+`tick_ms = 0` if `power_enabled == 0`**. The next loop iteration picks up the new `tick_ms`
+naturally — enabling or disabling platforms, flipping the `enabled` master switch, changing
+intervals, toggling `follow_mode`, or changing socket/device masks all take effect without
+restart.
 
-### 2.5 Analysis — what `PINSIGHT_POWER` gives you
+### 2.5 Runtime on/off control — three layered mechanisms
+
+Three independent ways to turn polling on and off, in order of granularity. **None requires
+new control-thread machinery** — they all funnel through the existing `tick_ms` / mode
+state the control thread already reads each iteration.
+
+**(1) Whole-feature master switch — `[Power] enabled = on/off` (static or live).**
+`enabled = off` forces `tick_ms = 0` in `energy_power_config_finalize()`, so the control
+loop stays on the blocking `sem_wait` path — zero overhead, identical to `PINSIGHT_POWER`
+unset. To toggle **live**, edit the config and `kill -USR1 <pid>`: the existing reload
+([pinsight_control_thread.c:210](src/pinsight_control_thread.c#L210)) re-parses and the
+accompanying `sem_post` wakes the loop, so the change lands on the very next iteration. No
+new mechanism — this reuses SIGUSR1 reload (§2.4).
+
+**(2) Phase-gated polling — `[Power] follow_mode = on`.** When set, the sample helper polls
+only while at least one domain is in `MONITORING`/`TRACING` (the gate at the top of
+`pinsight_control_energy_sample`). This makes the power profile automatically track the
+regions of interest the user already configured via lexgion mode control, with **no app
+changes**. It is a one-way *read* of `domain_default_trace_config[d].mode` — energy is not
+made a domain, consistent with the "Energy/Power is NOT a domain" decision. Implement a
+small helper:
+
+```c
+/* in pinsight_control_thread.c — true if any domain is MONITORING or TRACING */
+int pinsight_any_domain_active(void) {
+    for (int d = 0; d < num_domain; d++) {
+        pinsight_domain_mode_t m = domain_default_trace_config[d].mode;
+        if (m == PINSIGHT_DOMAIN_MONITORING || m == PINSIGHT_DOMAIN_TRACING)
+            return 1;
+    }
+    return 0;
+}
+```
+
+**(3) Programmatic API — `pinsight_power_on()` / `pinsight_power_off()`.** For precise,
+source-level region-of-interest control the application brackets a region directly. These
+set a `volatile int power_runtime_gate` checked alongside `follow_mode` in the sample
+helper (gate closed → skip sampling), and are exported from `enter_exit.c` like the other
+app-facing entry points. The most precise of the three, at the cost of touching app source.
+
+```c
+/* public API (declared in a pinsight app header, defined in enter_exit.c) */
+void pinsight_power_off(void);   /* close the gate — stop emitting energy_sample */
+void pinsight_power_on(void);    /* open the gate — resume */
+```
+
+The three compose: `enabled` is the master (off ⇒ nothing polls); within that,
+`follow_mode` and the API gate *whether a given tick emits a sample*. The poll-interval
+keys still set the *rate*.
+
+### 2.6 Analysis — what `PINSIGHT_POWER` gives you
 
 `energy_sample` events are interleaved with OMPT/HIP/MPI/Python events on the same LTTng
 timeline. Per-phase power attribution by linear interpolation:
@@ -834,20 +921,21 @@ for region in regions:
     before = last_sample_before(samples, region.t_begin)
     after  = first_sample_after(samples, region.t_end)
     fraction = (region.t_end - region.t_begin) / (after.ts - before.ts)
-    energy_J = (after.cpu0_uj - before.cpu0_uj) / 1e6 * fraction
+    energy_J = (after["cpu_uj"][0] - before["cpu_uj"][0]) / 1e6 * fraction  # socket 0
     power_W  = energy_J / ((region.t_end - region.t_begin) / 1e9)
 ```
 
-### 2.6 `PINSIGHT_POWER` file change summary
+### 2.7 `PINSIGHT_POWER` file change summary
 
 | Action | File |
 |--------|------|
 | **Modified** | `src/energy.h` — add `pinsight_energy_poll_cpu/gpu()` using `power_socket/device_mask`; add interval defaults |
 | **Modified** | `src/energy.c` — implement poll variants + persistent fds for CPU sysfs polling path |
 | **Modified** | `src/energy_lttng_ust_tracepoint.h` — add `energy_sample` tracepoint |
-| **Modified** | `src/pinsight_control_thread.c` — add timed loop + `energy_sample` emission |
-| **Modified** | `src/trace_config.h` — add poll intervals to `energy_power_config_t` |
-| **Modified** | `src/trace_config_parse.c` — parse `[Power]` section + compute `tick_ms` |
+| **Modified** | `src/pinsight_control_thread.c` — timed loop + `energy_sample` emission; `pinsight_any_domain_active()`; `follow_mode`/runtime-gate checks |
+| **Modified** | `src/enter_exit.c` — export `pinsight_power_on()` / `pinsight_power_off()` + `power_runtime_gate` |
+| **Modified** | `src/trace_config.h` — add poll intervals + `power_enabled` + `follow_mode` to `energy_power_config_t` |
+| **Modified** | `src/trace_config_parse.c` — parse `[Power]` section (incl. `enabled`, `follow_mode`); force `tick_ms=0` when disabled; compute `tick_ms` |
 
 ---
 
@@ -991,6 +1079,9 @@ void energy_power_config_finalize(void) {
         cfg.intel_cpu.power_socket_mask = cfg.intel_cpu.socket_mask;
     /* ... same for all platforms ... */
     cfg.tick_ms = compute_tick_ms(&cfg);
+    /* whole-feature master switch: off ⇒ no polling regardless of intervals */
+    if (!cfg.power_enabled)
+        cfg.tick_ms = 0;
 }
 ```
 
