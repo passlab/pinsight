@@ -77,11 +77,9 @@ void exit_pinsight_func() {
 #ifdef PINSIGHT_HIP
   LTTNG_ROCTRACER_Fini();
 #endif
-  /* Stop the control thread after domain finalization */
+  /* Stop the control thread after domain finalization. The control thread emits
+   * the closing energy_exit snapshot as it shuts down (inside this stop call) —
+   * it must run on a live thread, not this destructor, because AMD-SMI is unsafe
+   * to read on the main thread during DSO teardown. See pinsight_control_thread.c. */
   pinsight_control_thread_stop();
-#ifdef PINSIGHT_ENERGY
-  /* Final energy snapshot follows the exit_pinsight app-end marker. */
-  pinsight_energy_snapshot_exit();
-  pinsight_energy_fini();
-#endif
 }

@@ -16,6 +16,8 @@ option(PINSIGHT_MPI          "Build with MPI support"          TRUE)
 option(PINSIGHT_CUDA         "Build with CUDA support"         TRUE)
 option(PINSIGHT_HIP          "Build with HIP/ROCm support"     FALSE)
 option(PINSIGHT_ENERGY       "Build with Energy tracing"       FALSE)
+option(PINSIGHT_ENERGY_AMD_GPU "AMD GPU/APU energy via AMD-SMI" FALSE)
+option(PINSIGHT_ENERGY_VARIORUM "Node energy via Variorum (portable, stub)" FALSE)
 option(PINSIGHT_BACKTRACE    "Build with Backtrace enabled"    FALSE)
 option(PINSIGHT_PYTHON       "Build with Python tracing support" FALSE)
 
@@ -119,16 +121,50 @@ if (PINSIGHT_BACKTRACE)
             )
 endif()
 
-## Energy tracing — dedicated energy.c + its own LTTng provider.
-## CPU energy (Intel/AMD via powercap sysfs) needs no external library.
-## GPU paths (NVML / AMD-SMI / Level-Zero) are added under their own options
-## in later steps. The old RAPL piggy-back code (src/rapl.*) has been removed.
+## Energy tracing — dedicated energy.c coordinator + pluggable backends, each
+## behind its own option, all emitting through one LTTng provider.
+##   CPU (powercap/amd_energy) : sysfs, no external library
+##   AMD GPU/APU               : AMD-SMI  (PINSIGHT_ENERGY_AMD_GPU)
+##   Node (Variorum, stub)     : libvariorum (PINSIGHT_ENERGY_VARIORUM)
+## GPU/Variorum options imply PINSIGHT_ENERGY. The old RAPL piggy-back code
+## (src/rapl.*) has been removed.
+if (PINSIGHT_ENERGY_AMD_GPU OR PINSIGHT_ENERGY_VARIORUM)
+    set(PINSIGHT_ENERGY TRUE)
+endif()
+
 if (PINSIGHT_ENERGY)
     list(APPEND SOURCE_FILES
             src/energy.c
             src/energy.h
+            src/energy_backend.h
+            src/energy_sysfs.c
+            src/energy_amd_smi.c
+            src/energy_variorum.c
             src/energy_lttng_ust_tracepoint.h
             )
+    if (PINSIGHT_ENERGY_AMD_GPU)
+        # ROCM_PATH defaults to /opt/rocm if not set in the environment
+        if (NOT DEFINED ROCM_PATH)
+            set(ROCM_PATH "$ENV{ROCM_PATH}")
+            if (NOT ROCM_PATH)
+                set(ROCM_PATH "/opt/rocm")
+            endif()
+        endif()
+        find_library(AMD_SMI_LIB amd_smi HINTS ${ROCM_PATH}/lib ${ROCM_PATH}/lib64)
+        if (NOT AMD_SMI_LIB)
+            message(FATAL_ERROR "PINSIGHT_ENERGY_AMD_GPU=TRUE but libamd_smi not found under ${ROCM_PATH}")
+        endif()
+        include_directories(${ROCM_PATH}/include)
+        list(APPEND ENERGY_LIBS ${AMD_SMI_LIB})
+    endif()
+    if (PINSIGHT_ENERGY_VARIORUM)
+        find_library(VARIORUM_LIB variorum)
+        if (VARIORUM_LIB)
+            list(APPEND ENERGY_LIBS ${VARIORUM_LIB})
+        else()
+            message(WARNING "PINSIGHT_ENERGY_VARIORUM=TRUE but libvariorum not found; backend stub will not link a library")
+        endif()
+    endif()
 endif()
 
 
@@ -151,6 +187,10 @@ endif()
 if (PINSIGHT_HIP)
     target_link_libraries(pinsight hip::host ${ROCTRACER_LIB})
     target_compile_definitions(pinsight PRIVATE PINSIGHT_HIP)
+endif()
+
+if (PINSIGHT_ENERGY AND ENERGY_LIBS)
+    target_link_libraries(pinsight ${ENERGY_LIBS})
 endif()
 
 ## Python tracing via sys.monitoring (PEP 669, Python 3.12+)

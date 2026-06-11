@@ -1,115 +1,89 @@
 //
-// PInsight energy/power measurement — implementation.
+// PInsight energy/power — coordinator.
 //
-// This first slice covers the CPU path via the powercap sysfs interface:
-//   /sys/class/powercap/intel-rapl/intel-rapl:N/energy_uj   (microjoules)
-//   /sys/class/powercap/intel-rapl/intel-rapl:N/max_energy_range_uj
-// On current kernels this interface is populated by both Intel RAPL and AMD,
-// so it is the most portable starting point. Each intel-rapl:N node is a CPU
-// package (socket). GPU paths and [Energy] config selection arrive in later
-// steps; for now every discovered, readable socket is read.
+// Owns the dedicated energy_pinsight_lttng_ust provider and orchestrates the
+// pluggable backends (see energy_backend.h). At init it applies the activation
+// policy (NODE supersedes; at most one CPU; all GPU); at read it lets every
+// active backend append its readings; at the enter/exit snapshots it emits the
+// two energy sequences.
 //
-// NOTE: since ~2020 (CVE-2020-8694, "PLATYPUS") energy_uj is commonly
-// root-only. We probe readability at init and degrade gracefully — reads from
-// an unreadable counter yield 0 rather than failing or crashing.
-//
-
-#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "energy.h"
+#include "energy_backend.h"
 
 /* The energy provider is defined in exactly this translation unit. */
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
 #include "energy_lttng_ust_tracepoint.h"
 
-#define POWERCAP_RAPL_BASE "/sys/class/powercap/intel-rapl"
+/* All compiled-in backends, in activation-preference order. */
+static const pinsight_energy_backend_t *const all_backends[] = {
+#ifdef PINSIGHT_ENERGY_VARIORUM
+    &pinsight_energy_backend_variorum, /* NODE — tried first, supersedes if active */
+#endif
+    &pinsight_energy_backend_powercap, /* CPU */
+    &pinsight_energy_backend_amd_energy, /* CPU */
+#ifdef PINSIGHT_ENERGY_AMD_GPU
+    &pinsight_energy_backend_amd_smi, /* GPU */
+#endif
+};
+#define NUM_BACKENDS ((int)(sizeof(all_backends) / sizeof(all_backends[0])))
 
-/* Discovered CPU package (socket) state, filled at init. */
-static char cpu_energy_path[MAX_ENERGY_PACKAGES][320];
-static uint64_t cpu_max_range_uj[MAX_ENERGY_PACKAGES]; /* wraparound bound; 0 if unknown */
-static int cpu_readable[MAX_ENERGY_PACKAGES];          /* 1 if energy_uj is readable */
-static int num_cpu_sockets = 0;
-
-/* Read a sysfs file holding a single unsigned decimal integer.
- * Returns 0 and stores the value on success, -1 on any failure. */
-static int read_u64_file(const char *path, uint64_t *out) {
-  int fd = open(path, O_RDONLY);
-  if (fd < 0)
-    return -1;
-  char buf[32];
-  ssize_t n = read(fd, buf, sizeof(buf) - 1);
-  close(fd);
-  if (n <= 0)
-    return -1;
-  buf[n] = '\0';
-  *out = strtoull(buf, NULL, 10);
-  return 0;
-}
+static const pinsight_energy_backend_t *active[NUM_BACKENDS];
+static int num_active = 0;
 
 void pinsight_energy_init(void) {
-  num_cpu_sockets = 0;
+  num_active = 0;
+  int node_active = 0, cpu_active = 0;
 
-  for (int n = 0; n < MAX_ENERGY_PACKAGES; n++) {
-    char epath[320];
-    snprintf(epath, sizeof(epath), POWERCAP_RAPL_BASE "/intel-rapl:%d/energy_uj", n);
-    if (access(epath, F_OK) != 0)
-      break; /* no intel-rapl:N node — enumeration ends here */
-
-    int s = num_cpu_sockets;
-    strncpy(cpu_energy_path[s], epath, sizeof(cpu_energy_path[s]) - 1);
-    cpu_energy_path[s][sizeof(cpu_energy_path[s]) - 1] = '\0';
-
-    char mpath[320];
-    snprintf(mpath, sizeof(mpath),
-             POWERCAP_RAPL_BASE "/intel-rapl:%d/max_energy_range_uj", n);
-    if (read_u64_file(mpath, &cpu_max_range_uj[s]) != 0)
-      cpu_max_range_uj[s] = 0;
-
-    uint64_t probe;
-    cpu_readable[s] = (read_u64_file(epath, &probe) == 0) ? 1 : 0;
-
-    num_cpu_sockets++;
+  /* Pass 1: NODE backends (e.g. Variorum) — first readable supersedes the rest. */
+  for (int i = 0; i < NUM_BACKENDS; i++) {
+    if (all_backends[i]->kind != ENERGY_KIND_NODE)
+      continue;
+    if (!node_active && all_backends[i]->init() > 0) {
+      active[num_active++] = all_backends[i];
+      node_active = 1;
+    }
   }
 
-  int readable = 0;
-  for (int s = 0; s < num_cpu_sockets; s++)
-    readable += cpu_readable[s];
-
-  if (num_cpu_sockets == 0) {
-    fprintf(stderr, "PInsight ENERGY: no powercap RAPL interface found under %s; "
-                    "CPU energy will be reported as 0\n",
-            POWERCAP_RAPL_BASE);
-  } else if (readable == 0) {
-    fprintf(stderr, "PInsight ENERGY: found %d CPU package(s) but energy_uj is not "
-                    "readable (it is typically root-only); CPU energy will be 0\n",
-            num_cpu_sockets);
-  } else {
-    fprintf(stderr, "PInsight ENERGY: monitoring %d CPU package(s) (%d readable)\n",
-            num_cpu_sockets, readable);
+  /* If a NODE backend covers the whole node, skip CPU/GPU backends entirely. */
+  if (!node_active) {
+    for (int i = 0; i < NUM_BACKENDS; i++) {
+      const pinsight_energy_backend_t *b = all_backends[i];
+      if (b->kind == ENERGY_KIND_CPU) {
+        /* At most one CPU backend — avoids double-counting where both
+         * powercap and amd_energy are present. */
+        if (cpu_active)
+          continue;
+        if (b->init() > 0) {
+          active[num_active++] = b;
+          cpu_active = 1;
+        }
+      } else if (b->kind == ENERGY_KIND_GPU) {
+        if (b->init() > 0)
+          active[num_active++] = b;
+      }
+    }
   }
+
+  if (num_active == 0)
+    fprintf(stderr, "PInsight ENERGY: no readable energy backend on this node; "
+                    "energy sequences will be empty\n");
 }
 
 void pinsight_energy_fini(void) {
-  /* powercap energy mode opens no persistent resources; nothing to release.
-   * (PINSIGHT_POWER polling will add persistent-fd cleanup here.) */
+  for (int i = 0; i < num_active; i++)
+    active[i]->fini();
+  num_active = 0;
 }
 
 void pinsight_energy_read(pinsight_energy_t *e) {
   memset(e, 0, sizeof(*e));
-  e->num_cpu_sockets = num_cpu_sockets;
-  for (int s = 0; s < num_cpu_sockets; s++) {
-    uint64_t v = 0;
-    if (cpu_readable[s])
-      read_u64_file(cpu_energy_path[s], &v);
-    e->cpu_energy_uj[s] = v;
-  }
-  e->num_gpu_devices = 0; /* GPU paths added in later steps */
+  for (int i = 0; i < num_active; i++)
+    active[i]->read(e);
 }
 
 void pinsight_energy_snapshot_enter(void) {
@@ -117,7 +91,7 @@ void pinsight_energy_snapshot_enter(void) {
   pinsight_energy_read(&e);
   lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_enter,
                        (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
-                       (unsigned int)e.num_gpu_devices, e.gpu_energy_mj, (uint64_t)0);
+                       (unsigned int)e.num_gpu_devices, e.gpu_energy_uj, (uint64_t)0);
 }
 
 void pinsight_energy_snapshot_exit(void) {
@@ -125,5 +99,5 @@ void pinsight_energy_snapshot_exit(void) {
   pinsight_energy_read(&e);
   lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_exit,
                        (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
-                       (unsigned int)e.num_gpu_devices, e.gpu_energy_mj, (uint64_t)0);
+                       (unsigned int)e.num_gpu_devices, e.gpu_energy_uj, (uint64_t)0);
 }

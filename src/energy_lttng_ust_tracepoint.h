@@ -6,12 +6,13 @@
 // (e.g. `lttng enable-event -u 'energy_pinsight_lttng_ust:*'`).
 //
 // All energy events share one field layout: the common global fields plus two
-// dynamic-length sequences — one per-CPU-socket (microjoules), one per-GPU-device
-// (millijoules) — and a `seq` field (0 for enter/exit; a monotonic counter for the
-// future energy_sample). Using LTTng sequences instead of fixed cpuN/gpuN scalars
-// removes any ceiling on socket/device count: the sequence length is the number of
-// discovered sockets/devices, the element position is the socket/device index, and
-// an element is 0 when that index was not measured.
+// dynamic-length sequences in microjoules — one per-CPU-socket, one per-GPU/
+// accelerator-device (incl. the MI300A combined APU package) — and a `seq` field
+// (0 for enter/exit; a monotonic counter for the future energy_sample). Using
+// LTTng sequences instead of fixed cpuN/gpuN scalars removes any ceiling on
+// socket/device count: the sequence length is the number of discovered sockets/
+// devices, the element position is the source index, and an element is 0 when
+// that index was not measured.
 //
 #undef LTTNG_UST_TRACEPOINT_PROVIDER
 #define LTTNG_UST_TRACEPOINT_PROVIDER energy_pinsight_lttng_ust
@@ -35,13 +36,13 @@
  * their lengths (number of discovered sockets / devices). */
 #define ENERGY_LTTNG_UST_TP_ARGS \
         unsigned int, num_cpu, uint64_t *, cpu_uj, \
-        unsigned int, num_gpu, uint64_t *, gpu_mj, \
+        unsigned int, num_gpu, uint64_t *, gpu_uj, \
         uint64_t, seq
 
 #define ENERGY_LTTNG_UST_TP_FIELDS \
         COMMON_LTTNG_UST_TP_FIELDS_GLOBAL \
         lttng_ust_field_sequence(uint64_t, cpu_uj, cpu_uj, unsigned int, num_cpu) \
-        lttng_ust_field_sequence(uint64_t, gpu_mj, gpu_mj, unsigned int, num_gpu) \
+        lttng_ust_field_sequence(uint64_t, gpu_uj, gpu_uj, unsigned int, num_gpu) \
         lttng_ust_field_integer(uint64_t, seq, seq)
 
 #define LTTNG_UST_TRACEPOINT_EVENT_ENERGY(event_name)        \

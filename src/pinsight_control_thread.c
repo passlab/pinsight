@@ -17,6 +17,9 @@
 #include "pinsight.h"
 #include "pinsight_config.h"
 #include "trace_config.h"
+#ifdef PINSIGHT_ENERGY
+#include "energy.h"
+#endif
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -278,6 +281,17 @@ static void *pinsight_control_loop(void *arg) {
             control_apply_all_modes();
         }
     }
+
+#ifdef PINSIGHT_ENERGY
+    /* Emit the closing energy_exit from this (live) control thread just before
+     * it dies, NOT from the library destructor: AMD-SMI corrupts the heap if its
+     * gpu_metrics path is read on the main thread during DSO teardown after the
+     * constructor's read. Reading from a separate live thread is safe. Runs after
+     * the exit_pinsight marker (pinsight_control_thread_stop is called right
+     * after it), preserving the app-end-precedes-final-snapshot order. */
+    pinsight_energy_snapshot_exit();
+    pinsight_energy_fini();
+#endif
 
     return NULL;
 }

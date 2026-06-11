@@ -12,6 +12,8 @@
 #cmakedefine PINSIGHT_MPI
 #cmakedefine PINSIGHT_CUDA
 #cmakedefine PINSIGHT_ENERGY
+#cmakedefine PINSIGHT_ENERGY_AMD_GPU
+#cmakedefine PINSIGHT_ENERGY_VARIORUM
 #cmakedefine PINSIGHT_BACKTRACE
 #cmakedefine PINSIGHT_PYTHON
 
