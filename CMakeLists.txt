@@ -184,7 +184,10 @@ if (PINSIGHT_OPENMP)
 endif()
 
 if (PINSIGHT_MPI)
-	target_link_libraries(pinsight mpi)
+	# Use the find_package(MPI) imported target rather than a hardcoded -lmpi:
+	# portable across OpenMPI/MPICH and Cray MPICH (whose lib is libmpi_cray.so,
+	# not libmpi.so).
+	target_link_libraries(pinsight MPI::MPI_C)
 endif()
 
 if (PINSIGHT_CUDA)
