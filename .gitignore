@@ -108,6 +108,7 @@ experiment/backtrace/backtrace_libunwind
 
 # Local benchmark repo clones (not submodules — just local checkouts)
 eva/AMG/
+eva/AMG2023-tuolumne/
 eva/Kripke/
 eva/Quicksilver/
 eva/cuda-samples/
