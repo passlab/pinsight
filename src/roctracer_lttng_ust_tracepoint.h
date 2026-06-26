@@ -174,6 +174,62 @@ LTTNG_UST_TRACEPOINT_EVENT(
     )
 )
 
+/* ── hipMalloc ───────────────────────────────────────────────────────── */
+LTTNG_UST_TRACEPOINT_EVENT(
+    roctracer_pinsight_lttng_ust,
+    hipMalloc_begin,
+    LTTNG_UST_TP_ARGS(
+        COMMON_HIP_ARG,
+        size_t, size
+    ),
+    LTTNG_UST_TP_FIELDS(
+        COMMON_LTTNG_UST_TP_FIELDS_HIP
+        lttng_ust_field_integer(unsigned long int, size, (unsigned long int)(size))
+    )
+)
+
+LTTNG_UST_TRACEPOINT_EVENT(
+    roctracer_pinsight_lttng_ust,
+    hipMalloc_end,
+    LTTNG_UST_TP_ARGS(
+        COMMON_HIP_ARG,
+        void *, dev_ptr,
+        int,    return_val
+    ),
+    LTTNG_UST_TP_FIELDS(
+        COMMON_LTTNG_UST_TP_FIELDS_HIP
+        lttng_ust_field_integer_hex(unsigned long int, dev_ptr, (unsigned long int)(dev_ptr))
+        lttng_ust_field_integer(int, return_val, return_val)
+    )
+)
+
+/* ── hipFree ─────────────────────────────────────────────────────────── */
+LTTNG_UST_TRACEPOINT_EVENT(
+    roctracer_pinsight_lttng_ust,
+    hipFree_begin,
+    LTTNG_UST_TP_ARGS(
+        COMMON_HIP_ARG,
+        void *, dev_ptr
+    ),
+    LTTNG_UST_TP_FIELDS(
+        COMMON_LTTNG_UST_TP_FIELDS_HIP
+        lttng_ust_field_integer_hex(unsigned long int, dev_ptr, (unsigned long int)(dev_ptr))
+    )
+)
+
+LTTNG_UST_TRACEPOINT_EVENT(
+    roctracer_pinsight_lttng_ust,
+    hipFree_end,
+    LTTNG_UST_TP_ARGS(
+        COMMON_HIP_ARG,
+        int, return_val
+    ),
+    LTTNG_UST_TP_FIELDS(
+        COMMON_LTTNG_UST_TP_FIELDS_HIP
+        lttng_ust_field_integer(int, return_val, return_val)
+    )
+)
+
 /* ── hipLaunchKernel ─────────────────────────────────────────────────── */
 LTTNG_UST_TRACEPOINT_EVENT(
     roctracer_pinsight_lttng_ust,

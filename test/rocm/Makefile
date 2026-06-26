@@ -39,12 +39,20 @@ $(PINSIGHT_LIB):
 	make -j$$(nproc)
 
 # -----------------------------------------------------------------------
-# Build the test application
+# Build the test applications
 # -----------------------------------------------------------------------
-build: vecadd_pinsight
+build: vecadd_pinsight looping_pinsight
 
 vecadd_pinsight: vecadd_pinsight.hip
 	$(HIPCC) $(HIPFLAGS) -o $@ $^ -L$(ROCM_PATH)/lib -lamdhip64
+
+# long-running loop for runtime-mode / activity-pool cycling tests
+looping_pinsight: looping_pinsight.hip
+	$(HIPCC) $(HIPFLAGS) --offload-arch=gfx942 -o $@ $^ -L$(ROCM_PATH)/lib -lamdhip64
+
+# cyclic TRACING<->MONITORING test (drives the activity-pool disable/re-enable path)
+cyclic: looping_pinsight $(PINSIGHT_LIB)
+	bash cyclic_mode_test.sh
 
 # -----------------------------------------------------------------------
 # Run with LTTng tracing via PInsight
@@ -75,7 +83,7 @@ verify:
 
 # -----------------------------------------------------------------------
 clean:
-	rm -f vecadd_pinsight
+	rm -f vecadd_pinsight looping_pinsight
 
 allclean: clean
-	rm -rf $(TRACE_DIR)
+	rm -rf $(TRACE_DIR) cyclic_traces cyclic_traces.applog

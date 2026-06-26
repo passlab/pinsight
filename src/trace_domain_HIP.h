@@ -82,8 +82,8 @@ extern domain_trace_config_t *HIP_trace_config;
                                                                                \
   /* [HIP(malloc)] — IDs 20-24 */                                              \
   TRACE_SUBDOMAIN_BEGIN("malloc")                                              \
-  TRACE_EVENT("HIP_malloc",         0, 20, NULL) /* -                     */  \
-  TRACE_EVENT("HIP_free",           0, 21, NULL) /* -                     */  \
+  TRACE_EVENT("HIP_malloc",         1, 20, NULL) /* ✓ CB                  */  \
+  TRACE_EVENT("HIP_free",           1, 21, NULL) /* ✓ CB                  */  \
   TRACE_EVENT("HIP_host_malloc",    0, 22, NULL) /* -   hipHostMalloc()   */  \
   TRACE_EVENT("HIP_host_free",      0, 23, NULL) /* -   hipHostFree()     */  \
   TRACE_EVENT("HIP_malloc_managed", 0, 24, NULL) /* -   hipMallocManaged()*/  \

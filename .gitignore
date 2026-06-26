@@ -106,6 +106,31 @@ experiment/backtrace/backtrace
 experiment/backtrace/backtrace_dlinfo
 experiment/backtrace/backtrace_libunwind
 
+# CMake build trees (out-of-source)
+build_*/
+
+# Core dumps
+*.core
+*.core.gpu
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Presentation assets (large, kept local)
+doc/slides/
+
+# Built test/experiment binaries (no extension → not caught by *.exe etc.)
+test/rocm/looping_pinsight
+test/rocm/vecadd_pinsight
+test/rocm/HIP_trace_config.install
+test/rocm/vecadd_hip_traces/
+test/rocm/vecadd_hip_traces_new/
+experiment/lttng_roctracer/vecadd
+experiment/lttng_roctracer/vecadd_lttng
+experiment/lttng_roctracer/vecadd_roctracer
+experiment/lttng_roctracer/vecadd_lttng_traces/
+
 # Local benchmark repo clones (not submodules — just local checkouts)
 eva/AMG/
 eva/AMG2023-tuolumne/

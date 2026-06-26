@@ -23,6 +23,8 @@ domain_trace_config_t *HIP_trace_config;
 #define HIP_EVENT_DEVICE_RESET         0
 #define HIP_EVENT_DEVICE_SYNCHRONIZE   1
 #define HIP_EVENT_STREAM_SYNCHRONIZE  12
+#define HIP_EVENT_MALLOC              20
+#define HIP_EVENT_FREE               21
 #define HIP_EVENT_MEMCPY_HTOD         25
 #define HIP_EVENT_MEMCPY_DTOH         26
 #define HIP_EVENT_MEMCPY_DTOD         27
@@ -133,8 +135,23 @@ static inline void hip_calibrate_once(void) {
  * ================================================================ */
 static roctracer_pool_t *activity_pool = NULL;
 
+/* Gate for emitting activity records on flush.  NOT the live domain mode: the
+ * pool batches records and is flushed on buffer-full or at transitions, so the
+ * mode at flush time may differ from the mode when the records were captured.
+ * Instead this flag tracks "the batch currently in the pool should be emitted",
+ * and pinsight_control_hip_apply_mode() flushes at every MONITORING<->TRACING
+ * boundary *before* flipping it — so a batch captured under TRACING is always
+ * dumped with emit==1, and is never stranded for a later MONITORING flush to
+ * drop.  Set/cleared only by the control thread (and Init); read here. */
+static volatile int hip_activity_emit = 0;
+
 static void hip_activity_callback(const char *begin, const char *end,
                                   void *arg) {
+    /* Suppress in OFF/STANDBY/MONITORING (without this, MONITORING leaked every
+     * GPU activity record). Only async ops still in-flight at a TRACING->lower
+     * switch can leak/drop — best-effort by design. */
+    if (!hip_activity_emit)
+        return;
     const roctracer_record_t *rec = (const roctracer_record_t *)begin;
     while ((const char *)rec < end) {
         if (rec->domain == ACTIVITY_DOMAIN_HIP_OPS) {
@@ -194,6 +211,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
     if (cid != HIP_API_ID_hipLaunchKernel      &&
         cid != HIP_API_ID_hipMemcpy            &&
         cid != HIP_API_ID_hipMemcpyAsync       &&
+        cid != HIP_API_ID_hipMalloc            &&
+        cid != HIP_API_ID_hipFree              &&
         cid != HIP_API_ID_hipDeviceSynchronize &&
         cid != HIP_API_ID_hipStreamSynchronize &&
         cid != HIP_API_ID_hipDeviceReset       &&
@@ -382,6 +401,105 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         return;
     }
 
+    /* ========== hipMalloc ========== */
+    if (cid == HIP_API_ID_hipMalloc) {
+        const void *codeptr = (const void *)domain_info_table[HIP_domain_index]
+                                  .event_table[HIP_EVENT_MALLOC].name;
+
+        if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
+            lexgion_record_t *record =
+                lexgion_begin(ROCL_LEXGION, HIP_EVENT_MALLOC, codeptr);
+            lexgion_t *lgp = record->lgp;
+
+            if (lgp->name_resolved_gen != trace_config_change_counter) {
+                lgp->name = domain_info_table[HIP_domain_index]
+                                .event_table[HIP_EVENT_MALLOC].name;
+                lgp->filename_hint    = NULL;
+                lgp->name_resolved_gen = trace_config_change_counter;
+                lgp->trace_config_change_counter = (unsigned int)-1;
+            }
+
+            if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
+                lexgion_set_top_trace_bit_domain_event(
+                    lgp, HIP_domain_index, HIP_EVENT_MALLOC);
+
+            if (PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
+                size_t size = api_data->args.hipMalloc.size;
+                uint64_t ts = hip_fast_timestamp();
+#ifdef PINSIGHT_BACKTRACE
+                retrieve_backtrace();
+#endif
+                lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
+                                     hipMalloc_begin,
+                                     devId, api_data->correlation_id, ts,
+                                     codeptr, lgp->name, size);
+            }
+        } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
+            lexgion_t *lgp = lexgion_end(NULL);
+            if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
+                /* At EXIT the device address has been written into *ptr */
+                void *dev_ptr = api_data->args.hipMalloc.ptr
+                                    ? *(api_data->args.hipMalloc.ptr) : NULL;
+                int rv      = 0; /* hip_api_data_t has no retval field */
+                uint64_t ts = hip_fast_timestamp();
+                lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
+                                     hipMalloc_end,
+                                     devId, api_data->correlation_id, ts,
+                                     codeptr, lgp->name, dev_ptr, rv);
+                lexgion_post_trace_update(lgp);
+            }
+        }
+        return;
+    }
+
+    /* ========== hipFree ========== */
+    if (cid == HIP_API_ID_hipFree) {
+        const void *codeptr = (const void *)domain_info_table[HIP_domain_index]
+                                  .event_table[HIP_EVENT_FREE].name;
+
+        if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
+            lexgion_record_t *record =
+                lexgion_begin(ROCL_LEXGION, HIP_EVENT_FREE, codeptr);
+            lexgion_t *lgp = record->lgp;
+
+            if (lgp->name_resolved_gen != trace_config_change_counter) {
+                lgp->name = domain_info_table[HIP_domain_index]
+                                .event_table[HIP_EVENT_FREE].name;
+                lgp->filename_hint    = NULL;
+                lgp->name_resolved_gen = trace_config_change_counter;
+                lgp->trace_config_change_counter = (unsigned int)-1;
+            }
+
+            if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
+                lexgion_set_top_trace_bit_domain_event(
+                    lgp, HIP_domain_index, HIP_EVENT_FREE);
+
+            if (PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
+                void *dev_ptr = api_data->args.hipFree.ptr;
+                uint64_t ts   = hip_fast_timestamp();
+#ifdef PINSIGHT_BACKTRACE
+                retrieve_backtrace();
+#endif
+                lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
+                                     hipFree_begin,
+                                     devId, api_data->correlation_id, ts,
+                                     codeptr, lgp->name, dev_ptr);
+            }
+        } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
+            lexgion_t *lgp = lexgion_end(NULL);
+            if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
+                int rv      = 0; /* hip_api_data_t has no retval field */
+                uint64_t ts = hip_fast_timestamp();
+                lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
+                                     hipFree_end,
+                                     devId, api_data->correlation_id, ts,
+                                     codeptr, lgp->name, rv);
+                lexgion_post_trace_update(lgp);
+            }
+        }
+        return;
+    }
+
     /* ========== hipDeviceSynchronize ========== */
     if (cid == HIP_API_ID_hipDeviceSynchronize) {
         const void *codeptr = (const void *)domain_info_table[HIP_domain_index]
@@ -498,7 +616,9 @@ static int hip_permanently_off = 0;
 
 /* Called by the control thread for runtime mode transitions.
  * Precondition: pinsight_hip_init() has run, so last_mode is never NONE.
- * Callback and activity pool are always enabled/disabled as a pair. */
+ * Lifecycle: the API callback + activity pool are tied to ACTIVE (MONITORING or
+ * TRACING); activity COLLECTION (enable/disable_domain_activity) is tied to
+ * TRACING only — so MONITORING does not capture or flush activity records. */
 void pinsight_control_hip_apply_mode(void) {
     if (hip_permanently_off)
         return;
@@ -511,24 +631,40 @@ void pinsight_control_hip_apply_mode(void) {
     if (mode == last)
         return;
 
+    /* --- Leaving TRACING (→ MONITORING/STANDBY/OFF): drain THEN stop capture. ---
+     * Activity collection is enabled ONLY while TRACING, so MONITORING does not
+     * keep filling the pool and firing flush callbacks (which would be pure
+     * overhead since nothing is emitted).  Flush first, while hip_activity_emit
+     * is still 1, so the in-pool TRACING batch is emitted; then clear the gate
+     * and disable collection at the source. */
+    if (last == PINSIGHT_DOMAIN_TRACING && mode != PINSIGHT_DOMAIN_TRACING) {
+        if (activity_pool)
+            roctracer_flush_activity_expl(activity_pool);   /* emit==1 → emitted */
+        hip_activity_emit = 0;
+        roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
+    }
+
     if (mode == PINSIGHT_DOMAIN_OFF || mode == PINSIGHT_DOMAIN_STANDBY) {
         if (PINSIGHT_DOMAIN_ACTIVE(last)) {
-            /* ACTIVE → STANDBY/OFF: disable both together */
+            /* ACTIVE → STANDBY/OFF: close the pool + disable the API callback.
+             * Activity collection is already stopped above for last==TRACING;
+             * for last==MONITORING it was never on. */
             if (activity_pool) {
-                roctracer_flush_activity_expl(activity_pool);
-                roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
                 roctracer_close_pool_expl(activity_pool);
                 activity_pool = NULL;
             }
             roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
         }
-        /* STANDBY→OFF or STANDBY→STANDBY: both already torn down, nothing to do */
+        /* STANDBY→OFF or STANDBY→STANDBY: nothing to do */
+        hip_activity_emit = 0;
         if (mode == PINSIGHT_DOMAIN_OFF) {
             hip_permanently_off = 1;
             fprintf(stderr, "PInsight: HIP domain permanently OFF\n");
         }
     } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
-        /* STANDBY → MONITORING/TRACING: enable both together */
+        /* STANDBY → MONITORING/TRACING: enable the API callback and open the pool
+         * (kept allocated across MONITORING so MONITORING↔TRACING only toggles the
+         * activity domain, not a 2 MB alloc).  Start collection only for TRACING. */
         roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API,
                                          hip_api_callback, NULL);
         roctracer_properties_t props;
@@ -536,9 +672,16 @@ void pinsight_control_hip_apply_mode(void) {
         props.buffer_size         = 0x200000; /* 2 MB */
         props.buffer_callback_fun = hip_activity_callback;
         roctracer_open_pool_expl(&props, &activity_pool);
+        if (mode == PINSIGHT_DOMAIN_TRACING) {
+            roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+            hip_activity_emit = 1;
+        }
+    } else if (mode == PINSIGHT_DOMAIN_TRACING) {
+        /* MONITORING → TRACING: pool already open; (re)start collection. */
         roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+        hip_activity_emit = 1;
     }
-    /* MONITORING↔TRACING: callback and pool already active; mode flag distinguishes them */
+    /* TRACING → MONITORING was fully handled by the leaving-TRACING block above. */
 }
 
 /* ================================================================
@@ -563,9 +706,15 @@ void LTTNG_ROCTRACER_Init(void) {
             props.buffer_size         = 0x200000; /* 2 MB */
             props.buffer_callback_fun = hip_activity_callback;
             roctracer_open_pool_expl(&props, &activity_pool);
-            /* _expl routes records into our pool; the no-arg variant sends to
+            /* Start activity COLLECTION only in TRACING (MONITORING opens the
+             * pool but does not collect — otherwise it would fill the pool and
+             * fire flush callbacks for records that are never emitted).
+             * _expl routes records into our pool; the no-arg variant sends to
              * the default pool which has no callback and drops records. */
-            roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+            if (mode == PINSIGHT_DOMAIN_TRACING) {
+                roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+                hip_activity_emit = 1;
+            }
         }
         /* STANDBY: callback and pool stay unregistered until first active transition */
     }
@@ -575,12 +724,17 @@ void LTTNG_ROCTRACER_Init(void) {
 void LTTNG_ROCTRACER_Fini(void) {
     if (hip_permanently_off)
         return;
+    /* Final flush runs with hip_activity_emit still reflecting the last mode, so
+     * records captured while TRACING are emitted.  Collection is only on if we
+     * ended in TRACING (hip_activity_emit==1); disable it only then. */
     if (activity_pool) {
         roctracer_flush_activity_expl(activity_pool);
-        roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
+        if (hip_activity_emit)
+            roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
         roctracer_close_pool_expl(activity_pool);
         activity_pool = NULL;
     }
     roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
+    hip_activity_emit = 0;
     hip_permanently_off = 1;
 }
