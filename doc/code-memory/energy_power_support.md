@@ -73,3 +73,15 @@ benchmarks/amg2023_flux_multinode.sh (4 ranks/node 1 APU each via `flux run -g1`
 lttng energy, weak-scaled, 3D grid auto-factored) — just set BANK=. Inner `flux run` in the
 batch needs no --bank (charged at `flux batch`). Single-rank login-node runs work fine
 (that's how AMG was validated).
+
+**WORKAROUND that got multi-rank working (2026-06-11):** a **personal Flux instance**
+`flux start -s1 bash -c 'flux run -n4 ...'` runs multi-rank on the current node with NO
+bank/accounting (bypasses the blocker). Per-rank APU bind: `ROCR_VISIBLE_DEVICES=
+$((FLUX_TASK_RANK%4))` (flux `-g1` mis-binds all to GPU3 on login node). Add
+`-o cpu-affinity=off` or ranks SIGABRT from CPU contention on the shared login node.
+Login node tuolumne2151 IS a 4-APU MI300A node. **PInsight combined build `build_eval`
+(MPI+HIP+ENERGY_AMD_GPU+OpenMP) traced 4-rank AMG2023 on 4 APUs**: mpirank 0-3, inter-rank
+MPI_Isend 17k/Irecv 17k/Waitall 6k + Allreduce 2.3k, roctracer ~20k/rank balanced, 4 energy
+pairs. MPI domain enabled via amg_trace_config.txt ([MPI.global] trace_mode=TRACING) — domains
+default OFF without config. Needed CMake fix: target_link_libraries MPI::MPI_C not -lmpi
+(cray libmpi_cray.so); committed e12cc23. Local run script: eva/AMG2023-tuolumne/run_4rank_local.sh.
