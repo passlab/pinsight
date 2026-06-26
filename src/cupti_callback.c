@@ -36,6 +36,8 @@ domain_trace_config_t *CUDA_trace_config;
 #define CUDA_EVENT_MEMCPY_DTOD 14
 #define CUDA_EVENT_MEMCPY_HTOH 15
 #define CUDA_EVENT_MEMCPY_ASYNC 16
+#define CUDA_EVENT_MALLOC 18
+#define CUDA_EVENT_FREE 19
 #define CUDA_EVENT_KERNEL_LAUNCH 23
 
 /* ================================================================
@@ -143,16 +145,65 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
                                               uint8_t *buffer, size_t size,
                                               size_t validSize);
 
+static _Atomic int activity_registered = 0;
 static _Atomic int activity_init_done = 0;
 
-static void cupti_activity_init_once(void) {
-  if (!activity_init_done &&
-      __atomic_exchange_n(&activity_init_done, 1, __ATOMIC_SEQ_CST) == 0) {
+/* Gate for emitting activity records in activity_bufferCompleted().  NOT the
+ * live domain mode: CUPTI delivers buffers asynchronously (on buffer-full or at
+ * a flush), so the mode at delivery time may differ from the mode when the
+ * records were collected.  Instead this flag tracks "the records currently being
+ * collected should be emitted", and pinsight_control_cuda_apply_mode() flushes
+ * (blocking) at every MONITORING<->TRACING boundary *before* clearing it — so a
+ * batch collected under TRACING is always emitted, and is never stranded for a
+ * later MONITORING delivery to drop.  Set/cleared only by the control thread
+ * (and the first-callback init); read in activity_bufferCompleted(). */
+static volatile int cuda_activity_emit = 0;
+
+/* Register the activity buffer callbacks exactly once.  This only installs
+ * function pointers (no CUDA context required), so it is safe from any thread. */
+static void cupti_activity_register_once(void) {
+  if (!activity_registered &&
+      __atomic_exchange_n(&activity_registered, 1, __ATOMIC_SEQ_CST) == 0) {
     cuptiActivityRegisterCallbacks(activity_bufferRequested,
                                    activity_bufferCompleted);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+  }
+}
+
+/* Start activity COLLECTION (kernel + memcpy).  cuptiActivityEnable requires the
+ * CUDA driver to be initialized, so this must run from a context where CUDA is
+ * live (a CUPTI callback, or the control thread while the app is actively using
+ * CUDA).  Registration is ensured first. */
+static void cupti_activity_enable_collection(void) {
+  cupti_activity_register_once();
+  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
+  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
+  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+}
+
+/* Stop activity COLLECTION so MONITORING/STANDBY/OFF do not keep filling buffers
+ * and firing bufferCompleted for records that are never emitted. */
+static void cupti_activity_disable_collection(void) {
+  cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMCPY);
+  cuptiActivityDisable(CUPTI_ACTIVITY_KIND_KERNEL);
+  cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+}
+
+/* Deferred one-time activity setup, run from the first CUPTI callback (when a
+ * CUDA context exists).  Registers the buffer callbacks always; starts
+ * COLLECTION only if the starting mode is TRACING — MONITORING registers but
+ * does not collect, otherwise it would fill buffers and fire bufferCompleted for
+ * records that are dropped by the emit gate (pure overhead).  Runtime
+ * MONITORING<->TRACING transitions are handled by the control thread in
+ * pinsight_control_cuda_apply_mode(). */
+static void cupti_activity_init_once(void) {
+  if (activity_init_done ||
+      __atomic_exchange_n(&activity_init_done, 1, __ATOMIC_SEQ_CST) != 0)
+    return;
+  cupti_activity_register_once();
+  if (domain_default_trace_config[CUDA_domain_index].mode ==
+      PINSIGHT_DOMAIN_TRACING) {
+    cupti_activity_enable_collection();
+    cuda_activity_emit = 1;
   }
 }
 
@@ -444,6 +495,104 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     return;
   }
 
+  /* ========== cudaMalloc ========== */
+  if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaMalloc_v3020) {
+    const void *codeptr = (const void *)cbInfo->functionName;
+    const char *funName = cbInfo->functionName;
+    cudaMalloc_v3020_params *p =
+        (cudaMalloc_v3020_params *)cbInfo->functionParams;
+
+    if (cbInfo->callbackSite == CUPTI_API_ENTER) {
+      lexgion_record_t *record =
+          lexgion_begin(CUDA_LEXGION, CUDA_EVENT_MALLOC, codeptr);
+      lexgion_t *lgp = record->lgp;
+
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = domain_info_table[CUDA_domain_index]
+                        .event_table[CUDA_EVENT_MALLOC].name;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
+
+      if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+        lexgion_set_top_trace_bit_domain_event(lgp, CUDA_domain_index,
+                                               CUDA_EVENT_MALLOC);
+      }
+
+      if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
+        size_t size = p->size;
+        uint64_t timeStamp = cuda_fast_timestamp();
+#ifdef PINSIGHT_BACKTRACE
+        retrieve_backtrace();
+#endif
+        lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMalloc_begin, devId,
+                             correlationId, timeStamp, codeptr, funName, size);
+      }
+    } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
+      lexgion_t *lgp = lexgion_end(NULL);
+      if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
+        /* At EXIT the device address has been written into *devPtr */
+        void *dev_ptr = p->devPtr ? *(p->devPtr) : NULL;
+        int return_val = *((int *)cbInfo->functionReturnValue);
+        uint64_t timeStamp = cuda_fast_timestamp();
+        lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMalloc_end, devId,
+                             correlationId, timeStamp, codeptr, funName, dev_ptr,
+                             return_val);
+        lexgion_post_trace_update(lgp);
+      }
+    }
+    return;
+  }
+
+  /* ========== cudaFree ========== */
+  if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaFree_v3020) {
+    const void *codeptr = (const void *)cbInfo->functionName;
+    const char *funName = cbInfo->functionName;
+    cudaFree_v3020_params *p = (cudaFree_v3020_params *)cbInfo->functionParams;
+
+    if (cbInfo->callbackSite == CUPTI_API_ENTER) {
+      lexgion_record_t *record =
+          lexgion_begin(CUDA_LEXGION, CUDA_EVENT_FREE, codeptr);
+      lexgion_t *lgp = record->lgp;
+
+      if (lgp->name_resolved_gen != trace_config_change_counter) {
+        lgp->name = domain_info_table[CUDA_domain_index]
+                        .event_table[CUDA_EVENT_FREE].name;
+        lgp->filename_hint = NULL;
+        lgp->name_resolved_gen = trace_config_change_counter;
+        lgp->trace_config_change_counter = (unsigned int)-1;
+      }
+
+      if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
+        lexgion_set_top_trace_bit_domain_event(lgp, CUDA_domain_index,
+                                               CUDA_EVENT_FREE);
+      }
+
+      if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
+        void *dev_ptr = p->devPtr;
+        uint64_t timeStamp = cuda_fast_timestamp();
+#ifdef PINSIGHT_BACKTRACE
+        retrieve_backtrace();
+#endif
+        lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaFree_begin, devId,
+                             correlationId, timeStamp, codeptr, funName,
+                             dev_ptr);
+      }
+    } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
+      lexgion_t *lgp = lexgion_end(NULL);
+      if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
+        int return_val = *((int *)cbInfo->functionReturnValue);
+        uint64_t timeStamp = cuda_fast_timestamp();
+        lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaFree_end, devId,
+                             correlationId, timeStamp, codeptr, funName,
+                             return_val);
+        lexgion_post_trace_update(lgp);
+      }
+    }
+    return;
+  }
+
   /* ========== cudaDeviceSynchronize ========== */
   if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaDeviceSynchronize_v3020) {
     const void *codeptr = (const void *)cbInfo->functionName;
@@ -589,6 +738,15 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
                                               size_t validSize) {
   if (!buffer)
     return;
+  /* Suppress in OFF/STANDBY/MONITORING.  Unlike the ROCTracer pool (which owns
+   * its buffer), CUPTI hands us a buffer we allocated in activity_bufferRequested
+   * — so we MUST free() it even when skipping, or leak 8 MB per buffer.  Only
+   * async ops still in-flight at a TRACING->lower switch can leak/drop —
+   * best-effort by design. */
+  if (!cuda_activity_emit) {
+    free(buffer);
+    return;
+  }
   CUpti_Activity *record = NULL;
 
   do {
@@ -656,6 +814,10 @@ static void cupti_set_all_callbacks(int enable) {
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                      CUPTI_RUNTIME_TRACE_CBID_cudaMalloc_v3020);
+  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                      CUPTI_RUNTIME_TRACE_CBID_cudaFree_v3020);
+  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaDeviceReset_v3020);
 }
 
@@ -712,20 +874,45 @@ void pinsight_control_cuda_apply_mode(void) {
   if (mode == last)
     return;
 
+  /* --- Leaving TRACING (→ MONITORING/STANDBY/OFF): drain THEN stop collection. ---
+   * Activity collection is enabled ONLY while TRACING, so MONITORING does not
+   * keep filling buffers and firing bufferCompleted (which would be pure
+   * overhead since nothing is emitted).  Flush first (blocking, so all in-flight
+   * buffers are delivered) while cuda_activity_emit is still 1 — the in-flight
+   * TRACING batch is emitted; then clear the gate and disable collection at the
+   * source. */
+  if (last == PINSIGHT_DOMAIN_TRACING && mode != PINSIGHT_DOMAIN_TRACING) {
+    cuptiActivityFlushAll(1); /* emit==1 → emitted */
+    cuda_activity_emit = 0;
+    cupti_activity_disable_collection();
+  }
+
   if (mode == PINSIGHT_DOMAIN_OFF) {
     if (PINSIGHT_DOMAIN_ACTIVE(last))
       cuptiActivityFlushAll(1);
     cuptiUnsubscribe(subscriber);
     cuda_permanently_off = 1;
+    cuda_activity_emit = 0;
     fprintf(stderr, "PInsight: CUDA domain permanently OFF\n");
   } else if (mode == PINSIGHT_DOMAIN_STANDBY) {
     if (PINSIGHT_DOMAIN_ACTIVE(last))
       cupti_set_all_callbacks(0);
+    /* Collection already stopped above for last==TRACING; for last==MONITORING
+     * it was never on. */
   } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
-    /* STANDBY → MONITORING/TRACING */
+    /* STANDBY → MONITORING/TRACING: enable the API callbacks; start collection
+     * only for TRACING. */
     cupti_set_all_callbacks(1);
+    if (mode == PINSIGHT_DOMAIN_TRACING) {
+      cupti_activity_enable_collection();
+      cuda_activity_emit = 1;
+    }
+  } else if (mode == PINSIGHT_DOMAIN_TRACING) {
+    /* MONITORING → TRACING: callbacks already on; (re)start collection. */
+    cupti_activity_enable_collection();
+    cuda_activity_emit = 1;
   }
-  /* MONITORING↔TRACING: mode flag in callback handles it */
+  /* TRACING → MONITORING was fully handled by the leaving-TRACING block above. */
 }
 
 void LTTNG_CUPTI_Init(void) {
@@ -745,7 +932,14 @@ void LTTNG_CUPTI_Fini(void) {
    * Flag 1 = blocking: waits for all bufferCompleted callbacks to finish
    * before returning.  Critical for AMReX/Castro which does not call
    * cudaDeviceReset() — without this, GPU activity records may not be
-   * delivered to LTTng before the session daemon stops. */
+   * delivered to LTTng before the session daemon stops.
+   *
+   * The final flush runs with cuda_activity_emit still reflecting the last mode,
+   * so records collected while TRACING are emitted; if we ended in MONITORING/
+   * STANDBY the gate frees buffers without emitting.  Collection is only on if
+   * we ended in TRACING (emit==1) — disable it only then. */
   cuptiActivityFlushAll(1);
+  if (cuda_activity_emit)
+    cupti_activity_disable_collection();
   cuptiUnsubscribe(subscriber);
 }

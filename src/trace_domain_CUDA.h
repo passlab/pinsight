@@ -70,8 +70,8 @@ extern domain_trace_config_t *CUDA_trace_config;
   /* [CUDA(malloc)] */                                                         \
   TRACE_SUBDOMAIN_BEGIN("malloc")                                              \
   TRACE_EVENT("CUDA_memset",        0, 17, NULL)  /* - not registered */      \
-  TRACE_EVENT("CUDA_malloc",        0, 18, NULL)  /* - not registered */      \
-  TRACE_EVENT("CUDA_free",          0, 19, NULL)  /* - not registered */      \
+  TRACE_EVENT("CUDA_malloc",        1, 18, NULL)  /* ✓ CB: begin+end  */      \
+  TRACE_EVENT("CUDA_free",          1, 19, NULL)  /* ✓ CB: begin+end  */      \
   TRACE_EVENT("CUDA_malloc_host",   0, 20, NULL)  /* - not registered */      \
   TRACE_EVENT("CUDA_free_host",     0, 21, NULL)  /* - not registered */      \
   TRACE_EVENT("CUDA_malloc_managed",0, 22, NULL)  /* - not registered */      \
