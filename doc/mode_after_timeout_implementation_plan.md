@@ -1,6 +1,9 @@
 # `window_timeout` — implementation plan
 
-**Status:** plan · 2026-06-26
+**Status:** COMPLETED · planned 2026-06-26, landed 2026-06-29 (branch
+`feature/window-timeout-mode-trigger`). Phase 6 `all` was fully implemented (not
+just scaffolded) per the per-thread "first thread whose seen regions all capped"
+semantics. See the checklist in §11.
 **Design:** [mode_after_timeout_design.md](mode_after_timeout_design.md)
 **Targets:** branch `hip-rocm-support` (current dev line); build dirs `build_hip/`
 (gcc) for the control-thread/parser work, validated on Tuolumne.
@@ -301,11 +304,18 @@ landing.
 
 ## 11. Landing checklist
 
-- [ ] Phase 0 rename, `build_hip/` green, INTROSPECT unchanged
-- [ ] Phase 1 field added, compiles
-- [ ] Phase 2 file parse + preserve-on-reload gotcha + parser unit test
-- [ ] Phase 3 env var + alias warning + 4-colon walk + env test
-- [ ] Phase 4 timer arm/fire/re-arm + synthesized wakeup
-- [ ] Phase 5 `window_timeout_test.sh` + Makefile target, all assertions pass on Tuolumne
-- [ ] Docs (§9) updated; changelog notes the breaking change
-- [ ] (optional) Phase 6 enum scaffold + `anchor` rejection
+- [x] Phase 0 rename, `build_hip/` green, INTROSPECT unchanged
+- [x] Phase 1 field added, compiles
+- [x] Phase 2 file parse + preserve-on-reload gotcha + parser unit test (WT1–WT7)
+- [x] Phase 3 env var + alias warning + 4-colon walk + env test
+- [x] Phase 4 timer arm/fire/re-arm + synthesized wakeup (+ `window_already_ended`
+      cross-config arbiter fix found in testing, see design §10)
+- [x] Phase 5 tests — `test/mode_window/` GPU-free end-to-end (all checks pass) +
+      `test/rocm/window_timeout_test.sh` + `make window`. **Pending:** the HIP
+      script has not yet been run on an MI300A node (needs a flux bank).
+- [x] Docs (§9) updated; changelog notes the breaking change
+- [x] Phase 6 — `all` **fully implemented** (per-thread gate), `anchor` rejected
+
+**Remaining before calling it fully done:** run `make window` on a Tuolumne
+MI300A node for HIP end-to-end confirmation (GPU-free OpenMP path already validated
+the same domain-agnostic timer/gate code).

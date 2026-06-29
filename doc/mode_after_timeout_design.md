@@ -1,6 +1,9 @@
 # `window_timeout` — wall-clock guaranteed end-of-tracing-window deadline
 
-**Status:** design only (no implementation yet) · drafted 2026-06-25, revised 2026-06-26
+**Status:** IMPLEMENTED · drafted 2026-06-25, revised 2026-06-26, landed 2026-06-29
+(commit on `feature/window-timeout-mode-trigger`). Validated GPU-free end-to-end via
+`test/mode_window/`; HIP end-to-end (`test/rocm/window_timeout_test.sh`) pending an
+MI300A run. The §10 arbitration note records a fix made during that testing.
 **Related:** [trace_config_design.md](trace_config_design.md),
 [control_thread_design.md](control_thread_design.md),
 [four_mode_trace_design.md](four_mode_trace_design.md),
