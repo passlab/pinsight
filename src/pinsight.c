@@ -12,15 +12,15 @@ __thread pinsight_thread_data_t pinsight_thread_data;
 
 /**
  * Fire auto-trigger mode changes when a lexgion reaches max_num_traces.
- * Uses the unified trace_mode_after_t struct.
+ * Uses the unified window_end_action_t struct.
  *
  * If INTROSPECT is configured, delegates to the control thread which
  * handles script execution and pause/resume.
  * Otherwise, updates mode flags directly and wakes the control thread
  * to apply domain-specific changes (CUPTI enable/disable, OMPT register).
  */
-void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
-  trace_mode_after_t *ma = &tc->mode_after;
+void pinsight_fire_window_end(lexgion_trace_config_t *tc) {
+  window_end_action_t *ma = &tc->end_action;
 
   /* Atomic latch: only the FIRST lexgion to reach max_num_traces fires
    * the trigger. All subsequent lexgions see fired==1 and skip.
@@ -71,7 +71,7 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
  * encountered that has a finite max_num_traces has reached its cap. Unlimited
  * regions (max_num_traces == -1) are not gates. Returns 0 if the thread has
  * seen no finite-cap region yet. The first thread to satisfy this trips the
- * global mode_after.fired latch in pinsight_fire_mode_triggers().
+ * global end_action.fired latch in pinsight_fire_window_end().
  *
  * COST (why the O(N) scan is acceptable — do not "optimize" without a profile):
  * This is NOT called per traced invocation. It runs only at a region's CAP EDGE
@@ -103,7 +103,7 @@ int pinsight_all_seen_lexgions_capped(void) {
   return seen_finite > 0;
 }
 
-/* pinsight_execute_introspect() and the old pinsight_fire_mode_triggers()
+/* pinsight_execute_introspect() and the old pinsight_fire_window_end()
  * have been moved to pinsight_control_thread.c. The control thread now
  * handles introspection, pause/resume, and callback re-registration. */
 
@@ -374,7 +374,7 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
    * reset fires even when the counter is currently >= max_num_traces
    * and no trace is being emitted. */
   if (trace_config->max_num_traces != (unsigned int)-1) {
-    unsigned int cur_gen = trace_config->mode_after.generation;
+    unsigned int cur_gen = trace_config->end_action.generation;
     if (lgp->introspect_gen != cur_gen) {
       lgp->trace_counter = 0;
       lgp->introspect_gen = cur_gen;
@@ -463,7 +463,7 @@ int lexgion_set_rate_trace_bit(lexgion_t *lgp) {
    * advanced the generation (same logic as lexgion_set_top_trace_bit_domain_event).
    * Required for OpenMP/MPI domains that go through this function. */
   if (trace_config->max_num_traces != (unsigned int)-1) {
-    unsigned int cur_gen = trace_config->mode_after.generation;
+    unsigned int cur_gen = trace_config->end_action.generation;
     if (lgp->introspect_gen != cur_gen) {
       lgp->trace_counter = 0;
       lgp->introspect_gen = cur_gen;

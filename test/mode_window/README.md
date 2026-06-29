@@ -1,4 +1,4 @@
-# mode_window — GPU-free test for `window_timeout` + `mode_after_trigger`
+# mode_window — GPU-free test for `window_timeout` + `window_end_trigger`
 
 Exercises the **domain-agnostic** core of the tracing-window feature (the
 control-thread wall-clock timer and the `all` count-policy gate) via OpenMP/OMPT,

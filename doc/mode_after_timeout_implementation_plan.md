@@ -12,14 +12,14 @@ semantics. See the checklist in §11.
 
 **In scope (the designed feature):** a per-process wall-clock `window_timeout`
 that ends the current TRACING window via the control thread, firing the existing
-`trace_mode_after` transition (mode switch *or* INTROSPECT). Plus the two settled
+`window_end_action` transition (mode switch *or* INTROSPECT). Plus the two settled
 renames and the env-var rename/alias.
 
 **In scope, narrow:** rename `introspect_timeout` → `introspect_pause_duration`
 (prerequisite); env var `PINSIGHT_TRACE_RATE` → `PINSIGHT_TRACE_WINDOW` + alias.
 
 **Companion, separate design (Phase 6, do NOT block on it):** the
-`mode_after_trigger = first | all` count policy. Only `first` exists today (the
+`window_end_trigger = first | all` count policy. Only `first` exists today (the
 CAS latch). Implementing `all` (fire when every region this thread has seen has
 capped) needs its own design for the per-thread "all capped" bookkeeping; this
 plan adds only the *parser scaffolding* (accept `first`/`all`, reject `anchor`)
@@ -35,7 +35,7 @@ timeout (Section 13 of the design).
 Phase 0 (rename)  ──► Phase 1 (struct) ──► Phase 2 (file parse)   ──┐
                                       └──► Phase 3 (env var)       ──┤
                                                                     ├─► Phase 4 (control-thread timer) ─► Phase 5 (test)
-Phase 6 (mode_after_trigger enum) — independent, can land before or after
+Phase 6 (window_end_trigger enum) — independent, can land before or after
 ```
 
 Phases 0–4 are sequential. Do them in order; each compiles and is independently
@@ -61,7 +61,7 @@ identically (no behavior change).
 ## 3. Phase 1 — data structure
 
 **[src/trace_config.h:231](../src/trace_config.h#L231)** — add to
-`trace_mode_after_t`, after the rename:
+`window_end_action_t`, after the rename:
 
 ```c
 int window_timeout_sec;   /* >0: wall-clock deadline ending the TRACING window;
@@ -72,32 +72,32 @@ Default-zero is automatic for `= {0}`-initialized configs and the
 `lexgion_default_trace_config`. No initializer changes needed beyond confirming
 defaults are zeroed.
 
-**Verify:** compiles; `sizeof(trace_mode_after_t)` grows by one int; nothing reads
+**Verify:** compiles; `sizeof(window_end_action_t)` grows by one int; nothing reads
 the field yet.
 
 ## 4. Phase 2 — config-file parsing (`window_timeout` key)
 
 **[src/trace_config_parse.c:763](../src/trace_config_parse.c#L763)** — add a
 `window_timeout` branch in the `[Lexgion*]` key dispatch, beside
-`max_num_traces`/`trace_mode_after`:
+`max_num_traces`/`window_end_action`:
 
 ```c
 } else if (strcmp(key, "window_timeout") == 0) {
     int v = atoi(val);
     for (int ci = 0; ci < cfg_count; ci++)
-        cfgs[ci]->mode_after.window_timeout_sec = v;
+        cfgs[ci]->end_action.window_timeout_sec = v;
 }
 ```
 
-**GOTCHA — ordering vs. `trace_mode_after`.** The `trace_mode_after` branch does
-`trace_mode_after_t parsed = {0}; ... cfgs[ci]->mode_after = parsed;` — a **full
+**GOTCHA — ordering vs. `window_end_action`.** The `window_end_action` branch does
+`window_end_action_t parsed = {0}; ... cfgs[ci]->end_action = parsed;` — a **full
 struct overwrite** that already preserves `generation`/`fired`
 ([src/trace_config_parse.c:765-774](../src/trace_config_parse.c#L765-L774)). It
 must **also preserve `window_timeout_sec`**, or a `window_timeout` line appearing
-*before* `trace_mode_after` in the file gets wiped. Add:
+*before* `window_end_action` in the file gets wiped. Add:
 
 ```c
-parsed.window_timeout_sec = cfgs[ci]->mode_after.window_timeout_sec;
+parsed.window_timeout_sec = cfgs[ci]->end_action.window_timeout_sec;
 ```
 
 next to the existing `parsed.generation = …; parsed.fired = …;` lines.
@@ -108,8 +108,8 @@ end-of-file/section finalization. If Phase 6 isn't landed yet, stub this as a
 TODO; `first` needs no warning.
 
 **Verify:** unit-extend `test/trace_config_parse/test_config_parser.c` — assert
-`window_timeout` parses into `mode_after.window_timeout_sec`, and that
-`window_timeout` set *before* `trace_mode_after` survives (regression for the
+`window_timeout` parses into `end_action.window_timeout_sec`, and that
+`window_timeout` set *before* `window_end_action` survives (regression for the
 gotcha).
 
 ## 5. Phase 3 — environment variable (`PINSIGHT_TRACE_WINDOW` + alias)
@@ -129,7 +129,7 @@ if (!win_env) {
 }
 ```
 
-2. New grammar `start:max:rate:window_timeout[:mode_after_string]`:
+2. New grammar `start:max:rate:window_timeout[:window_end_action_string]`:
 
 ```c
 int start=0, max=0, rate=0, win=0;
@@ -137,11 +137,11 @@ int count = sscanf(win_env, "%d:%d:%d:%d", &start, &max, &rate, &win);
 if (count >= 1) lexgion_default_trace_config->trace_starts_at = start;
 if (count >= 2) lexgion_default_trace_config->max_num_traces  = max;
 if (count >= 3) lexgion_default_trace_config->tracing_rate    = rate;
-if (count >= 4) lexgion_default_trace_config->mode_after.window_timeout_sec = win;
+if (count >= 4) lexgion_default_trace_config->end_action.window_timeout_sec = win;
 ```
 
 3. Advance past **four** colons (was three) before
-   `parse_trace_mode_after()`
+   `parse_window_end_action()`
    ([src/trace_config.c:160-170](../src/trace_config.c#L160-L170)): change the
    `while (colons < 3)` walk to `< 4`.
 
@@ -149,7 +149,7 @@ if (count >= 4) lexgion_default_trace_config->mode_after.window_timeout_sec = wi
 [PINSIGHT_TRACE_CONFIG_FORMAT.md](PINSIGHT_TRACE_CONFIG_FORMAT.md).
 
 **Verify:** `PINSIGHT_TRACE_WINDOW=0:50:1:30:HIP:MONITORING` sets max=50,
-window=30, and HIP mode_after=MONITORING; `PINSIGHT_TRACE_RATE=…` prints the
+window=30, and HIP end_action=MONITORING; `PINSIGHT_TRACE_RATE=…` prints the
 deprecation warning and parses identically; legacy 3-field `0:50:1` still works
 (count<4 → window stays 0).
 
@@ -164,10 +164,10 @@ file-scope, control-thread-only state (no locking).
 ```c
 static int                 window_timer_armed = 0;
 static struct timespec     window_deadline;     /* CLOCK_REALTIME */
-static trace_mode_after_t *window_timer_ma = NULL;
+static window_end_action_t *window_timer_ma = NULL;
 
 static void window_timer_arm_from_default(void) {
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     if (ma->window_timeout_sec > 0) {
         clock_gettime(CLOCK_REALTIME, &window_deadline);
         window_deadline.tv_sec += ma->window_timeout_sec;
@@ -180,7 +180,7 @@ static void window_timer_arm_from_default(void) {
 }
 ```
 
-(Single per-process timer drives off the default lexgion's `mode_after`, matching
+(Single per-process timer drives off the default lexgion's `end_action`, matching
 how `PINSIGHT_TRACE_WINDOW`/`[Lexgion.default]` set it.)
 
 **6.2 Initial arm.** Call `window_timer_arm_from_default()` once just before the
@@ -202,7 +202,7 @@ if (rc == -1 && errno == EINTR) continue;
 
 int reason;
 if (rc == -1 && errno == ETIMEDOUT) {
-    trace_mode_after_t *ma = window_timer_ma;
+    window_end_action_t *ma = window_timer_ma;
     int expected = 0;
     if (!__atomic_compare_exchange_n(&ma->fired, &expected, 1, 0,
                                      __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
@@ -262,13 +262,13 @@ Extend the existing ROCm harness (`test/rocm/`, not git-ignored):
 - **New** `Makefile` target `make window_timeout`.
 - **Parser unit test** additions per Phase 2/3 above.
 
-## 8. Phase 6 — `mode_after_trigger` enum (companion, separate)
+## 8. Phase 6 — `window_end_trigger` enum (companion, separate)
 
 Scaffolding only here; `all` firing logic is its own design task.
 
-- Add `typedef enum { TRIGGER_FIRST, TRIGGER_ALL, TRIGGER_ANCHOR } mode_after_trigger_t;`
-  and a field on the lexgion/`trace_mode_after` config; default `TRIGGER_FIRST`.
-- Parse `mode_after_trigger = first | all` in the `[Lexgion*]` dispatch
+- Add `typedef enum { TRIGGER_FIRST, TRIGGER_ALL, TRIGGER_ANCHOR } window_end_trigger_t;`
+  and a field on the lexgion/`window_end_action` config; default `TRIGGER_FIRST`.
+- Parse `window_end_trigger = first | all` in the `[Lexgion*]` dispatch
   (Phase 2 site). **Reject `anchor`** with "not yet implemented" (design §2) — do
   not silently ignore.
 - `first` = today's CAS-latch behavior (no logic change). `all` firing

@@ -4,7 +4,7 @@ PInsight Python Rate-Control Test Script
 Provides three functions called many times to exercise:
   - max_num_traces  (hot_loop)
   - tracing_rate    (sampled_work)
-  - trace_mode_after (once_then_stop)
+  - window_end_action (once_then_stop)
 
 Usage (via pinsight launcher):
   python3 -m pinsight test_rate_control.py [N]
@@ -24,7 +24,7 @@ def sampled_work(i):
     pass
 
 def once_then_stop(i):
-    """Called N times. trace_mode_after test: verify traces stop after K calls."""
+    """Called N times. window_end_action test: verify traces stop after K calls."""
     pass
 
 for i in range(N):

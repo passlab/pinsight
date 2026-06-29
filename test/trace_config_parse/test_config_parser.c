@@ -13,8 +13,8 @@
 // pinsight.c is not linked into the test binary)
 volatile sig_atomic_t mode_change_requested = 0;
 
-void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
-  trace_mode_after_t *ma = &tc->mode_after;
+void pinsight_fire_window_end(lexgion_trace_config_t *tc) {
+  window_end_action_t *ma = &tc->end_action;
   for (int d = 0; d < num_domain; d++) {
     pinsight_domain_mode_t new_mode = ma->mode[d];
     if (new_mode == PINSIGHT_DOMAIN_NONE)
@@ -1478,8 +1478,8 @@ void test_domain_global() {
   }
 }
 
-void test_trace_mode_after() {
-  printf("\n===== trace_mode_after Tests =====\n");
+void test_window_end_action() {
+  printf("\n===== window_end_action Tests =====\n");
 
   // Find first OpenMP domain index (same as parser's find_domain_index)
   int omp_idx = -1;
@@ -1495,36 +1495,36 @@ void test_trace_mode_after() {
     return;
   }
 
-  // --- TMA1: Shorthand trace_mode_after = MONITORING ---
-  printf("\n  -- TMA1: [Lexgion.default] trace_mode_after = MONITORING --\n");
+  // --- TMA1: Shorthand window_end_action = MONITORING ---
+  printf("\n  -- TMA1: [Lexgion.default] window_end_action = MONITORING --\n");
   {
     FILE *fp = fopen("test_tma.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
     fprintf(fp, "    max_num_traces = 100\n");
-    fprintf(fp, "    trace_mode_after = MONITORING\n");
+    fprintf(fp, "    window_end_action = MONITORING\n");
     fclose(fp);
-    // Reset mode_after
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    // Reset end_action
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     parse_trace_config_file("test_tma.txt");
 
-    // Shorthand sets mode_after for all registered domains
+    // Shorthand sets end_action for all registered domains
     int all_monitoring = 1;
     for (int i = 0; i < num_domain; i++) {
-      if (lexgion_default_trace_config->mode_after.mode[i] !=
+      if (lexgion_default_trace_config->end_action.mode[i] !=
           PINSIGHT_DOMAIN_MONITORING) {
         all_monitoring = 0;
         break;
       }
     }
     if (all_monitoring) {
-      printf("[PASS] TMA1: shorthand trace_mode_after=MONITORING set for all "
+      printf("[PASS] TMA1: shorthand window_end_action=MONITORING set for all "
              "registered domains\n");
     } else {
-      printf("[FAIL] TMA1: mode_after not MONITORING for all domains\n");
+      printf("[FAIL] TMA1: end_action not MONITORING for all domains\n");
       for (int i = 0; i < num_domain; i++)
-        printf("  mode_after.mode[%d]=%d\n", i,
-               lexgion_default_trace_config->mode_after.mode[i]);
+        printf("  end_action.mode[%d]=%d\n", i,
+               lexgion_default_trace_config->end_action.mode[i]);
     }
     if (lexgion_default_trace_config->max_num_traces == 100) {
       printf("[PASS] TMA1: max_num_traces=100 correctly set\n");
@@ -1534,65 +1534,65 @@ void test_trace_mode_after() {
     }
   }
 
-  // --- TMA2: Explicit trace_mode_after = OpenMP:OFF ---
-  printf("\n  -- TMA2: trace_mode_after = OpenMP:OFF --\n");
+  // --- TMA2: Explicit window_end_action = OpenMP:OFF ---
+  printf("\n  -- TMA2: window_end_action = OpenMP:OFF --\n");
   {
     FILE *fp = fopen("test_tma.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
     fprintf(fp, "    max_num_traces = 200\n");
-    fprintf(fp, "    trace_mode_after = OpenMP:OFF\n");
+    fprintf(fp, "    window_end_action = OpenMP:OFF\n");
     fclose(fp);
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     parse_trace_config_file("test_tma.txt");
 
-    if (lexgion_default_trace_config->mode_after.mode[omp_idx] ==
+    if (lexgion_default_trace_config->end_action.mode[omp_idx] ==
             PINSIGHT_DOMAIN_OFF &&
-        lexgion_default_trace_config->mode_after.mode[mpi_idx] ==
+        lexgion_default_trace_config->end_action.mode[mpi_idx] ==
             PINSIGHT_DOMAIN_NONE) {
       printf("[PASS] TMA2: OpenMP:OFF parsed (mode[%d]=OFF, "
              "mode[%d]=NONE)\n",
              omp_idx, mpi_idx);
     } else {
       printf("[FAIL] TMA2: mode[omp]=%d, mode[mpi]=%d\n",
-             lexgion_default_trace_config->mode_after.mode[omp_idx],
-             lexgion_default_trace_config->mode_after.mode[mpi_idx]);
+             lexgion_default_trace_config->end_action.mode[omp_idx],
+             lexgion_default_trace_config->end_action.mode[mpi_idx]);
     }
   }
 
-  // --- TMA3: Multi trace_mode_after = OpenMP:MONITORING, MPI:OFF ---
-  printf("\n  -- TMA3: trace_mode_after = OpenMP:MONITORING, MPI:OFF --\n");
+  // --- TMA3: Multi window_end_action = OpenMP:MONITORING, MPI:OFF ---
+  printf("\n  -- TMA3: window_end_action = OpenMP:MONITORING, MPI:OFF --\n");
   {
     FILE *fp = fopen("test_tma.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
     fprintf(fp, "    max_num_traces = 300\n");
-    fprintf(fp, "    trace_mode_after = OpenMP:MONITORING, MPI:OFF\n");
+    fprintf(fp, "    window_end_action = OpenMP:MONITORING, MPI:OFF\n");
     fclose(fp);
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     parse_trace_config_file("test_tma.txt");
 
-    if (lexgion_default_trace_config->mode_after.mode[omp_idx] ==
+    if (lexgion_default_trace_config->end_action.mode[omp_idx] ==
             PINSIGHT_DOMAIN_MONITORING &&
-        lexgion_default_trace_config->mode_after.mode[mpi_idx] ==
+        lexgion_default_trace_config->end_action.mode[mpi_idx] ==
             PINSIGHT_DOMAIN_OFF) {
       printf("[PASS] TMA3: mode[OpenMP]=MONITORING, "
              "mode[MPI]=OFF\n");
     } else {
       printf("[FAIL] TMA3: mode[omp]=%d (exp MONITORING), "
              "mode[mpi]=%d (exp OFF)\n",
-             lexgion_default_trace_config->mode_after.mode[omp_idx],
-             lexgion_default_trace_config->mode_after.mode[mpi_idx]);
+             lexgion_default_trace_config->end_action.mode[omp_idx],
+             lexgion_default_trace_config->end_action.mode[mpi_idx]);
     }
   }
 
-  // --- TMA4: Per-address lexgion with trace_mode_after ---
-  printf("\n  -- TMA4: [Lexgion(0x400500)] trace_mode_after = OFF --\n");
+  // --- TMA4: Per-address lexgion with window_end_action ---
+  printf("\n  -- TMA4: [Lexgion(0x400500)] window_end_action = OFF --\n");
   {
     FILE *fp = fopen("test_tma.txt", "w");
     fprintf(fp, "[Lexgion(0x400500)]\n");
     fprintf(fp, "    max_num_traces = 50\n");
-    fprintf(fp, "    trace_mode_after = OFF\n");
+    fprintf(fp, "    window_end_action = OFF\n");
     fclose(fp);
     parse_trace_config_file("test_tma.txt");
 
@@ -1604,13 +1604,13 @@ void test_trace_mode_after() {
         // Shorthand OFF sets mode for all registered domains
         int all_off = 1;
         for (int d = 0; d < num_domain; d++) {
-          if (lc->mode_after.mode[d] != PINSIGHT_DOMAIN_OFF) {
+          if (lc->end_action.mode[d] != PINSIGHT_DOMAIN_OFF) {
             all_off = 0;
             break;
           }
         }
         if (all_off && lc->max_num_traces == 50) {
-          printf("[PASS] TMA4: Lexgion(0x400500) trace_mode_after=OFF, "
+          printf("[PASS] TMA4: Lexgion(0x400500) window_end_action=OFF, "
                  "max=50\n");
         } else {
           printf("[FAIL] TMA4: all_off=%d, max=%d\n", all_off,
@@ -1628,8 +1628,8 @@ void test_trace_mode_after() {
   remove("test_tma.txt");
 }
 
-void test_trace_mode_after_runtime() {
-  printf("\n===== trace_mode_after Runtime Tests =====\n");
+void test_window_end_action_runtime() {
+  printf("\n===== window_end_action Runtime Tests =====\n");
 
   // Find first OpenMP and MPI domain indices
   int omp_idx = -1;
@@ -1646,7 +1646,7 @@ void test_trace_mode_after_runtime() {
   }
 
   // --- TMA5: Explicit trigger fires and changes domain mode ---
-  printf("\n  -- TMA5: pinsight_fire_mode_triggers() changes domain mode --\n");
+  printf("\n  -- TMA5: pinsight_fire_window_end() changes domain mode --\n");
   {
     // Reset state
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
@@ -1655,10 +1655,10 @@ void test_trace_mode_after_runtime() {
 
     // Create a trace config with explicit trigger: OpenMP -> MONITORING
     lexgion_trace_config_t tc = {0};
-    tc.mode_after.mode[omp_idx] = PINSIGHT_DOMAIN_MONITORING;
+    tc.end_action.mode[omp_idx] = PINSIGHT_DOMAIN_MONITORING;
 
     // Fire the trigger
-    pinsight_fire_mode_triggers(&tc);
+    pinsight_fire_window_end(&tc);
 
     // Check 1: domain mode changed
     if (domain_default_trace_config[omp_idx].mode ==
@@ -1695,9 +1695,9 @@ void test_trace_mode_after_runtime() {
 
     // Try to trigger OpenMP -> OFF (should be blocked by mode_change_fired)
     lexgion_trace_config_t tc = {0};
-    tc.mode_after.mode[omp_idx] = PINSIGHT_DOMAIN_OFF;
+    tc.end_action.mode[omp_idx] = PINSIGHT_DOMAIN_OFF;
 
-    pinsight_fire_mode_triggers(&tc);
+    pinsight_fire_window_end(&tc);
 
     // Mode should NOT have changed (still MONITORING)
     if (domain_default_trace_config[omp_idx].mode ==
@@ -1712,8 +1712,8 @@ void test_trace_mode_after_runtime() {
     }
   }
 
-  // --- TMA7: mode_after triggers multiple domains ---
-  printf("\n  -- TMA7: mode_after triggers multiple domains --\n");
+  // --- TMA7: end_action triggers multiple domains ---
+  printf("\n  -- TMA7: end_action triggers multiple domains --\n");
   {
     // Reset both domains
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
@@ -1722,12 +1722,12 @@ void test_trace_mode_after_runtime() {
     domain_default_trace_config[mpi_idx].mode_change_fired = 0;
     mode_change_requested = 0;
 
-    // Create a config with mode_after set for both domains
+    // Create a config with end_action set for both domains
     lexgion_trace_config_t tc = {0};
-    tc.mode_after.mode[omp_idx] = PINSIGHT_DOMAIN_OFF;
-    tc.mode_after.mode[mpi_idx] = PINSIGHT_DOMAIN_OFF;
+    tc.end_action.mode[omp_idx] = PINSIGHT_DOMAIN_OFF;
+    tc.end_action.mode[mpi_idx] = PINSIGHT_DOMAIN_OFF;
 
-    pinsight_fire_mode_triggers(&tc);
+    pinsight_fire_window_end(&tc);
 
     // Both domains should switch to OFF
     int pass = 1;
@@ -1743,7 +1743,7 @@ void test_trace_mode_after_runtime() {
     }
     if (pass) {
       printf(
-          "[PASS] TMA7: mode_after triggered both OpenMP and MPI to OFF\n");
+          "[PASS] TMA7: end_action triggered both OpenMP and MPI to OFF\n");
     }
 
     // Restore modes for subsequent tests
@@ -1754,8 +1754,8 @@ void test_trace_mode_after_runtime() {
   }
 }
 
-void test_trace_mode_after_env() {
-  printf("\n===== trace_mode_after Env Var Tests =====\n");
+void test_window_end_action_env() {
+  printf("\n===== window_end_action Env Var Tests =====\n");
 
   int omp_idx = -1, mpi_idx = -1;
   for (int i = 0; i < num_domain; i++) {
@@ -1773,11 +1773,11 @@ void test_trace_mode_after_env() {
   printf(
       "\n  -- TMA8: PINSIGHT_TRACE_WINDOW=0:50:1:0:OpenMP:MONITORING,MPI:OFF --\n");
   {
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
 
-    /* New 5-field grammar: start:max:rate:window_timeout:mode_after */
+    /* New 5-field grammar: start:max:rate:window_timeout:end_action */
     setenv("PINSIGHT_TRACE_WINDOW", "0:50:1:0:OpenMP:MONITORING,MPI:OFF", 1);
     setup_trace_config_env();
     unsetenv("PINSIGHT_TRACE_WINDOW");
@@ -1789,17 +1789,17 @@ void test_trace_mode_after_env() {
              lexgion_default_trace_config->max_num_traces);
     }
 
-    if (lexgion_default_trace_config->mode_after.mode[omp_idx] ==
+    if (lexgion_default_trace_config->end_action.mode[omp_idx] ==
             PINSIGHT_DOMAIN_MONITORING &&
-        lexgion_default_trace_config->mode_after.mode[mpi_idx] ==
+        lexgion_default_trace_config->end_action.mode[mpi_idx] ==
             PINSIGHT_DOMAIN_OFF) {
       printf("[PASS] TMA8: mode[OpenMP]=MONITORING, "
              "mode[MPI]=OFF\n");
     } else {
       printf("[FAIL] TMA8: mode[omp]=%d (exp MONITORING), "
              "mode[mpi]=%d (exp OFF)\n",
-             lexgion_default_trace_config->mode_after.mode[omp_idx],
-             lexgion_default_trace_config->mode_after.mode[mpi_idx]);
+             lexgion_default_trace_config->end_action.mode[omp_idx],
+             lexgion_default_trace_config->end_action.mode[mpi_idx]);
     }
   }
 }
@@ -1820,18 +1820,18 @@ void test_introspect_config() {
   }
 
   // --- TMA9: INTROSPECT:60:analyze.sh:TRACING ---
-  printf("\n  -- TMA9: trace_mode_after = INTROSPECT:60:analyze.sh:TRACING --\n");
+  printf("\n  -- TMA9: window_end_action = INTROSPECT:60:analyze.sh:TRACING --\n");
   {
     FILE *fp = fopen("test_introspect.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
     fprintf(fp, "    max_num_traces = 100\n");
-    fprintf(fp, "    trace_mode_after = INTROSPECT:60:analyze.sh:TRACING\n");
+    fprintf(fp, "    window_end_action = INTROSPECT:60:analyze.sh:TRACING\n");
     fclose(fp);
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     parse_trace_config_file("test_introspect.txt");
 
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
 
     if (ma->introspect != 1) {
@@ -1862,17 +1862,17 @@ void test_introspect_config() {
   }
 
   // --- TMA10: INTROSPECT:0:- (indefinite, no script, default resume) ---
-  printf("\n  -- TMA10: trace_mode_after = INTROSPECT:0:- --\n");
+  printf("\n  -- TMA10: window_end_action = INTROSPECT:0:- --\n");
   {
     FILE *fp = fopen("test_introspect.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
-    fprintf(fp, "    trace_mode_after = INTROSPECT:0:-\n");
+    fprintf(fp, "    window_end_action = INTROSPECT:0:-\n");
     fclose(fp);
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     parse_trace_config_file("test_introspect.txt");
 
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
 
     if (ma->introspect != 1) {
@@ -1904,17 +1904,17 @@ void test_introspect_config() {
 
   // --- TMA11: INTROSPECT:30:my_analysis.sh (no explicit resume mode) ---
   printf(
-      "\n  -- TMA11: trace_mode_after = INTROSPECT:30:my_analysis.sh --\n");
+      "\n  -- TMA11: window_end_action = INTROSPECT:30:my_analysis.sh --\n");
   {
     FILE *fp = fopen("test_introspect.txt", "w");
     fprintf(fp, "[Lexgion.default]\n");
-    fprintf(fp, "    trace_mode_after = INTROSPECT:30:my_analysis.sh\n");
+    fprintf(fp, "    window_end_action = INTROSPECT:30:my_analysis.sh\n");
     fclose(fp);
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
     parse_trace_config_file("test_introspect.txt");
 
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
 
     if (ma->introspect_pause_duration != 30) {
@@ -1940,15 +1940,15 @@ void test_introspect_config() {
   // --- TMA12: INTROSPECT via env var (new 5-field grammar) ---
   printf("\n  -- TMA12: PINSIGHT_TRACE_WINDOW=0:100:10:0:INTROSPECT:60:analyze.sh:TRACING --\n");
   {
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
 
     setenv("PINSIGHT_TRACE_WINDOW",
            "0:100:10:0:INTROSPECT:60:analyze.sh:TRACING", 1);
     setup_trace_config_env();
     unsetenv("PINSIGHT_TRACE_WINDOW");
 
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
 
     if (lexgion_default_trace_config->max_num_traces != 100) {
@@ -1983,19 +1983,19 @@ void test_introspect_config() {
   printf("\n  -- TMA13: INTROSPECT serialization output --\n");
   {
     // Set up an INTROSPECT config
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
-    lexgion_default_trace_config->mode_after.introspect = 1;
-    lexgion_default_trace_config->mode_after.introspect_pause_duration = 45;
-    strncpy(lexgion_default_trace_config->mode_after.introspect_script,
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
+    lexgion_default_trace_config->end_action.introspect = 1;
+    lexgion_default_trace_config->end_action.introspect_pause_duration = 45;
+    strncpy(lexgion_default_trace_config->end_action.introspect_script,
             "test_script.sh",
-            sizeof(lexgion_default_trace_config->mode_after.introspect_script) - 1);
+            sizeof(lexgion_default_trace_config->end_action.introspect_script) - 1);
     for (int i = 0; i < num_domain; i++)
-      lexgion_default_trace_config->mode_after.mode[i] =
+      lexgion_default_trace_config->end_action.mode[i] =
           PINSIGHT_DOMAIN_TRACING;
 
     // Print to capture output (uses public API which prints all lexgion configs)
-    printf("  [Expected output to contain: trace_mode_after = INTROSPECT:45:test_script.sh:TRACING]\n");
+    printf("  [Expected output to contain: window_end_action = INTROSPECT:45:test_script.sh:TRACING]\n");
     printf("  [Actual output:]\n");
     print_lexgion_trace_config(stdout);
     printf("[PASS] TMA13: Serialization output generated (verify visually)\n");
@@ -2449,25 +2449,25 @@ void test_python_config() {
   }
 
   /* ------------------------------------------------------------------ */
-  /* PY11: trace_mode_after = Python:MONITORING on named Python lexgion  */
+  /* PY11: window_end_action = Python:MONITORING on named Python lexgion  */
   /* ------------------------------------------------------------------ */
-  printf("\n  -- PY11: trace_mode_after = Python:MONITORING on named lexgion --\n");
+  printf("\n  -- PY11: window_end_action = Python:MONITORING on named lexgion --\n");
   {
     int saved_n = num_lexgion_trace_configs;
     FILE *fp = fopen("test_py.txt", "w");
     fprintf(fp, "[Lexgion(Python:hotloop)]\n");
     fprintf(fp, "    max_num_traces = 10\n");
-    fprintf(fp, "    trace_mode_after = Python:MONITORING\n");
+    fprintf(fp, "    window_end_action = Python:MONITORING\n");
     fclose(fp);
     parse_trace_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("hotloop", py_idx, NULL);
     if (lc) {
-      if (lc->mode_after.mode[py_idx] == PINSIGHT_DOMAIN_MONITORING)
-        printf("[PASS] PY11: trace_mode_after Python:MONITORING stored\n");
+      if (lc->end_action.mode[py_idx] == PINSIGHT_DOMAIN_MONITORING)
+        printf("[PASS] PY11: window_end_action Python:MONITORING stored\n");
       else
-        printf("[FAIL] PY11: mode_after.mode[py]=%d (expected MONITORING=%d)\n",
-               lc->mode_after.mode[py_idx], PINSIGHT_DOMAIN_MONITORING);
+        printf("[FAIL] PY11: end_action.mode[py]=%d (expected MONITORING=%d)\n",
+               lc->end_action.mode[py_idx], PINSIGHT_DOMAIN_MONITORING);
     } else {
       printf("[FAIL] PY11: 'hotloop' named entry not found\n");
     }
@@ -2484,13 +2484,13 @@ void test_python_config() {
     FILE *fp = fopen("test_py.txt", "w");
     fprintf(fp, "[Lexgion(Python:expensive)]\n");
     fprintf(fp, "    max_num_traces = 5\n");
-    fprintf(fp, "    trace_mode_after = INTROSPECT:30:analyze.sh:Python:MONITORING\n");
+    fprintf(fp, "    window_end_action = INTROSPECT:30:analyze.sh:Python:MONITORING\n");
     fclose(fp);
     parse_trace_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("expensive", py_idx, NULL);
     if (lc) {
-      trace_mode_after_t *ma = &lc->mode_after;
+      window_end_action_t *ma = &lc->end_action;
       int pass = 1;
       if (!ma->introspect)
         { printf("[FAIL] PY12: introspect flag not set\n"); pass = 0; }
@@ -2700,10 +2700,10 @@ void test_python_config() {
 
 #endif /* PINSIGHT_PYTHON */
 
-/* window_timeout + mode_after_trigger (file + env) */
+/* window_timeout + window_end_trigger (file + env) */
 void test_window_timeout() {
-  printf("\n===== window_timeout / mode_after_trigger Tests =====\n");
-  trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+  printf("\n===== window_timeout / window_end_trigger Tests =====\n");
+  window_end_action_t *ma = &lexgion_default_trace_config->end_action;
 
   // --- WT1: file window_timeout key ---
   printf("\n  -- WT1: [Lexgion.default] window_timeout = 30 --\n");
@@ -2718,27 +2718,27 @@ void test_window_timeout() {
            ma->window_timeout_sec);
   }
 
-  // --- WT2: ordering gotcha — window_timeout BEFORE trace_mode_after survives ---
-  printf("\n  -- WT2: window_timeout before trace_mode_after (overwrite-survival) --\n");
+  // --- WT2: ordering gotcha — window_timeout BEFORE window_end_action survives ---
+  printf("\n  -- WT2: window_timeout before window_end_action (overwrite-survival) --\n");
   {
     FILE *fp = fopen("test_wt.txt", "w");
     fprintf(fp, "[Lexgion.default]\n    window_timeout = 25\n"
-                "    trace_mode_after = MONITORING\n");
+                "    window_end_action = MONITORING\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
     parse_trace_config_file("test_wt.txt");
     int ok = (ma->window_timeout_sec == 25) &&
              (ma->mode[0] == PINSIGHT_DOMAIN_MONITORING);
-    printf(ok ? "[PASS] WT2: window_timeout_sec=25 survived trace_mode_after overwrite\n"
+    printf(ok ? "[PASS] WT2: window_timeout_sec=25 survived window_end_action overwrite\n"
               : "[FAIL] WT2: window_timeout_sec=%d (expected 25), mode[0]=%d\n",
            ma->window_timeout_sec, ma->mode[0]);
   }
 
-  // --- WT3: mode_after_trigger = all ---
-  printf("\n  -- WT3: mode_after_trigger = all --\n");
+  // --- WT3: window_end_trigger = all ---
+  printf("\n  -- WT3: window_end_trigger = all --\n");
   {
     FILE *fp = fopen("test_wt.txt", "w");
-    fprintf(fp, "[Lexgion.default]\n    mode_after_trigger = all\n");
+    fprintf(fp, "[Lexgion.default]\n    window_end_trigger = all\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
     parse_trace_config_file("test_wt.txt");
@@ -2747,11 +2747,11 @@ void test_window_timeout() {
            ma->trigger, TRIGGER_ALL);
   }
 
-  // --- WT4: mode_after_trigger = anchor rejected -> first ---
-  printf("\n  -- WT4: mode_after_trigger = anchor (reserved -> first) --\n");
+  // --- WT4: window_end_trigger = anchor rejected -> first ---
+  printf("\n  -- WT4: window_end_trigger = anchor (reserved -> first) --\n");
   {
     FILE *fp = fopen("test_wt.txt", "w");
-    fprintf(fp, "[Lexgion.default]\n    mode_after_trigger = anchor\n");
+    fprintf(fp, "[Lexgion.default]\n    window_end_trigger = anchor\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
     parse_trace_config_file("test_wt.txt");
@@ -2760,7 +2760,7 @@ void test_window_timeout() {
            ma->trigger, TRIGGER_FIRST);
   }
 
-  // --- WT5: env PINSIGHT_TRACE_WINDOW with 4th field + mode_after ---
+  // --- WT5: env PINSIGHT_TRACE_WINDOW with 4th field + end_action ---
   printf("\n  -- WT5: PINSIGHT_TRACE_WINDOW=0:50:1:30:MONITORING --\n");
   {
     memset(ma, 0, sizeof(*ma));
@@ -2771,7 +2771,7 @@ void test_window_timeout() {
     int ok = (lexgion_default_trace_config->max_num_traces == 50) &&
              (ma->window_timeout_sec == 30) &&
              (ma->mode[0] == PINSIGHT_DOMAIN_MONITORING);
-    printf(ok ? "[PASS] WT5: max=50, window_timeout=30, mode_after=MONITORING\n"
+    printf(ok ? "[PASS] WT5: max=50, window_timeout=30, end_action=MONITORING\n"
               : "[FAIL] WT5: max=%d window=%d mode[0]=%d\n",
            lexgion_default_trace_config->max_num_traces,
            ma->window_timeout_sec, ma->mode[0]);
@@ -2820,9 +2820,9 @@ int main() {
   test_implicit_add();
   test_actions_and_features();
   test_domain_global();
-  test_trace_mode_after();
-  test_trace_mode_after_runtime();
-  test_trace_mode_after_env();
+  test_window_end_action();
+  test_window_end_action_runtime();
+  test_window_end_action_env();
   test_introspect_config();
   test_window_timeout();
   test_knob_config();

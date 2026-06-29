@@ -80,14 +80,14 @@ Additional punit constraints from other domains, separated by commas. **Only app
 
 > **Tracing window.** A *window* is a stretch of execution during which a domain
 > stays in one mode (TRACING / MONITORING / STANDBY / OFF). A TRACING window ends —
-> and `trace_mode_after` transitions the domain — when **either** the count trigger
-> (`max_num_traces`, per `mode_after_trigger`) **or** the time trigger
+> and `window_end_action` transitions the domain — when **either** the count trigger
+> (`max_num_traces`, per `window_end_trigger`) **or** the time trigger
 > (`window_timeout`, wall-clock seconds) fires, whichever comes first.
 
-- **Auto Mode Switch**: `trace_mode_after = MODE` — Action performed when the TRACING window ends (count trigger and/or `window_timeout`). Supports:
-  - Shorthand: `trace_mode_after = MONITORING` (applies to all domains with events in the lexgion)
-  - Explicit per-domain: `trace_mode_after = OpenMP:MONITORING, MPI:OFF`
-  - **INTROSPECT action**: `trace_mode_after = INTROSPECT:pause:script[:resume_mode]`
+- **Auto Mode Switch**: `window_end_action = MODE` — Action performed when the TRACING window ends (count trigger and/or `window_timeout`). Supports:
+  - Shorthand: `window_end_action = MONITORING` (applies to all domains with events in the lexgion)
+  - Explicit per-domain: `window_end_action = OpenMP:MONITORING, MPI:OFF`
+  - **INTROSPECT action**: `window_end_action = INTROSPECT:pause:script[:resume_mode]`
     - `pause` — seconds to pause the app before auto-resuming (the INTROSPECT *pause duration*; internally `introspect_pause_duration`). Semantics:
       - `> 0`: pause for N seconds (interruptible by SIGUSR1)
       - `0`: no pause — run the script and immediately continue
@@ -95,8 +95,8 @@ Additional punit constraints from other domains, separated by commas. **Only app
     - `script` — analysis script to launch (`-` = none). Receives `<chunk_path> <app_pid> <config_file>` as arguments.
     - `resume_mode` — domain mode after resume (default: `MONITORING`). Accepts `OFF`, `STANDBY`, `MONITORING`, or `TRACING`.
     - When INTROSPECT fires, PInsight automatically runs `lttng rotate` to flush traces, then optionally launches the script, then pauses ALL application threads (via the control thread) until the pause duration elapses or SIGUSR1.
-- **Window Timeout**: `window_timeout = N` — End the TRACING window after **N wall-clock seconds** (integer) and perform `trace_mode_after`, **even if no region reaches `max_num_traces`**. `0`/absent/negative = disabled (default). This is a single per-process backstop handled entirely in the control thread (zero application overhead); the clock starts at process start. Use it standalone for time-windowed capture ("trace the first N seconds, then drop to MONITORING"), or alongside a count trigger as a guaranteed ceiling on TRACING duration.
-- **Count Policy**: `mode_after_trigger = first | all` — Which count condition ends the window (default `first`):
+- **Window Timeout**: `window_timeout = N` — End the TRACING window after **N wall-clock seconds** (integer) and perform `window_end_action`, **even if no region reaches `max_num_traces`**. `0`/absent/negative = disabled (default). This is a single per-process backstop handled entirely in the control thread (zero application overhead); the clock starts at process start. Use it standalone for time-windowed capture ("trace the first N seconds, then drop to MONITORING"), or alongside a count trigger as a guaranteed ceiling on TRACING duration.
+- **Count Policy**: `window_end_trigger = first | all` — Which count condition ends the window (default `first`):
   - `first` — the first region to reach `max_num_traces` fires (lowest overhead; biased coverage).
   - `all` — fire only once **every** region this thread has encountered has capped (per-thread; the first thread to satisfy it fires). ⚠ If a region is rare or never re-reached the window may never end via count alone — pair `all` with a `window_timeout` backstop (PInsight warns at startup if you don't).
   - `anchor` — **reserved, not yet implemented** (the parser rejects it and falls back to `first`).
@@ -211,7 +211,7 @@ Trace 100 executions of each lexgion, then switch all domains to MONITORING.
 [Lexgion.default]
     max_num_traces = 100
     tracing_rate = 1
-    trace_mode_after = MONITORING
+    window_end_action = MONITORING
 ```
 
 ### 15. Per-Domain Auto Mode Switch
@@ -219,7 +219,7 @@ Trace 50 executions of a specific region, then set OpenMP to MONITORING and MPI 
 ```ini
 [Lexgion(0x400500)]
     max_num_traces = 50
-    trace_mode_after = OpenMP:MONITORING, MPI:OFF
+    window_end_action = OpenMP:MONITORING, MPI:OFF
 ```
 
 ### 16. Introspect-Analyze-Resume Workflow
@@ -228,13 +228,13 @@ Trace 100 executions, then introspect for 60 seconds while running an analysis s
 [Lexgion.default]
     max_num_traces = 100
     tracing_rate = 10
-    trace_mode_after = INTROSPECT:60:analyze_traces.sh:TRACING
+    window_end_action = INTROSPECT:60:analyze_traces.sh:TRACING
 ```
 
 ### 17. INTROSPECT via Environment Variable
 Same as above, configured entirely via env var. The `PINSIGHT_TRACE_WINDOW`
 variable mirrors `[Lexgion.default]`; its grammar is
-`start:max:rate:window_timeout[:mode_after_string]` (see "Environment Variables"
+`start:max:rate:window_timeout[:window_end_action_string]` (see "Environment Variables"
 below). Here `window_timeout` is `0` (disabled):
 ```bash
 PINSIGHT_TRACE_WINDOW=0:100:10:0:INTROSPECT:60:analyze_traces.sh:TRACING
@@ -245,7 +245,7 @@ Introspect indefinitely with no script — only SIGUSR1 resumes the app.
 ```ini
 [Lexgion.default]
     max_num_traces = 50
-    trace_mode_after = INTROSPECT:-1:-
+    window_end_action = INTROSPECT:-1:-
 ```
 
 ### 19. Fire-and-Forget INTROSPECT (No Pause)
@@ -253,7 +253,7 @@ Run the analysis script immediately without pausing the application. Useful for 
 ```ini
 [Lexgion.default]
     max_num_traces = 100
-    trace_mode_after = INTROSPECT:0:analyze_traces.sh:TRACING
+    window_end_action = INTROSPECT:0:analyze_traces.sh:TRACING
 ```
 
 ### 20. INTROSPECT with STANDBY Resume
@@ -261,7 +261,7 @@ After introspection, resume in STANDBY mode (near-zero overhead, recoverable).
 ```ini
 [Lexgion.default]
     max_num_traces = 200
-    trace_mode_after = INTROSPECT:60:analyze.sh:STANDBY
+    window_end_action = INTROSPECT:60:analyze.sh:STANDBY
 ```
 
 ### 21. Time-Windowed Capture (`window_timeout`, standalone)
@@ -273,7 +273,7 @@ where activity records are not rate-limited).
     trace_mode = TRACING
 [Lexgion.default]
     window_timeout = 30
-    trace_mode_after = HIP:MONITORING
+    window_end_action = HIP:MONITORING
 ```
 
 ### 22. Count OR Timeout, with the `all` Policy
@@ -283,9 +283,9 @@ case). Whichever fires first wins.
 ```ini
 [Lexgion.default]
     max_num_traces = 50
-    mode_after_trigger = all
+    window_end_trigger = all
     window_timeout = 60
-    trace_mode_after = MONITORING
+    window_end_action = MONITORING
 ```
 
 ### 23. Cyclic INTROSPECT Bounded by `window_timeout`
@@ -296,7 +296,7 @@ every cycle, so each window is bounded.
 [Lexgion.default]
     max_num_traces = 100
     window_timeout = 45
-    trace_mode_after = INTROSPECT:30:analyze.sh:TRACING
+    window_end_action = INTROSPECT:30:analyze.sh:TRACING
 ```
 
 ---
@@ -313,21 +313,21 @@ Configuration can also be supplied without a file:
 
 ### `PINSIGHT_TRACE_WINDOW` grammar
 ```
-PINSIGHT_TRACE_WINDOW = start : max : rate : window_timeout [ : mode_after_string ]
+PINSIGHT_TRACE_WINDOW = start : max : rate : window_timeout [ : window_end_action_string ]
 ```
 Read as: *the window starts at `start`, caps at `max` traces, is sampled at `rate`,
-times out after `window_timeout` seconds, then performs `mode_after_string`.*
+times out after `window_timeout` seconds, then performs `window_end_action_string`.*
 - `window_timeout` is integer seconds; `0` = disabled.
 - To set a mode-after with **no** timeout, put `0` in the 4th field:
   `0:50:1:0:HIP:MONITORING`. For a timeout with **no** count cap:
   `0:-1:1:30:HIP:MONITORING`.
-- `mode_after_string` accepts everything `trace_mode_after` does, including
+- `window_end_action_string` accepts everything `window_end_action` does, including
   `INTROSPECT:pause:script[:resume_mode]`.
 - Example — cap at 50 traces *or* 30 s, then HIP→MONITORING:
   `PINSIGHT_TRACE_WINDOW=0:50:1:30:HIP:MONITORING`.
 
 > **⚠ Deprecation / breaking change.** This variable was formerly
-> `PINSIGHT_TRACE_RATE` with grammar `start:max:rate[:mode_after_string]` (no
+> `PINSIGHT_TRACE_RATE` with grammar `start:max:rate[:window_end_action_string]` (no
 > `window_timeout` field). `PINSIGHT_TRACE_RATE` is **still accepted as a
 > deprecated alias** (same new grammar) and prints a one-line warning. Existing
 > values that used a 4th field (e.g. `0:50:1:HIP:MONITORING`) must insert the new

@@ -2,7 +2,7 @@
 # window_timeout test for the per-process wall-clock window deadline.
 #
 # Runs looping_pinsight in TRACING with a [Lexgion.default] window_timeout that is
-# much shorter than the run, and trace_mode_after = HIP:MONITORING. The control
+# much shorter than the run, and window_end_action = HIP:MONITORING. The control
 # thread's sem_timedwait must fire at the deadline and flip HIP -> MONITORING even
 # though NO region reaches max_num_traces (the standalone time-windowed capture).
 # Verifies:
@@ -41,7 +41,7 @@ cat > "$CFG" <<EOF
     trace_mode = TRACING
 [Lexgion.default]
     window_timeout = $WINDOW
-    trace_mode_after = HIP:MONITORING
+    window_end_action = HIP:MONITORING
 EOF
 
 lttng destroy -a >/dev/null 2>&1

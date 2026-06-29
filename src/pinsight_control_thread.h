@@ -10,7 +10,7 @@
  *
  * Wakeup sources:
  *   - SIGUSR1 signal → sem_post(&control_sem)
- *   - Auto-trigger (mode_after) → pinsight_control_thread_wakeup()
+ *   - Auto-trigger (end_action) → pinsight_control_thread_wakeup()
  *   - inotify config file change (Linux only, future)
  */
 #ifndef PINSIGHT_CONTROL_THREAD_H
@@ -50,7 +50,7 @@ void pinsight_control_thread_stop(void);
  * @param reason  Bitmask of PINSIGHT_WAKEUP_* flags indicating what to do.
  */
 #define PINSIGHT_WAKEUP_CONFIG_RELOAD  0x01  /* Re-read config file */
-#define PINSIGHT_WAKEUP_MODE_CHANGE    0x02  /* Apply mode_after changes */
+#define PINSIGHT_WAKEUP_MODE_CHANGE    0x02  /* Apply end_action changes */
 #define PINSIGHT_WAKEUP_INTROSPECT     0x04  /* Run introspection + pause */
 
 void pinsight_control_thread_wakeup(int reason);
@@ -82,9 +82,9 @@ static inline void pinsight_check_pause(void) {
 
 /**
  * Set the pending introspection action for the control thread.
- * Called from pinsight_fire_mode_triggers() when mode_after.introspect == 1.
+ * Called from pinsight_fire_window_end() when end_action.introspect == 1.
  */
-void pinsight_control_set_pending_action(trace_mode_after_t *ma);
+void pinsight_control_set_pending_action(window_end_action_t *ma);
 
 /* ================================================================
  * Domain-specific apply functions — called by control thread only.

@@ -177,7 +177,7 @@ check "3.2c tracing_rate=1 (every call), $N calls → $N traces" "$COUNT" $N eq
 
 # ═══════════════════════════════════════════════════════════════════════════
 echo ""
-echo "===== Phase 3.3: trace_mode_after =====";
+echo "===== Phase 3.3: window_end_action =====";
 echo ""
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -190,7 +190,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 
 [Lexgion(Python:once_then_stop)]
     max_num_traces  = 20
-    trace_mode_after = Python:MONITORING
+    window_end_action = Python:MONITORING
 EOF
 
 cat > /tmp/test_3_3ab.py <<PYEOF
@@ -225,7 +225,7 @@ rm -rf /tmp/pinsight-phase3-trace
 check "3.3a once_then_stop emits 20 traces before trigger" "$STOP_COUNT" 20 eq
 check "3.3b hot_loop emits 0 traces (domain already MONITORING by the time it runs)" "$HOT_COUNT" 0 eq
 
-# ── 3.3c: trace_mode_after = Python:STANDBY ──
+# ── 3.3c: window_end_action = Python:STANDBY ──
 # Verify that after the trigger, the domain is in STANDBY (still counting but not tracing)
 cat > /tmp/pinsight_trace_config.txt <<'EOF'
 [Python.global]
@@ -233,14 +233,14 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 
 [Lexgion(Python:once_then_stop)]
     max_num_traces  = 15
-    trace_mode_after = Python:STANDBY
+    window_end_action = Python:STANDBY
 EOF
 
 session_start
 PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 STOP_COUNT=$(session_stop_and_count "once_then_stop")
-check "3.3c trace_mode_after=STANDBY: exactly 15 traces then silence" "$STOP_COUNT" 15 eq
+check "3.3c window_end_action=STANDBY: exactly 15 traces then silence" "$STOP_COUNT" 15 eq
 
 # ── 3.3d: Lexgion(Python).default max_num_traces ──
 # All Python functions share max_num_traces=5 via domain default.
@@ -282,7 +282,7 @@ cat > /tmp/pinsight_trace_config.txt <<EOF
 
 [Lexgion(Python:hot_loop)]
     max_num_traces   = 10
-    trace_mode_after = INTROSPECT:5:/tmp/introspect_script.sh:Python:TRACING
+    window_end_action = INTROSPECT:5:/tmp/introspect_script.sh:Python:TRACING
 EOF
 
 session_start

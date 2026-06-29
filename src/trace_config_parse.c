@@ -71,7 +71,7 @@ static pinsight_domain_mode_t parse_mode_value(const char *val) {
 }
 
 /**
- * Unified parser for trace_mode_after values.
+ * Unified parser for window_end_action values.
  * Format: [INTROSPECT:<timeout>:<script>:][OFF|STANDBY|MONITOR|TRACE|<domain>:<mode>[,...]]
  *
  * Examples:
@@ -87,7 +87,7 @@ static pinsight_domain_mode_t parse_mode_value(const char *val) {
  *
  * Returns 0 on success, -1 on error.
  */
-int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
+int parse_window_end_action(const char *val, window_end_action_t *out) {
   /* Parser only writes fields that the user explicitly specifies.
    * Caller is responsible for initializing the struct (e.g., = {0}). */
 
@@ -151,7 +151,7 @@ int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
           out->mode[d_idx] = parse_mode_value(ms);
         } else {
           fprintf(stderr, "PInsight config: unknown domain '%s' in "
-                          "trace_mode_after\n", domain_name);
+                          "window_end_action\n", domain_name);
         }
       } else {
         // Shorthand: "MONITORING" -> apply to all registered domains
@@ -760,45 +760,45 @@ static void parse_key_value(char *line) {
       int v = atoi(val);
       for (int ci = 0; ci < cfg_count; ci++)
         cfgs[ci]->tracing_rate = v;
-    } else if (strcmp(key, "trace_mode_after") == 0) {
-      // Unified parsing for all trace_mode_after values (including INTROSPECT)
-      trace_mode_after_t parsed = {0};
-      parse_trace_mode_after(val, &parsed);
+    } else if (strcmp(key, "window_end_action") == 0) {
+      // Unified parsing for all window_end_action values (including INTROSPECT)
+      window_end_action_t parsed = {0};
+      parse_window_end_action(val, &parsed);
       for (int ci = 0; ci < cfg_count; ci++) {
         /* Preserve runtime cycling state (generation, fired) across reload.
          * These fields are incremented/reset by the control thread during
          * cyclic INTROSPECT; resetting them on re-parse would break the
          * generation-based counter reset that drives each new cycle.
          * Also preserve the config sub-fields set by their OWN keys
-         * (window_timeout, mode_after_trigger) so this full-struct overwrite
+         * (window_timeout, window_end_trigger) so this full-struct overwrite
          * stays order-independent w.r.t. those keys within the same section. */
-        parsed.generation         = cfgs[ci]->mode_after.generation;
-        parsed.fired              = cfgs[ci]->mode_after.fired;
-        parsed.window_timeout_sec = cfgs[ci]->mode_after.window_timeout_sec;
-        parsed.trigger            = cfgs[ci]->mode_after.trigger;
-        cfgs[ci]->mode_after = parsed;
+        parsed.generation         = cfgs[ci]->end_action.generation;
+        parsed.fired              = cfgs[ci]->end_action.fired;
+        parsed.window_timeout_sec = cfgs[ci]->end_action.window_timeout_sec;
+        parsed.trigger            = cfgs[ci]->end_action.trigger;
+        cfgs[ci]->end_action = parsed;
       }
     } else if (strcmp(key, "window_timeout") == 0) {
       /* Wall-clock deadline (seconds) ending the TRACING window. 0/absent/<0
-       * = disabled. Lives in mode_after; preserved across the trace_mode_after
+       * = disabled. Lives in end_action; preserved across the window_end_action
        * overwrite above. */
       int v = atoi(val);
       for (int ci = 0; ci < cfg_count; ci++)
-        cfgs[ci]->mode_after.window_timeout_sec = v;
-    } else if (strcmp(key, "mode_after_trigger") == 0) {
+        cfgs[ci]->end_action.window_timeout_sec = v;
+    } else if (strcmp(key, "window_end_trigger") == 0) {
       /* Count-policy: first (default) | all | anchor(reserved). */
-      mode_after_trigger_t trig = TRIGGER_FIRST;
+      window_end_trigger_t trig = TRIGGER_FIRST;
       if (strcasecmp(val, "all") == 0) {
         trig = TRIGGER_ALL;
       } else if (strcasecmp(val, "anchor") == 0) {
-        fprintf(stderr, "PInsight config: mode_after_trigger='anchor' is not yet "
+        fprintf(stderr, "PInsight config: window_end_trigger='anchor' is not yet "
                         "implemented; using 'first'\n");
       } else if (strcasecmp(val, "first") != 0) {
-        fprintf(stderr, "PInsight config: unknown mode_after_trigger='%s' "
+        fprintf(stderr, "PInsight config: unknown window_end_trigger='%s' "
                         "(expected first|all); using 'first'\n", val);
       }
       for (int ci = 0; ci < cfg_count; ci++)
-        cfgs[ci]->mode_after.trigger = trig;
+        cfgs[ci]->end_action.trigger = trig;
     } else {
       // Check for Domain.Event override
       char *dot = strchr(key, '.');

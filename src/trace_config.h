@@ -171,7 +171,7 @@ typedef struct punit_trace_config {
  * TRACING:    Full tracing with LTTng output (default).
  */
 typedef enum {
-  PINSIGHT_DOMAIN_NONE = 0, /* No mode specified (only for trace_mode_after) */
+  PINSIGHT_DOMAIN_NONE = 0, /* No mode specified (only for window_end_action) */
   PINSIGHT_DOMAIN_OFF = 1,  /* Permanent teardown */
   PINSIGHT_DOMAIN_STANDBY = 2,    /* Callback-ready, immediate return */
   PINSIGHT_DOMAIN_MONITORING = 3, /* LRU lookup + count, no LTTng */
@@ -214,7 +214,7 @@ typedef struct domain_trace_config { // The trace config for a domain
   volatile unsigned long int
       events; // The default event config for the domain, initially copied from
               // domain_info->events
-  volatile int mode_change_fired; // Once-per-domain latch: set when mode_after
+  volatile int mode_change_fired; // Once-per-domain latch: set when end_action
                                   // fires, reset on config reload
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
@@ -226,21 +226,21 @@ extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
  *            the first thread to satisfy it trips the global latch).
  *   anchor = reserved, NOT yet implemented (a user-named region caps). The parser
  *            rejects this keyword for now. Enum so adding it later is additive. */
-typedef enum mode_after_trigger {
+typedef enum window_end_trigger {
   TRIGGER_FIRST  = 0, /* default (zero-initialized) */
   TRIGGER_ALL    = 1,
   TRIGGER_ANCHOR = 2, /* reserved */
-} mode_after_trigger_t;
+} window_end_trigger_t;
 
 /**
- * Unified trace_mode_after action: handles both regular mode switching
+ * Unified window_end_action action: handles both regular mode switching
  * (e.g. MONITORING, OpenMP:OFF) and INTROSPECT with timeout/script.
  *
  * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect ==
  * 0. For INTROSPECT:     introspect == 1, introspect_pause_duration/introspect_script
  * set, mode[] specifies per-domain resume modes after introspection.
  */
-typedef struct trace_mode_after {
+typedef struct window_end_action {
   pinsight_domain_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
                                                 // (NONE = no change)
   int introspect;              // 1 = introspect before switching modes
@@ -252,11 +252,11 @@ typedef struct trace_mode_after {
   volatile unsigned int generation; // incremented each cyclic INTROSPECT cycle;
                                     // lexgions compare against their local
                                     // introspect_gen to auto-reset trace_counter
-  mode_after_trigger_t trigger;     // count-policy for the count trigger
+  window_end_trigger_t trigger;     // count-policy for the count trigger
                                     // (default TRIGGER_FIRST = 0)
   int window_timeout_sec;           // >0: wall-clock deadline (sec) ending the
                                     // TRACING window; 0/absent = disabled (default)
-} trace_mode_after_t;
+} window_end_action_t;
 
 /**
  * A lexgion trace config includes the triple (trace_starts_at, max_num_traces,
@@ -294,7 +294,7 @@ typedef struct lexgion_trace_config {
   int domain_index;       /* -1 = any domain; else must match lexgion class */
 
   // Auto-trigger: switch domain modes when max_num_traces is reached
-  trace_mode_after_t mode_after;
+  window_end_action_t end_action;
 } lexgion_trace_config_t;
 
 // Default rate trace config: trace every execution,
@@ -315,10 +315,10 @@ extern void pinsight_load_trace_config(char *filepath);
 void parse_trace_config_file(char *filename);
 extern int find_domain_index(const char *name);
 
-// Unified parser for trace_mode_after values:
+// Unified parser for window_end_action values:
 // "MONITORING", "OpenMP:OFF,MPI:MONITORING",
 // "INTROSPECT:60:script.sh[:TRACING]"
-extern int parse_trace_mode_after(const char *val, trace_mode_after_t *out);
+extern int parse_window_end_action(const char *val, window_end_action_t *out);
 
 // Check whether the current execution punit id's match the domain_punit_set
 // constraints

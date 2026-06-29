@@ -140,9 +140,9 @@ void setup_trace_config_env() {
   }
 
   // 2. Override Lexgion Window
-  // PINSIGHT_TRACE_WINDOW=start:max:rate:window_timeout[:mode_after_string]
+  // PINSIGHT_TRACE_WINDOW=start:max:rate:window_timeout[:end_action_string]
   //   window_timeout = wall-clock seconds ending the window (0 = disabled)
-  // mode_after_string can be:
+  // end_action_string can be:
   //   MONITORING | OpenMP:MONITORING | OpenMP:MONITORING,MPI:OFF
   //   INTROSPECT:60:script.sh[:TRACING]
   // PINSIGHT_TRACE_RATE is retained as a DEPRECATED ALIAS (same grammar).
@@ -164,9 +164,9 @@ void setup_trace_config_env() {
     if (count >= 3)
       lexgion_default_trace_config->tracing_rate = rate;
     if (count >= 4)
-      lexgion_default_trace_config->mode_after.window_timeout_sec = window;
+      lexgion_default_trace_config->end_action.window_timeout_sec = window;
 
-    // Find the 5th field (mode_after string): skip past the 4th ':'
+    // Find the 5th field (end_action string): skip past the 4th ':'
     char *p = (char *)win_env;
     int colons = 0;
     while (*p && colons < 4) {
@@ -174,9 +174,9 @@ void setup_trace_config_env() {
         colons++;
       p++;
     }
-    // p now points to the start of the mode_after string (or '\0')
+    // p now points to the start of the end_action string (or '\0')
     if (colons == 4 && *p) {
-      parse_trace_mode_after(p, &lexgion_default_trace_config->mode_after);
+      parse_window_end_action(p, &lexgion_default_trace_config->end_action);
     }
   }
 }
@@ -298,8 +298,8 @@ void initial_setup_trace_config() {
       DEFAULT_TRACE_START; // start tracing from the first execution
   lexgion_default_trace_config->max_num_traces =
       DEFAULT_TRACE_MAX; // unlimited traces
-    memset(&lexgion_default_trace_config->mode_after, 0,
-           sizeof(lexgion_default_trace_config->mode_after));
+    memset(&lexgion_default_trace_config->end_action, 0,
+           sizeof(lexgion_default_trace_config->end_action));
 
   // Mark the default lexgion trace config for each domain as empty config
   // codeptr: NULL: empty config
@@ -319,9 +319,9 @@ void initial_setup_trace_config() {
    * window may never end. Recommend a window_timeout backstop. 'first' always
    * fires, so it needs no warning. (Warn only; do not error or inject a default.) */
   {
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     if (ma->trigger == TRIGGER_ALL && ma->window_timeout_sec <= 0) {
-      fprintf(stderr, "PInsight WARNING: mode_after_trigger='all' with no "
+      fprintf(stderr, "PInsight WARNING: window_end_trigger='all' with no "
                       "window_timeout — the tracing window may never end if a "
                       "region is rare or never re-reached. Consider setting "
                       "window_timeout.\n");
@@ -580,9 +580,9 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
   fprintf(out, "    max_num_traces = %d\n", lg->max_num_traces);
   fprintf(out, "    tracing_rate = %d\n", lg->tracing_rate);
   {
-    trace_mode_after_t *ma = &lg->mode_after;
+    window_end_action_t *ma = &lg->end_action;
     if (ma->introspect) {
-      fprintf(out, "    trace_mode_after = INTROSPECT:%d:%s",
+      fprintf(out, "    window_end_action = INTROSPECT:%d:%s",
               ma->introspect_pause_duration,
               ma->introspect_script[0] ? ma->introspect_script : "-");
       // Print resume mode (use first domain's mode as representative)
@@ -610,15 +610,15 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
       }
       fprintf(out, "\n");
     } else {
-      int has_mode_after = 0;
+      int has_end_action = 0;
       for (int d = 0; d < num_domain; d++) {
         if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
-          has_mode_after = 1;
+          has_end_action = 1;
           break;
         }
       }
-      if (has_mode_after) {
-        fprintf(out, "    trace_mode_after =");
+      if (has_end_action) {
+        fprintf(out, "    window_end_action =");
         int first = 1;
         for (int d = 0; d < num_domain; d++) {
           if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {

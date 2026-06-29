@@ -288,7 +288,7 @@ void on_ompt_callback_thread_end(ompt_data_t *thread_data) {
     lexgion_t *lgp;
 
     /* Drain any stale lexgion stack entries left by callbacks that were
-     * deregistered mid-execution (e.g. mode_after=OFF).  Keep popping
+     * deregistered mid-execution (e.g. end_action=OFF).  Keep popping
      * until we reach the initial parallel region or the stack is empty. */
     lgp = lexgion_end(&record_id);
     while (lgp && lgp->codeptr_ra != (void *)INITIAL_PARALLEL_CODEPTR &&

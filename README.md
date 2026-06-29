@@ -213,7 +213,7 @@ PINSIGHT_TRACE_CUDA=<MODE>
 PINSIGHT_TRACE_HIP=<MODE>
 PINSIGHT_TRACE_PYTHON=<MODE>
 
-# Tracing window: start:max_num_traces:tracing_rate:window_timeout[:mode_after]
+# Tracing window: start:max_num_traces:tracing_rate:window_timeout[:window_end_action]
 # (window_timeout = wall-clock seconds to end the window, 0 = disabled)
 PINSIGHT_TRACE_WINDOW=0:100:1:0:MONITORING
 # PINSIGHT_TRACE_RATE is a deprecated alias (same grammar, prints a warning).
@@ -225,7 +225,7 @@ PINSIGHT_TRACE_CONFIG_FILE=/path/to/config.txt
 PINSIGHT_DEBUG_ENABLE=0|1
 ```
 
-**Tracing-window examples** (`start:max:rate:window_timeout[:mode_after]`):
+**Tracing-window examples** (`start:max:rate:window_timeout[:window_end_action]`):
 
 | Setting | Meaning |
 |---------|---------|
@@ -255,7 +255,7 @@ The file is searched in this order:
 [Lexgion.default]
     max_num_traces = 100
     tracing_rate = 1
-    trace_mode_after = MONITORING
+    window_end_action = MONITORING
 ```
 
 See [`doc/PINSIGHT_TRACE_CONFIG_FORMAT.md`](doc/PINSIGHT_TRACE_CONFIG_FORMAT.md) for the full config format specification.
@@ -301,7 +301,7 @@ Application running (TRACING mode)
 ```ini
 [Lexgion.default]
     max_num_traces = 100
-    trace_mode_after = INTROSPECT:10:analyze.sh:TRACING
+    window_end_action = INTROSPECT:10:analyze.sh:TRACING
     #                  ^^^^^^^^^^  ^^  ^^^^^^^^^^  ^^^^^^^
     #                  action    timeout  script  resume_mode
 ```

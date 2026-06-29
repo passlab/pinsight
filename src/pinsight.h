@@ -109,7 +109,7 @@ typedef struct lexgion {
                                * rate-limiting: topmost parallel/task or regions
                                * with address-specific config) */
   unsigned int introspect_gen; /* generation when trace_counter was last reset;
-                                * compared against mode_after.generation to detect
+                                * compared against end_action.generation to detect
                                 * new cycles and auto-reset the counter */
   unsigned int
       first_trace_num; // the execution number when the first trace is recorded
@@ -212,7 +212,7 @@ static inline int get_trace_bit() {
 }
 
 // Forward declaration for auto-trigger (defined in pinsight.c)
-extern void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc);
+extern void pinsight_fire_window_end(lexgion_trace_config_t *tc);
 /* 'all' count-policy gate: 1 iff every finite-cap lexgion THIS THREAD has seen
  * has capped (defined in pinsight.c). */
 extern int pinsight_all_seen_lexgions_capped(void);
@@ -231,20 +231,20 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
     if (lgp->trace_counter >= tc->max_num_traces) {
       /* Count-policy: 'first' (default) fires on the first region to cap;
        * 'all' fires only once every region THIS THREAD has seen has capped.
-       * The global mode_after.fired latch makes the first thread to satisfy
+       * The global end_action.fired latch makes the first thread to satisfy
        * the policy the one that applies the switch.
        * Reached only at a region's cap edge (this branch runs once per region
        * per window — see set_top_trace_bit). 'first' short-circuits to a single
        * int compare; the 'all' scan's cost is documented on the helper. */
-      if (tc->mode_after.trigger != TRIGGER_ALL ||
+      if (tc->end_action.trigger != TRIGGER_ALL ||
           pinsight_all_seen_lexgions_capped()) {
-        pinsight_fire_mode_triggers(tc);
+        pinsight_fire_window_end(tc);
       }
       /* Do NOT reset trace_counter here. Keeping it at max_num_traces
-       * permanently stops tracing when there is no trace_mode_after.
+       * permanently stops tracing when there is no window_end_action.
        * For INTROSPECT cycling, the counter is reset via the generation
        * check in lexgion_set_top_trace_bit_domain_event when the
-       * control thread advances mode_after.generation after each cycle. */
+       * control thread advances end_action.generation after each cycle. */
     }
   }
 }

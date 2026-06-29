@@ -24,7 +24,7 @@ A **window** is a maximal stretch of execution during which a domain stays in on
 mode (TRACING / MONITORING / STANDBY / OFF). The run is a sequence of windows, and
 each **mode switch** is simply the boundary between one window and the next. The
 **TRACING window** is the one this design bounds: it ends — and transitions the
-domain to another mode (e.g. `HIP → MONITORING`) per `trace_mode_after` — when
+domain to another mode (e.g. `HIP → MONITORING`) per `window_end_action` — when
 either trigger trips:
 
 - the **count trigger**: some region reaches `max_num_traces` (today's behavior), or
@@ -65,7 +65,7 @@ triggers and INTROSPECT are all points on it:
 3. **At window end, INTROSPECT runs if configured** — the analysis script is
    spawned and (if `introspect_pause_duration != 0`) the application pauses, then
    resumes. This happens *before* the mode transition.
-4. **The mode transition** (`trace_mode_after`) is applied — the boundary that
+4. **The mode transition** (`window_end_action`) is applied — the boundary that
    starts the next window. Two shapes:
    - **Indefinite next window** (e.g. → `HIP:MONITORING`): a MONITORING (or
      STANDBY/OFF) window begins with **no end-trigger configured**, so it runs
@@ -96,9 +96,9 @@ current scope**.
 
 ## 2. Motivation
 
-`trace_mode_after` today is a count-driven, one-shot global switch: the **first**
+`window_end_action` today is a count-driven, one-shot global switch: the **first**
 lexgion (per-thread region) to reach `max_num_traces` flips the whole domain via
-the `ma->fired` CAS latch in `pinsight_fire_mode_triggers()`
+the `ma->fired` CAS latch in `pinsight_fire_window_end()`
 ([src/pinsight.c:22](../src/pinsight.c#L22)). The planned trigger-policy menu
 extends this to:
 
@@ -108,7 +108,7 @@ extends this to:
 
 **Implemented scope:** only `first` and `all` are built now. `anchor` is a
 **reserved** policy value, designed for additive extension: the trigger policy is
-a parsed enum (e.g. `mode_after_trigger_t { TRIGGER_FIRST, TRIGGER_ALL,
+a parsed enum (e.g. `window_end_trigger_t { TRIGGER_FIRST, TRIGGER_ALL,
 TRIGGER_ANCHOR }`), so adding `anchor` later is just a new accepted keyword plus
 one branch in the fire logic — no change to the data model, the window, or the
 timeout machinery. The parser should reject the `anchor` keyword for now with a
@@ -194,7 +194,7 @@ while (!control_shutdown) {
     if (rc == -1 && errno == ETIMEDOUT) {
         /* Deadline reached. Win the latch; if a count policy already fired this
          * window, the CAS no-ops and we just disarm (Section 7). */
-        trace_mode_after_t *ma = window_timer_ma;   /* the armed action */
+        window_end_action_t *ma = window_timer_ma;   /* the armed action */
         int expected = 0;
         if (!__atomic_compare_exchange_n(&ma->fired, &expected, 1, 0,
                                          __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
@@ -239,13 +239,13 @@ then `+= seconds`).
 
 ## 5. Config grammar
 
-A new key in the `[Lexgion*]` section, alongside `trace_mode_after`:
+A new key in the `[Lexgion*]` section, alongside `window_end_action`:
 
 ```
 [Lexgion.default]
     max_num_traces   = 50              # end window by count (existing)
-    trace_mode_after = HIP:MONITORING  # what to switch to at window end (existing)
-    mode_after_trigger = first | all            # count policy (default first); 'anchor' reserved, not yet implemented
+    window_end_action = HIP:MONITORING  # what to switch to at window end (existing)
+    window_end_trigger = first | all            # count policy (default first); 'anchor' reserved, not yet implemented
     window_timeout   = 30              # NEW: end the window after T wall seconds, no matter what
 ```
 
@@ -261,18 +261,18 @@ A new key in the `[Lexgion*]` section, alongside `trace_mode_after`:
   wall-clock default would be non-deterministic and surprising). `first` always
   fires, so it needs no such warning.
 - Parsed in [src/trace_config_parse.c:763](../src/trace_config_parse.c#L763)
-  next to the existing `trace_mode_after` handling (the `parse_trace_mode_after`
+  next to the existing `window_end_action` handling (the `parse_window_end_action`
   helper is at [src/trace_config_parse.c:90](../src/trace_config_parse.c#L90)).
 
 **Naming caution:** this is distinct from the INTROSPECT *pause duration*. That
-pre-existing field, currently `trace_mode_after_t.introspect_timeout`, is
+pre-existing field, currently `window_end_action_t.introspect_timeout`, is
 **renamed to `introspect_pause_duration`** as part of this work (see Section 6) —
 `window_timeout` = *when the window ends*; `introspect_pause_duration` = *how long
 the app pauses once INTROSPECT runs*. The two are orthogonal and may coexist.
 
 ### 5.1 Environment variable (`PINSIGHT_TRACE_WINDOW`, was `PINSIGHT_TRACE_RATE`)
 
-`max_num_traces` and `trace_mode_after` are already reachable without a config
+`max_num_traces` and `window_end_action` are already reachable without a config
 file via this variable, parsed in `setup_trace_config_env()`
 ([src/trace_config.c:142-171](../src/trace_config.c#L142-L171)). The variable name
 is changed from `PINSIGHT_TRACE_RATE` to **`PINSIGHT_TRACE_WINDOW`**: it never
@@ -284,13 +284,13 @@ transition), so the new name reflects its actual job and the window concept.
 
 ```
 # OLD name + OLD grammar
-PINSIGHT_TRACE_RATE   = start : max : rate [ : mode_after_string ]
+PINSIGHT_TRACE_RATE   = start : max : rate [ : window_end_action_string ]
 # NEW name + NEW grammar (window_timeout is the new 4th field)
-PINSIGHT_TRACE_WINDOW = start : max : rate : window_timeout [ : mode_after_string ]
+PINSIGHT_TRACE_WINDOW = start : max : rate : window_timeout [ : window_end_action_string ]
 ```
 
 Read as: *the window starts at `start`, caps at `max` traces, is sampled at
-`rate`, times out after `window_timeout` s, then performs `mode_after`.*
+`rate`, times out after `window_timeout` s, then performs `end_action`.*
 
 - `window_timeout` is an **integer** seconds value; `0` (or absent) = disabled.
 - To set a mode-after **without** a window timeout, put `0` in the 4th field, e.g.
@@ -306,7 +306,7 @@ Both names use the **same (new) grammar** — i.e. the alias also expects the 4t
 `window_timeout` field. The alias may be removed in a later release.
 
 **⚠ Breaking change (grammar, both names).** The 4th colon-separated field was
-previously the *mode_after_string*; it is now `window_timeout`, and the mode-after
+previously the *window_end_action_string*; it is now `window_timeout`, and the mode-after
 tail shifts to the 5th field. Any existing value that used a 4th field (e.g.
 `0:50:1:HIP:MONITORING`) must gain the new field (`0:50:1:0:HIP:MONITORING`),
 whether set via the new name or the deprecated alias. Acceptable for a research
@@ -327,9 +327,9 @@ if (!win_env) {
 then read a 4th integer with
 `sscanf(win_env, "%d:%d:%d:%d", &start, &max, &rate, &window_timeout)` and, when
 `count >= 4`, store it in
-`lexgion_default_trace_config->mode_after.window_timeout_sec`; finally advance past
+`lexgion_default_trace_config->end_action.window_timeout_sec`; finally advance past
 **four** colons (was three) before handing the remaining tail to
-`parse_trace_mode_after()`
+`parse_window_end_action()`
 ([src/trace_config.c:160-170](../src/trace_config.c#L160-L170)).
 
 **Unaffected:**
@@ -338,7 +338,7 @@ then read a 4th integer with
   change.
 - The INTROSPECT sub-grammar inside the mode-after string
   (`INTROSPECT:<pause>:<script>[:<resume_mode>]`) — the `introspect_timeout` →
-  `introspect_pause_duration` rename is internal to `parse_trace_mode_after`; the
+  `introspect_pause_duration` rename is internal to `parse_window_end_action`; the
   `<pause>` token is unchanged, so existing INTROSPECT strings keep working in both
   the env var and the config file.
 
@@ -348,12 +348,12 @@ updated for both the new `[Lexgion*]` key and this `PINSIGHT_TRACE_RATE` field.
 
 ## 6. Data structures
 
-Extend `trace_mode_after_t`
+Extend `window_end_action_t`
 ([src/trace_config.h:231](../src/trace_config.h#L231)), renaming the existing
 pause field and adding the window deadline:
 
 ```c
-typedef struct trace_mode_after {
+typedef struct window_end_action {
     pinsight_domain_mode_t mode[MAX_NUM_DOMAINS];
     int introspect;
     int introspect_pause_duration; /* RENAMED from introspect_timeout: INTROSPECT
@@ -365,7 +365,7 @@ typedef struct trace_mode_after {
     /* NEW */
     int window_timeout_sec;        /* >0: wall-clock deadline ending the tracing
                                       window; 0/absent = off */
-} trace_mode_after_t;
+} window_end_action_t;
 ```
 
 The `introspect_timeout` rename touches its uses at
@@ -378,7 +378,7 @@ only by the control thread — no locking):
 ```c
 static int                 window_timer_armed = 0;
 static struct timespec     window_deadline;     /* CLOCK_REALTIME */
-static trace_mode_after_t *window_timer_ma = NULL; /* action to fire on ETIMEDOUT */
+static window_end_action_t *window_timer_ma = NULL; /* action to fire on ETIMEDOUT */
 ```
 
 ## 7. Arming, firing, re-arming
@@ -451,7 +451,7 @@ runs `control_execute_introspect()` (script + pause-for-`introspect_pause_durati
   testing 2026-06-29.** The original design assumed the per-config `ma->fired` CAS
   is the single arbiter for "who ends the window." In practice that is **not
   sufficient**: default lexgions resolve to per-domain *copies* of the window's
-  `mode_after` (`lexgion_domain_default_trace_config[domain] = *lexgion_default`),
+  `end_action` (`lexgion_domain_default_trace_config[domain] = *lexgion_default`),
   so the count path CASes a *different* `fired` field than the timer (which arms
   off `lexgion_default`). With only the `ma->fired` check, a count policy that
   ended the window did not stop the timer from also firing — harmless for a plain
@@ -483,7 +483,7 @@ runs `control_execute_introspect()` (script + pause-for-`introspect_pause_durati
 
 ## 11. Edge cases
 
-- **`window_timeout` but no `trace_mode_after`:** nothing to switch to. Treat as a
+- **`window_timeout` but no `window_end_action`:** nothing to switch to. Treat as a
   config error / no-op (warn at parse time).
 - **Spurious `sem_timedwait` wakeups / real wakeups before the deadline:** a
   normal wakeup (mode change, reload) returns 0, not `ETIMEDOUT`; the loop

@@ -56,23 +56,23 @@ static volatile int control_shutdown = 0;
 static volatile int pending_wakeup_reason = 0;
 
 /* Pending mode action — set by auto-trigger, consumed by control thread */
-static trace_mode_after_t *pending_mode_action = NULL;
+static window_end_action_t *pending_mode_action = NULL;
 
 /* ----------------------------------------------------------------
  * window_timeout: a single per-process wall-clock deadline that ends the
  * current TRACING window even if no region reaches max_num_traces. State is
  * file-scope and touched ONLY by the control thread (no locking). The timer
- * drives off the default lexgion's mode_after (the per-process window config).
+ * drives off the default lexgion's end_action (the per-process window config).
  * ---------------------------------------------------------------- */
 static int                 window_timer_armed = 0;
 static struct timespec     window_deadline;        /* CLOCK_REALTIME */
-static trace_mode_after_t *window_timer_ma = NULL; /* action fired on ETIMEDOUT */
+static window_end_action_t *window_timer_ma = NULL; /* action fired on ETIMEDOUT */
 
 /* True if the window's action has ALREADY been applied this window (i.e. a count
  * policy ended the window first), so the timer must NOT re-fire it.
  *
  * Why not just rely on ma->fired: count triggers fire off the per-domain *default
- * copies* of the window's mode_after (lexgions resolve to
+ * copies* of the window's end_action (lexgions resolve to
  * lexgion_domain_default_trace_config[domain], a copy of lexgion_default), so the
  * timer's ma->fired (on lexgion_default) is a DIFFERENT latch and would not see
  * the count fire. The domain-level mode_change_fired latch, by contrast, is set by
@@ -80,8 +80,8 @@ static trace_mode_after_t *window_timer_ma = NULL; /* action fired on ETIMEDOUT 
  * the real cross-config arbiter. Returns true only when the action targets at
  * least one domain and every targeted domain has already switched. (Pure
  * INTROSPECT with no resume modes has no domain target; that narrow count+timer
- * race is not arbitrated here — see mode_after_timeout_design.md §9.) */
-static int window_already_ended(trace_mode_after_t *ma) {
+ * race is not arbitrated here — see end_action_timeout_design.md §9.) */
+static int window_already_ended(window_end_action_t *ma) {
     int has_target = 0;
     for (int d = 0; d < num_domain; d++) {
         if (ma->mode[d] == PINSIGHT_DOMAIN_NONE)
@@ -97,7 +97,7 @@ static int window_already_ended(trace_mode_after_t *ma) {
  * thread start, after each config reload, and after each cyclic-window reset so
  * every TRACING window is bounded. window_timeout_sec <= 0 disarms. */
 static void window_timer_arm_from_default(void) {
-    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     if (ma->window_timeout_sec > 0) {
         clock_gettime(CLOCK_REALTIME, &window_deadline);
         window_deadline.tv_sec += ma->window_timeout_sec;
@@ -117,7 +117,7 @@ static void window_timer_arm_from_default(void) {
  *   timeout = 0: no pause, just run script
  *   timeout = -1: pause indefinitely until SIGUSR1
  * ================================================================ */
-static void control_execute_introspect(trace_mode_after_t *ma) {
+static void control_execute_introspect(window_end_action_t *ma) {
     /* 1. Launch introspection script if configured */
     if (ma->introspect_script[0] && strcmp(ma->introspect_script, "-") != 0) {
         /* Build the LTTng chunk path for the script */
@@ -271,7 +271,7 @@ static void *pinsight_control_loop(void *arg) {
              * the wakeup the app thread would have posted and fall through to the
              * existing handler. INTROSPECT vs plain switch is chosen from the
              * action itself, so INTROSPECT-on-timeout works for free. */
-            trace_mode_after_t *ma = window_timer_ma;
+            window_end_action_t *ma = window_timer_ma;
             window_timer_armed = 0; /* one-shot; re-armed on reload / cyclic reset */
             if (!ma)
                 continue;
@@ -315,14 +315,14 @@ static void *pinsight_control_loop(void *arg) {
 
         /* 2 & 3. Auto-trigger: Mode Change and/or Introspection */
         if ((reason & (PINSIGHT_WAKEUP_INTROSPECT | PINSIGHT_WAKEUP_MODE_CHANGE)) && pending_mode_action) {
-            trace_mode_after_t *ma = pending_mode_action;
+            window_end_action_t *ma = pending_mode_action;
             pending_mode_action = NULL;
 
             if (reason & PINSIGHT_WAKEUP_INTROSPECT) {
                 control_execute_introspect(ma);
             }
 
-            /* Apply mode_after modes */
+            /* Apply end_action modes */
             int cyclic_resume = 0; /* detect TRACING resume for counter reset */
             for (int d = 0; d < num_domain; d++) {
                 pinsight_domain_mode_t new_mode = ma->mode[d];
@@ -441,8 +441,8 @@ void pinsight_install_signal_handler(void) {
 }
 
 /* ================================================================
- * Set pending mode action — called from pinsight_fire_mode_triggers
+ * Set pending mode action — called from pinsight_fire_window_end
  * ================================================================ */
-void pinsight_control_set_pending_action(trace_mode_after_t *ma) {
+void pinsight_control_set_pending_action(window_end_action_t *ma) {
     pending_mode_action = ma;
 }

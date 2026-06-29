@@ -1,7 +1,7 @@
 /* GPU-free PInsight test driver: three distinct OpenMP parallel-region sites
  * (= three lexgions) driven at different rates. Used to validate:
  *   - window_timeout (wall-clock window end), and
- *   - mode_after_trigger = first | all (count policy).
+ *   - window_end_trigger = first | all (count policy).
  * Prints "iter N" to stderr so the synchronous "Auto-trigger (immediate)" line
  * (printed by the app thread when a count policy fires) can be located by iter. */
 #include <stdio.h>
