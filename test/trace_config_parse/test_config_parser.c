@@ -1771,15 +1771,16 @@ void test_trace_mode_after_env() {
 
   // --- TMA8: Env var multi-domain: OpenMP:MONITORING,MPI:OFF ---
   printf(
-      "\n  -- TMA8: PINSIGHT_TRACE_RATE=0:50:1:OpenMP:MONITORING,MPI:OFF --\n");
+      "\n  -- TMA8: PINSIGHT_TRACE_WINDOW=0:50:1:0:OpenMP:MONITORING,MPI:OFF --\n");
   {
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
     lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
 
-    setenv("PINSIGHT_TRACE_RATE", "0:50:1:OpenMP:MONITORING,MPI:OFF", 1);
+    /* New 5-field grammar: start:max:rate:window_timeout:mode_after */
+    setenv("PINSIGHT_TRACE_WINDOW", "0:50:1:0:OpenMP:MONITORING,MPI:OFF", 1);
     setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_RATE");
+    unsetenv("PINSIGHT_TRACE_WINDOW");
 
     if (lexgion_default_trace_config->max_num_traces == 50) {
       printf("[PASS] TMA8: max_num_traces=50\n");
@@ -1837,9 +1838,9 @@ void test_introspect_config() {
       printf("[FAIL] TMA9: introspect=%d (expected 1)\n", ma->introspect);
       pass = 0;
     }
-    if (ma->introspect_timeout != 60) {
-      printf("[FAIL] TMA9: introspect_timeout=%d (expected 60)\n",
-             ma->introspect_timeout);
+    if (ma->introspect_pause_duration != 60) {
+      printf("[FAIL] TMA9: introspect_pause_duration=%d (expected 60)\n",
+             ma->introspect_pause_duration);
       pass = 0;
     }
     if (strcmp(ma->introspect_script, "analyze.sh") != 0) {
@@ -1878,9 +1879,9 @@ void test_introspect_config() {
       printf("[FAIL] TMA10: introspect=%d (expected 1)\n", ma->introspect);
       pass = 0;
     }
-    if (ma->introspect_timeout != 0) {
-      printf("[FAIL] TMA10: introspect_timeout=%d (expected 0)\n",
-             ma->introspect_timeout);
+    if (ma->introspect_pause_duration != 0) {
+      printf("[FAIL] TMA10: introspect_pause_duration=%d (expected 0)\n",
+             ma->introspect_pause_duration);
       pass = 0;
     }
     if (strcmp(ma->introspect_script, "-") != 0) {
@@ -1916,9 +1917,9 @@ void test_introspect_config() {
     trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
     int pass = 1;
 
-    if (ma->introspect_timeout != 30) {
+    if (ma->introspect_pause_duration != 30) {
       printf("[FAIL] TMA11: timeout=%d (expected 30)\n",
-             ma->introspect_timeout);
+             ma->introspect_pause_duration);
       pass = 0;
     }
     if (strcmp(ma->introspect_script, "my_analysis.sh") != 0) {
@@ -1936,16 +1937,16 @@ void test_introspect_config() {
       printf("[PASS] TMA11: INTROSPECT:30:my_analysis.sh resume=NONE (consumer default)\n");
   }
 
-  // --- TMA12: INTROSPECT via env var ---
-  printf("\n  -- TMA12: PINSIGHT_TRACE_RATE=0:100:10:INTROSPECT:60:analyze.sh:TRACING --\n");
+  // --- TMA12: INTROSPECT via env var (new 5-field grammar) ---
+  printf("\n  -- TMA12: PINSIGHT_TRACE_WINDOW=0:100:10:0:INTROSPECT:60:analyze.sh:TRACING --\n");
   {
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
 
-    setenv("PINSIGHT_TRACE_RATE",
-           "0:100:10:INTROSPECT:60:analyze.sh:TRACING", 1);
+    setenv("PINSIGHT_TRACE_WINDOW",
+           "0:100:10:0:INTROSPECT:60:analyze.sh:TRACING", 1);
     setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_RATE");
+    unsetenv("PINSIGHT_TRACE_WINDOW");
 
     trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
     int pass = 1;
@@ -1959,9 +1960,9 @@ void test_introspect_config() {
       printf("[FAIL] TMA12: introspect=%d (expected 1)\n", ma->introspect);
       pass = 0;
     }
-    if (ma->introspect_timeout != 60) {
+    if (ma->introspect_pause_duration != 60) {
       printf("[FAIL] TMA12: timeout=%d (expected 60)\n",
-             ma->introspect_timeout);
+             ma->introspect_pause_duration);
       pass = 0;
     }
     if (strcmp(ma->introspect_script, "analyze.sh") != 0) {
@@ -1985,7 +1986,7 @@ void test_introspect_config() {
     memset(&lexgion_default_trace_config->mode_after, 0,
            sizeof(lexgion_default_trace_config->mode_after));
     lexgion_default_trace_config->mode_after.introspect = 1;
-    lexgion_default_trace_config->mode_after.introspect_timeout = 45;
+    lexgion_default_trace_config->mode_after.introspect_pause_duration = 45;
     strncpy(lexgion_default_trace_config->mode_after.introspect_script,
             "test_script.sh",
             sizeof(lexgion_default_trace_config->mode_after.introspect_script) - 1);
@@ -2493,8 +2494,8 @@ void test_python_config() {
       int pass = 1;
       if (!ma->introspect)
         { printf("[FAIL] PY12: introspect flag not set\n"); pass = 0; }
-      if (ma->introspect_timeout != 30)
-        { printf("[FAIL] PY12: timeout=%d (expected 30)\n", ma->introspect_timeout); pass = 0; }
+      if (ma->introspect_pause_duration != 30)
+        { printf("[FAIL] PY12: timeout=%d (expected 30)\n", ma->introspect_pause_duration); pass = 0; }
       if (strcmp(ma->introspect_script, "analyze.sh") != 0)
         { printf("[FAIL] PY12: script='%s' (expected 'analyze.sh')\n",
                  ma->introspect_script); pass = 0; }
@@ -2699,6 +2700,113 @@ void test_python_config() {
 
 #endif /* PINSIGHT_PYTHON */
 
+/* window_timeout + mode_after_trigger (file + env) */
+void test_window_timeout() {
+  printf("\n===== window_timeout / mode_after_trigger Tests =====\n");
+  trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+
+  // --- WT1: file window_timeout key ---
+  printf("\n  -- WT1: [Lexgion.default] window_timeout = 30 --\n");
+  {
+    FILE *fp = fopen("test_wt.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n    max_num_traces = 50\n    window_timeout = 30\n");
+    fclose(fp);
+    memset(ma, 0, sizeof(*ma));
+    parse_trace_config_file("test_wt.txt");
+    printf(ma->window_timeout_sec == 30 ? "[PASS] WT1: window_timeout_sec=30\n"
+           : "[FAIL] WT1: window_timeout_sec=%d (expected 30)\n",
+           ma->window_timeout_sec);
+  }
+
+  // --- WT2: ordering gotcha — window_timeout BEFORE trace_mode_after survives ---
+  printf("\n  -- WT2: window_timeout before trace_mode_after (overwrite-survival) --\n");
+  {
+    FILE *fp = fopen("test_wt.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n    window_timeout = 25\n"
+                "    trace_mode_after = MONITORING\n");
+    fclose(fp);
+    memset(ma, 0, sizeof(*ma));
+    parse_trace_config_file("test_wt.txt");
+    int ok = (ma->window_timeout_sec == 25) &&
+             (ma->mode[0] == PINSIGHT_DOMAIN_MONITORING);
+    printf(ok ? "[PASS] WT2: window_timeout_sec=25 survived trace_mode_after overwrite\n"
+              : "[FAIL] WT2: window_timeout_sec=%d (expected 25), mode[0]=%d\n",
+           ma->window_timeout_sec, ma->mode[0]);
+  }
+
+  // --- WT3: mode_after_trigger = all ---
+  printf("\n  -- WT3: mode_after_trigger = all --\n");
+  {
+    FILE *fp = fopen("test_wt.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n    mode_after_trigger = all\n");
+    fclose(fp);
+    memset(ma, 0, sizeof(*ma));
+    parse_trace_config_file("test_wt.txt");
+    printf(ma->trigger == TRIGGER_ALL ? "[PASS] WT3: trigger=TRIGGER_ALL\n"
+           : "[FAIL] WT3: trigger=%d (expected TRIGGER_ALL=%d)\n",
+           ma->trigger, TRIGGER_ALL);
+  }
+
+  // --- WT4: mode_after_trigger = anchor rejected -> first ---
+  printf("\n  -- WT4: mode_after_trigger = anchor (reserved -> first) --\n");
+  {
+    FILE *fp = fopen("test_wt.txt", "w");
+    fprintf(fp, "[Lexgion.default]\n    mode_after_trigger = anchor\n");
+    fclose(fp);
+    memset(ma, 0, sizeof(*ma));
+    parse_trace_config_file("test_wt.txt");
+    printf(ma->trigger == TRIGGER_FIRST ? "[PASS] WT4: anchor rejected, trigger=TRIGGER_FIRST\n"
+           : "[FAIL] WT4: trigger=%d (expected TRIGGER_FIRST=%d)\n",
+           ma->trigger, TRIGGER_FIRST);
+  }
+
+  // --- WT5: env PINSIGHT_TRACE_WINDOW with 4th field + mode_after ---
+  printf("\n  -- WT5: PINSIGHT_TRACE_WINDOW=0:50:1:30:MONITORING --\n");
+  {
+    memset(ma, 0, sizeof(*ma));
+    lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
+    setenv("PINSIGHT_TRACE_WINDOW", "0:50:1:30:MONITORING", 1);
+    setup_trace_config_env();
+    unsetenv("PINSIGHT_TRACE_WINDOW");
+    int ok = (lexgion_default_trace_config->max_num_traces == 50) &&
+             (ma->window_timeout_sec == 30) &&
+             (ma->mode[0] == PINSIGHT_DOMAIN_MONITORING);
+    printf(ok ? "[PASS] WT5: max=50, window_timeout=30, mode_after=MONITORING\n"
+              : "[FAIL] WT5: max=%d window=%d mode[0]=%d\n",
+           lexgion_default_trace_config->max_num_traces,
+           ma->window_timeout_sec, ma->mode[0]);
+  }
+
+  // --- WT6: deprecated alias PINSIGHT_TRACE_RATE still works (same grammar) ---
+  printf("\n  -- WT6: deprecated PINSIGHT_TRACE_RATE=0:50:1:15:MONITORING --\n");
+  {
+    memset(ma, 0, sizeof(*ma));
+    setenv("PINSIGHT_TRACE_RATE", "0:50:1:15:MONITORING", 1);
+    setup_trace_config_env();
+    unsetenv("PINSIGHT_TRACE_RATE");
+    printf(ma->window_timeout_sec == 15
+               ? "[PASS] WT6: alias parsed window_timeout=15 (with deprecation warning)\n"
+               : "[FAIL] WT6: window_timeout_sec=%d (expected 15)\n",
+           ma->window_timeout_sec);
+  }
+
+  // --- WT7: legacy 3-field value -> window stays 0, no crash ---
+  printf("\n  -- WT7: legacy PINSIGHT_TRACE_WINDOW=10:100:5 (3 fields) --\n");
+  {
+    memset(ma, 0, sizeof(*ma));
+    setenv("PINSIGHT_TRACE_WINDOW", "10:100:5", 1);
+    setup_trace_config_env();
+    unsetenv("PINSIGHT_TRACE_WINDOW");
+    int ok = (lexgion_default_trace_config->max_num_traces == 100) &&
+             (ma->window_timeout_sec == 0);
+    printf(ok ? "[PASS] WT7: 3-field value parses, window_timeout defaults to 0\n"
+              : "[FAIL] WT7: max=%d window=%d (expected 100, 0)\n",
+           lexgion_default_trace_config->max_num_traces, ma->window_timeout_sec);
+  }
+
+  remove("test_wt.txt");
+}
+
 int main() {
   // Setup mock domain info
   // ... (This part was in original file, assuming it's still there)
@@ -2716,6 +2824,7 @@ int main() {
   test_trace_mode_after_runtime();
   test_trace_mode_after_env();
   test_introspect_config();
+  test_window_timeout();
   test_knob_config();
 #ifdef PINSIGHT_PYTHON
   test_python_config();

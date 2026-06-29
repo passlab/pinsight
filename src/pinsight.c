@@ -67,6 +67,42 @@ void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc) {
   }
 }
 
+/* 'all' count-policy gate. Returns 1 iff every lexgion THIS THREAD has
+ * encountered that has a finite max_num_traces has reached its cap. Unlimited
+ * regions (max_num_traces == -1) are not gates. Returns 0 if the thread has
+ * seen no finite-cap region yet. The first thread to satisfy this trips the
+ * global mode_after.fired latch in pinsight_fire_mode_triggers().
+ *
+ * COST (why the O(N) scan is acceptable — do not "optimize" without a profile):
+ * This is NOT called per traced invocation. It runs only at a region's CAP EDGE
+ * — the single call to lexgion_post_trace_update() where trace_counter first
+ * reaches max_num_traces — because once trace_counter >= max the lexgion's
+ * trace_bit goes 0 (set_top_trace_bit, pinsight.c) so the region stops tracing
+ * and stops calling post_trace_update until a cyclic generation reset. Hence the
+ * scan fires exactly once per finite-cap region per window: O(N) per scan, O(N^2)
+ * per window total (N = finite-cap lexgions this thread has seen, bounded by
+ * MAX_NUM_LEXGIONS). For realistic N (tens) that is microseconds per window, paid
+ * only during the brief cap-out phase at the window's end, never in steady state.
+ * The default 'first' policy never calls this at all (short-circuited at the call
+ * site). If a pathological case ever shows up (hundreds of capped regions in
+ * tight cyclic windows), replace this with two per-thread counters
+ * (num_finite_seen / num_finite_capped, the latter reset on the generation bump)
+ * for an O(1) gate. */
+int pinsight_all_seen_lexgions_capped(void) {
+  pinsight_thread_data_t *td = &pinsight_thread_data;
+  int seen_finite = 0;
+  for (int i = 0; i < td->num_lexgions; i++) {
+    lexgion_t *lg = &td->lexgions[i];
+    lexgion_trace_config_t *c = lg->trace_config;
+    if (!c || c->max_num_traces == (unsigned int)-1)
+      continue; /* unlimited region: not a gate */
+    seen_finite++;
+    if (lg->trace_counter < c->max_num_traces)
+      return 0; /* a finite-cap region this thread saw is not yet capped */
+  }
+  return seen_finite > 0;
+}
+
 /* pinsight_execute_introspect() and the old pinsight_fire_mode_triggers()
  * have been moved to pinsight_control_thread.c. The control thread now
  * handles introspection, pause/resume, and callback re-registration. */

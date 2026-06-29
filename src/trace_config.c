@@ -139,33 +139,43 @@ void setup_trace_config_env() {
     }
   }
 
-  // 2. Override Lexgion Rate
-  // PINSIGHT_TRACE_RATE=start:max:rate[:mode_after_string]
+  // 2. Override Lexgion Window
+  // PINSIGHT_TRACE_WINDOW=start:max:rate:window_timeout[:mode_after_string]
+  //   window_timeout = wall-clock seconds ending the window (0 = disabled)
   // mode_after_string can be:
   //   MONITORING | OpenMP:MONITORING | OpenMP:MONITORING,MPI:OFF
   //   INTROSPECT:60:script.sh[:TRACING]
-  char *rate_env = getenv("PINSIGHT_TRACE_RATE");
-  if (rate_env) {
-    // Parse first 3 numeric fields separated by ':'
-    int start = 0, max = 0, rate = 0;
-    int count = sscanf(rate_env, "%d:%d:%d", &start, &max, &rate);
+  // PINSIGHT_TRACE_RATE is retained as a DEPRECATED ALIAS (same grammar).
+  char *win_env = getenv("PINSIGHT_TRACE_WINDOW");
+  if (!win_env) {
+    win_env = getenv("PINSIGHT_TRACE_RATE"); /* deprecated alias */
+    if (win_env)
+      fprintf(stderr, "PInsight WARNING: PINSIGHT_TRACE_RATE is deprecated; "
+                      "use PINSIGHT_TRACE_WINDOW (same grammar)\n");
+  }
+  if (win_env) {
+    // Parse first 4 numeric fields separated by ':'
+    int start = 0, max = 0, rate = 0, window = 0;
+    int count = sscanf(win_env, "%d:%d:%d:%d", &start, &max, &rate, &window);
     if (count >= 1)
       lexgion_default_trace_config->trace_starts_at = start;
     if (count >= 2)
       lexgion_default_trace_config->max_num_traces = max;
     if (count >= 3)
       lexgion_default_trace_config->tracing_rate = rate;
+    if (count >= 4)
+      lexgion_default_trace_config->mode_after.window_timeout_sec = window;
 
-    // Find the 4th field: skip past the 3rd ':'
-    char *p = (char *)rate_env;
+    // Find the 5th field (mode_after string): skip past the 4th ':'
+    char *p = (char *)win_env;
     int colons = 0;
-    while (*p && colons < 3) {
+    while (*p && colons < 4) {
       if (*p == ':')
         colons++;
       p++;
     }
     // p now points to the start of the mode_after string (or '\0')
-    if (colons == 3 && *p) {
+    if (colons == 4 && *p) {
       parse_trace_mode_after(p, &lexgion_default_trace_config->mode_after);
     }
   }
@@ -303,6 +313,20 @@ void initial_setup_trace_config() {
 
   pinsight_load_trace_config(NULL);
   setup_trace_config_env();
+
+  /* Never-fires guard: the 'all' count policy fires only once every region this
+   * thread has seen has capped; if a region is rare/never re-reached the TRACING
+   * window may never end. Recommend a window_timeout backstop. 'first' always
+   * fires, so it needs no warning. (Warn only; do not error or inject a default.) */
+  {
+    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    if (ma->trigger == TRIGGER_ALL && ma->window_timeout_sec <= 0) {
+      fprintf(stderr, "PInsight WARNING: mode_after_trigger='all' with no "
+                      "window_timeout — the tracing window may never end if a "
+                      "region is rare or never re-reached. Consider setting "
+                      "window_timeout.\n");
+    }
+  }
 
 #ifdef PINSIGHT_PYTHON
   /* After config file and env vars have been applied, save the intended Python
@@ -559,7 +583,7 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
     trace_mode_after_t *ma = &lg->mode_after;
     if (ma->introspect) {
       fprintf(out, "    trace_mode_after = INTROSPECT:%d:%s",
-              ma->introspect_timeout,
+              ma->introspect_pause_duration,
               ma->introspect_script[0] ? ma->introspect_script : "-");
       // Print resume mode (use first domain's mode as representative)
       int has_resume = 0;

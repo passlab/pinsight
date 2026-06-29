@@ -220,19 +220,31 @@ typedef struct domain_trace_config { // The trace config for a domain
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
 
+/* Count-trigger policy that ends a TRACING window via max_num_traces.
+ *   first  = the first region to reach its cap fires (default; today's behavior).
+ *   all    = fire when every region THIS THREAD has seen has capped (per-thread;
+ *            the first thread to satisfy it trips the global latch).
+ *   anchor = reserved, NOT yet implemented (a user-named region caps). The parser
+ *            rejects this keyword for now. Enum so adding it later is additive. */
+typedef enum mode_after_trigger {
+  TRIGGER_FIRST  = 0, /* default (zero-initialized) */
+  TRIGGER_ALL    = 1,
+  TRIGGER_ANCHOR = 2, /* reserved */
+} mode_after_trigger_t;
+
 /**
  * Unified trace_mode_after action: handles both regular mode switching
  * (e.g. MONITORING, OpenMP:OFF) and INTROSPECT with timeout/script.
  *
  * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect ==
- * 0. For INTROSPECT:     introspect == 1, introspect_timeout/introspect_script
+ * 0. For INTROSPECT:     introspect == 1, introspect_pause_duration/introspect_script
  * set, mode[] specifies per-domain resume modes after introspection.
  */
 typedef struct trace_mode_after {
   pinsight_domain_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
                                                 // (NONE = no change)
   int introspect;              // 1 = introspect before switching modes
-  int introspect_timeout;      // >0: pause N seconds, 0: no pause, <0: wait
+  int introspect_pause_duration;      // >0: pause N seconds, 0: no pause, <0: wait
                                // indefinitely for SIGUSR1
   char introspect_script[256]; // script to invoke ("-" or "" = none)
   volatile int fired;          // latch: set by first lexgion to fire,
@@ -240,6 +252,10 @@ typedef struct trace_mode_after {
   volatile unsigned int generation; // incremented each cyclic INTROSPECT cycle;
                                     // lexgions compare against their local
                                     // introspect_gen to auto-reset trace_counter
+  mode_after_trigger_t trigger;     // count-policy for the count trigger
+                                    // (default TRIGGER_FIRST = 0)
+  int window_timeout_sec;           // >0: wall-clock deadline (sec) ending the
+                                    // TRACING window; 0/absent = disabled (default)
 } trace_mode_after_t;
 
 /**

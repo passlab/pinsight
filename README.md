@@ -213,8 +213,10 @@ PINSIGHT_TRACE_CUDA=<MODE>
 PINSIGHT_TRACE_HIP=<MODE>
 PINSIGHT_TRACE_PYTHON=<MODE>
 
-# Rate-based sampling: trace_starts_at:max_num_traces:tracing_rate[:mode_after]
-PINSIGHT_TRACE_RATE=0:100:1:MONITORING
+# Tracing window: start:max_num_traces:tracing_rate:window_timeout[:mode_after]
+# (window_timeout = wall-clock seconds to end the window, 0 = disabled)
+PINSIGHT_TRACE_WINDOW=0:100:1:0:MONITORING
+# PINSIGHT_TRACE_RATE is a deprecated alias (same grammar, prints a warning).
 
 # Config file path
 PINSIGHT_TRACE_CONFIG_FILE=/path/to/config.txt
@@ -223,15 +225,16 @@ PINSIGHT_TRACE_CONFIG_FILE=/path/to/config.txt
 PINSIGHT_DEBUG_ENABLE=0|1
 ```
 
-**Rate-based sampling examples:**
+**Tracing-window examples** (`start:max:rate:window_timeout[:mode_after]`):
 
 | Setting | Meaning |
 |---------|---------|
-| `0:-1:1` | Record all traces (default) |
-| `0:100:1` | Record first 100 executions per region |
-| `10:20:100` | Skip first 10, then 1-in-100 for 20 traces |
-| `0:100:1:MONITORING` | First 100 traces, then switch to MONITORING |
-| `0:50:1:INTROSPECT:10:analyze.sh:TRACING` | First 50 traces, then introspect and resume |
+| `0:-1:1:0` | Record all traces (default) |
+| `0:100:1:0` | Record first 100 executions per region |
+| `10:20:100:0` | Skip first 10, then 1-in-100 for 20 traces |
+| `0:100:1:0:MONITORING` | First 100 traces, then switch to MONITORING |
+| `0:-1:1:30:MONITORING` | Trace for 30 wall-clock seconds, then MONITORING |
+| `0:50:1:60:INTROSPECT:10:analyze.sh:TRACING` | First 50 traces *or* 60 s, then introspect and resume |
 
 ### Config File
 

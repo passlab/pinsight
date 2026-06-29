@@ -101,7 +101,7 @@ int parse_trace_mode_after(const char *val, trace_mode_after_t *out) {
     // Parse timeout
     char *endptr;
     long timeout = strtol(p, &endptr, 10);
-    out->introspect_timeout = (int)timeout; /* >0: timed, 0: no pause, <0: indefinite */
+    out->introspect_pause_duration = (int)timeout; /* >0: timed, 0: no pause, <0: indefinite */
 
     // Expect ':' after timeout
     if (*endptr != ':') {
@@ -768,11 +768,37 @@ static void parse_key_value(char *line) {
         /* Preserve runtime cycling state (generation, fired) across reload.
          * These fields are incremented/reset by the control thread during
          * cyclic INTROSPECT; resetting them on re-parse would break the
-         * generation-based counter reset that drives each new cycle. */
-        parsed.generation = cfgs[ci]->mode_after.generation;
-        parsed.fired      = cfgs[ci]->mode_after.fired;
+         * generation-based counter reset that drives each new cycle.
+         * Also preserve the config sub-fields set by their OWN keys
+         * (window_timeout, mode_after_trigger) so this full-struct overwrite
+         * stays order-independent w.r.t. those keys within the same section. */
+        parsed.generation         = cfgs[ci]->mode_after.generation;
+        parsed.fired              = cfgs[ci]->mode_after.fired;
+        parsed.window_timeout_sec = cfgs[ci]->mode_after.window_timeout_sec;
+        parsed.trigger            = cfgs[ci]->mode_after.trigger;
         cfgs[ci]->mode_after = parsed;
       }
+    } else if (strcmp(key, "window_timeout") == 0) {
+      /* Wall-clock deadline (seconds) ending the TRACING window. 0/absent/<0
+       * = disabled. Lives in mode_after; preserved across the trace_mode_after
+       * overwrite above. */
+      int v = atoi(val);
+      for (int ci = 0; ci < cfg_count; ci++)
+        cfgs[ci]->mode_after.window_timeout_sec = v;
+    } else if (strcmp(key, "mode_after_trigger") == 0) {
+      /* Count-policy: first (default) | all | anchor(reserved). */
+      mode_after_trigger_t trig = TRIGGER_FIRST;
+      if (strcasecmp(val, "all") == 0) {
+        trig = TRIGGER_ALL;
+      } else if (strcasecmp(val, "anchor") == 0) {
+        fprintf(stderr, "PInsight config: mode_after_trigger='anchor' is not yet "
+                        "implemented; using 'first'\n");
+      } else if (strcasecmp(val, "first") != 0) {
+        fprintf(stderr, "PInsight config: unknown mode_after_trigger='%s' "
+                        "(expected first|all); using 'first'\n", val);
+      }
+      for (int ci = 0; ci < cfg_count; ci++)
+        cfgs[ci]->mode_after.trigger = trig;
     } else {
       // Check for Domain.Event override
       char *dot = strchr(key, '.');

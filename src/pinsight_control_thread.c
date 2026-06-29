@@ -58,6 +58,57 @@ static volatile int pending_wakeup_reason = 0;
 /* Pending mode action — set by auto-trigger, consumed by control thread */
 static trace_mode_after_t *pending_mode_action = NULL;
 
+/* ----------------------------------------------------------------
+ * window_timeout: a single per-process wall-clock deadline that ends the
+ * current TRACING window even if no region reaches max_num_traces. State is
+ * file-scope and touched ONLY by the control thread (no locking). The timer
+ * drives off the default lexgion's mode_after (the per-process window config).
+ * ---------------------------------------------------------------- */
+static int                 window_timer_armed = 0;
+static struct timespec     window_deadline;        /* CLOCK_REALTIME */
+static trace_mode_after_t *window_timer_ma = NULL; /* action fired on ETIMEDOUT */
+
+/* True if the window's action has ALREADY been applied this window (i.e. a count
+ * policy ended the window first), so the timer must NOT re-fire it.
+ *
+ * Why not just rely on ma->fired: count triggers fire off the per-domain *default
+ * copies* of the window's mode_after (lexgions resolve to
+ * lexgion_domain_default_trace_config[domain], a copy of lexgion_default), so the
+ * timer's ma->fired (on lexgion_default) is a DIFFERENT latch and would not see
+ * the count fire. The domain-level mode_change_fired latch, by contrast, is set by
+ * BOTH the count immediate-path (pinsight.c) and the control-thread path — it is
+ * the real cross-config arbiter. Returns true only when the action targets at
+ * least one domain and every targeted domain has already switched. (Pure
+ * INTROSPECT with no resume modes has no domain target; that narrow count+timer
+ * race is not arbitrated here — see mode_after_timeout_design.md §9.) */
+static int window_already_ended(trace_mode_after_t *ma) {
+    int has_target = 0;
+    for (int d = 0; d < num_domain; d++) {
+        if (ma->mode[d] == PINSIGHT_DOMAIN_NONE)
+            continue;
+        has_target = 1;
+        if (!domain_default_trace_config[d].mode_change_fired)
+            return 0; /* a targeted domain has not switched yet */
+    }
+    return has_target;
+}
+
+/* (Re)arm the window timer from the current default config. Called at control
+ * thread start, after each config reload, and after each cyclic-window reset so
+ * every TRACING window is bounded. window_timeout_sec <= 0 disarms. */
+static void window_timer_arm_from_default(void) {
+    trace_mode_after_t *ma = &lexgion_default_trace_config->mode_after;
+    if (ma->window_timeout_sec > 0) {
+        clock_gettime(CLOCK_REALTIME, &window_deadline);
+        window_deadline.tv_sec += ma->window_timeout_sec;
+        window_timer_ma = ma;
+        window_timer_armed = 1;
+    } else {
+        window_timer_ma = NULL;
+        window_timer_armed = 0;
+    }
+}
+
 /* ================================================================
  * Introspection support — moved from pinsight.c
  *
@@ -119,7 +170,7 @@ static void control_execute_introspect(trace_mode_after_t *ma) {
     }
 
     /* 2. Handle pause based on timeout */
-    if (ma->introspect_timeout == 0) {
+    if (ma->introspect_pause_duration == 0) {
         /* No pause — just ran the script, continue */
         return;
     }
@@ -130,16 +181,16 @@ static void control_execute_introspect(trace_mode_after_t *ma) {
     pthread_mutex_unlock(&pinsight_pause_mutex);
     fprintf(stderr, "PInsight: Application paused for introspection\n");
 
-    if (ma->introspect_timeout > 0) {
+    if (ma->introspect_pause_duration > 0) {
         /* Timed wait — interruptible by SIGUSR1 → sem_post */
         struct timespec deadline;
         clock_gettime(CLOCK_REALTIME, &deadline);
-        deadline.tv_sec += ma->introspect_timeout;
+        deadline.tv_sec += ma->introspect_pause_duration;
 
         int ret = sem_timedwait(&control_sem, &deadline);
         if (ret == -1 && errno == ETIMEDOUT) {
             fprintf(stderr, "PInsight: INTROSPECT timeout (%ds), auto-resuming\n",
-                    ma->introspect_timeout);
+                    ma->introspect_pause_duration);
         } else {
             fprintf(stderr, "PInsight: INTROSPECT woken by SIGUSR1, resuming\n");
         }
@@ -196,18 +247,54 @@ static void *pinsight_control_loop(void *arg) {
     sigaddset(&mask, SIGUSR1);
     pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
+    /* Arm the window timer at control-thread start (≈ process start): the
+     * window_timeout clock is relative to here (design decision §7). */
+    window_timer_arm_from_default();
+
     while (!control_shutdown) {
-        /* Block until signaled — zero CPU when idle.
-         * Restart on EINTR (which shouldn't happen since SIGUSR1 is
-         * blocked, but defensive coding). */
-        while (sem_wait(&control_sem) == -1 && errno == EINTR)
+        /* Block until signaled — zero CPU when idle. When a window timeout is
+         * armed, block with a deadline instead so the window ends on time even
+         * if no region caps. Restart on EINTR (defensive; SIGUSR1 is blocked). */
+        int rc;
+        if (window_timer_armed)
+            rc = sem_timedwait(&control_sem, &window_deadline);
+        else
+            rc = sem_wait(&control_sem);
+        if (rc == -1 && errno == EINTR)
             continue;
 
-        if (control_shutdown) break;
-
-        /* Consume wakeup reason atomically */
-        int reason = __atomic_exchange_n(&pending_wakeup_reason, 0,
-                                          __ATOMIC_SEQ_CST);
+        int reason;
+        if (rc == -1 && errno == ETIMEDOUT) {
+            /* Window deadline reached. End the window via the SAME machinery the
+             * count path uses: win the latch (if a count policy already fired
+             * this window, the CAS no-ops and we just disarm), then synthesize
+             * the wakeup the app thread would have posted and fall through to the
+             * existing handler. INTROSPECT vs plain switch is chosen from the
+             * action itself, so INTROSPECT-on-timeout works for free. */
+            trace_mode_after_t *ma = window_timer_ma;
+            window_timer_armed = 0; /* one-shot; re-armed on reload / cyclic reset */
+            if (!ma)
+                continue;
+            /* If a count policy already ended this window, no-op (the real
+             * arbiter is the domain-level mode_change_fired, not ma->fired —
+             * see window_already_ended). The ma->fired CAS additionally guards
+             * the same-config case. */
+            int expected = 0;
+            if (window_already_ended(ma) ||
+                !__atomic_compare_exchange_n(&ma->fired, &expected, 1, 0,
+                                             __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
+                continue; /* window already ended this cycle */
+            fprintf(stderr, "PInsight: window_timeout (%ds) reached — ending "
+                            "TRACING window\n", ma->window_timeout_sec);
+            pending_mode_action = ma;
+            reason = ma->introspect ? PINSIGHT_WAKEUP_INTROSPECT
+                                    : PINSIGHT_WAKEUP_MODE_CHANGE;
+        } else {
+            if (control_shutdown) break;
+            /* Consume wakeup reason atomically */
+            reason = __atomic_exchange_n(&pending_wakeup_reason, 0,
+                                         __ATOMIC_SEQ_CST);
+        }
 
         /* 1. Config reload (SIGUSR1 or inotify) */
         if (reason & PINSIGHT_WAKEUP_CONFIG_RELOAD) {
@@ -216,6 +303,9 @@ static void *pinsight_control_loop(void *arg) {
              * overwritten in-place within the same second). */
             pinsight_invalidate_config_mtime();
             pinsight_load_trace_config(NULL);
+            /* Re-arm the window timer: a reload may add, extend, or clear
+             * window_timeout. Restarts the deadline from now. */
+            window_timer_arm_from_default();
             /* Note: we intentionally do NOT reset mode_change_fired here.
              * Config reload updates configuration (modes, rates, events)
              * but does not touch runtime state (counters, trigger guards).
@@ -271,6 +361,10 @@ static void *pinsight_control_loop(void *arg) {
                 fprintf(stderr,
                     "PInsight: Cyclic INTROSPECT: cycle %u complete, "
                     "latches reset for next cycle\n", ma->generation);
+                /* Re-arm the window timer for the new TRACING window so each
+                 * cycle is bounded. This re-arm (replacing any stale deadline
+                 * each cycle) is what makes the timeout's CAS-no-op safe. */
+                window_timer_arm_from_default();
             }
         }
 

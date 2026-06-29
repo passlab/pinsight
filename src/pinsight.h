@@ -213,6 +213,9 @@ static inline int get_trace_bit() {
 
 // Forward declaration for auto-trigger (defined in pinsight.c)
 extern void pinsight_fire_mode_triggers(lexgion_trace_config_t *tc);
+/* 'all' count-policy gate: 1 iff every finite-cap lexgion THIS THREAD has seen
+ * has capped (defined in pinsight.c). */
+extern int pinsight_all_seen_lexgions_capped(void);
 
 static inline void lexgion_post_trace_update(lexgion_t *lgp) {
   lgp->trace_counter++;
@@ -226,7 +229,17 @@ static inline void lexgion_post_trace_update(lexgion_t *lgp) {
   lexgion_trace_config_t *tc = lgp->trace_config;
   if (tc && tc->max_num_traces != (unsigned int)-1) {
     if (lgp->trace_counter >= tc->max_num_traces) {
-      pinsight_fire_mode_triggers(tc);
+      /* Count-policy: 'first' (default) fires on the first region to cap;
+       * 'all' fires only once every region THIS THREAD has seen has capped.
+       * The global mode_after.fired latch makes the first thread to satisfy
+       * the policy the one that applies the switch.
+       * Reached only at a region's cap edge (this branch runs once per region
+       * per window — see set_top_trace_bit). 'first' short-circuits to a single
+       * int compare; the 'all' scan's cost is documented on the helper. */
+      if (tc->mode_after.trigger != TRIGGER_ALL ||
+          pinsight_all_seen_lexgions_capped()) {
+        pinsight_fire_mode_triggers(tc);
+      }
       /* Do NOT reset trace_counter here. Keeping it at max_num_traces
        * permanently stops tracing when there is no trace_mode_after.
        * For INTROSPECT cycling, the counter is reset via the generation

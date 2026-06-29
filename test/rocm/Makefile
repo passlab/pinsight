@@ -54,6 +54,10 @@ looping_pinsight: looping_pinsight.hip
 cyclic: looping_pinsight $(PINSIGHT_LIB)
 	bash cyclic_mode_test.sh
 
+# window_timeout test: wall-clock deadline ends the TRACING window -> MONITORING
+window: looping_pinsight $(PINSIGHT_LIB)
+	bash window_timeout_test.sh
+
 # -----------------------------------------------------------------------
 # Run with LTTng tracing via PInsight
 # -----------------------------------------------------------------------
@@ -86,4 +90,4 @@ clean:
 	rm -f vecadd_pinsight looping_pinsight
 
 allclean: clean
-	rm -rf $(TRACE_DIR) cyclic_traces cyclic_traces.applog
+	rm -rf $(TRACE_DIR) cyclic_traces cyclic_traces.applog window_traces window_traces.applog
