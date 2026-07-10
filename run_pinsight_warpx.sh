@@ -30,6 +30,16 @@ fi
 
 # 3. Build WarpX C-Extension / Python bindings
 if ! python3 -c "import pywarpx" 2>/dev/null; then
+    # Ensure WarpX submodule/source is present on the VM
+    if [ ! -f "warpx/CMakeLists.txt" ]; then
+        echo "[Build] warpx/CMakeLists.txt not found! Cloning WarpX repository..."
+        if [ -d "warpx" ]; then
+            # Clean up the empty directory/link to avoid git clone failure
+            rm -rf warpx
+        fi
+        git clone --recursive https://github.com/ECP-WarpX/warpx.git warpx
+    fi
+
     echo "[Build] Compiling and installing WarpX Python package (PICMI)..."
     cd warpx
     mkdir -p build_py
