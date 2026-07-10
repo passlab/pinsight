@@ -8,10 +8,40 @@ set -euo pipefail
 PINSIGHT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PINSIGHT_ROOT"
 
-# Ensure we have a clean virtual environment to bypass system-wide site-packages permission issues
+# Find a suitable python interpreter (must be >= 3.12 for PInsight PEP 669 tracing and pyAMReX >=3.11 requirements)
+find_python() {
+    for py in python3.13 python3.12 python3; do
+        if command -v "$py" &>/dev/null; then
+            local ver
+            ver=$("$py" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+            local major=$(echo "$ver" | cut -d. -f1)
+            local minor=$(echo "$ver" | cut -d. -f2)
+            if [ "$major" -eq 3 ] && [ "$minor" -ge 12 ]; then
+                echo "$py"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+if [ -d "venv" ]; then
+    # Check if the existing venv is using Python >= 3.12
+    local_py_ver=$(./venv/bin/python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+    if [ "$local_py_ver" -lt 12 ]; then
+        echo "[Setup] Existing venv is outdated (Python 3.${local_py_ver} < 3.12). Deleting to recreate..."
+        rm -rf venv
+    fi
+fi
+
 if [ ! -d "venv" ]; then
-    echo "[Setup] Creating Python virtual environment (venv) to isolate build dependencies..."
-    python3 -m venv venv
+    if ! PY_BIN=$(find_python); then
+        echo "Error: PInsight Python tracing requires Python 3.12+ (due to CPython sys.monitoring/PEP 669 requirements)."
+        echo "Please install Python 3.12+ (e.g., 'sudo apt install python3.12 python3.12-venv python3.12-dev') and run this script again."
+        exit 1
+    fi
+    echo "[Setup] Creating Python virtual environment (venv) using $PY_BIN..."
+    "$PY_BIN" -m venv venv
 fi
 
 echo "[Setup] Activating Python virtual environment..."
