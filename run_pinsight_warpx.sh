@@ -61,6 +61,12 @@ fi
 pip install mpi4py
 
 
+# Dynamically query the virtual environment's python paths to pass to CMake.
+# This prevents FindPython/FindPython3 from failing inside virtual environments.
+PY_EXE="$PINSIGHT_ROOT/venv/bin/python3"
+PY_INC=$("$PY_EXE" -c "import sysconfig; print(sysconfig.get_path('include'))")
+PY_LIB=$("$PY_EXE" -c "import sysconfig; import os; print(os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')))")
+
 echo "========================================================="
 echo "Starting WarpX + PInsight 4-GPU Run Setup"
 echo "========================================================="
@@ -74,7 +80,13 @@ if [ ! -f "build/libpinsight.so" ]; then
           -DPINSIGHT_PYTHON=TRUE \
           -DPINSIGHT_CUDA=TRUE \
           -DPINSIGHT_MPI=TRUE \
-          -DPINSIGHT_OPENMP=TRUE ..
+          -DPINSIGHT_OPENMP=TRUE \
+          -DPython3_EXECUTABLE="$PY_EXE" \
+          -DPython3_INCLUDE_DIR="$PY_INC" \
+          -DPython3_LIBRARY="$PY_LIB" \
+          -DPython_EXECUTABLE="$PY_EXE" \
+          -DPython_INCLUDE_DIR="$PY_INC" \
+          -DPython_LIBRARY="$PY_LIB" ..
     make -j"$(nproc)"
     cd ..
 else
@@ -101,7 +113,13 @@ if ! python3 -c "import pywarpx" 2>/dev/null; then
           -DWarpX_DIMS="3" \
           -DWarpX_PYTHON=ON \
           -DWarpX_COMPUTE=CUDA \
-          -DWarpX_MPI=ON
+          -DWarpX_MPI=ON \
+          -DPython3_EXECUTABLE="$PY_EXE" \
+          -DPython3_INCLUDE_DIR="$PY_INC" \
+          -DPython3_LIBRARY="$PY_LIB" \
+          -DPython_EXECUTABLE="$PY_EXE" \
+          -DPython_INCLUDE_DIR="$PY_INC" \
+          -DPython_LIBRARY="$PY_LIB"
     cmake --build . -j"$(nproc)" --target pip_install
     cd "$PINSIGHT_ROOT"
 else
