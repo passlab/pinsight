@@ -8,33 +8,28 @@ set -euo pipefail
 PINSIGHT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PINSIGHT_ROOT"
 
-# Ensure ~/.local/bin is in PATH (where pip installs binaries)
-export PATH="$HOME/.local/bin:$PATH"
-
-# Function to check if cmake is available and >= 3.24.0
-cmake_version_check() {
-    if ! command -v cmake &>/dev/null; then
-        return 1
-    fi
-    local version
-    version=$(cmake --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
-    local major=$(echo "$version" | cut -d. -f1)
-    local minor=$(echo "$version" | cut -d. -f2)
-    if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 24 ]; }; then
-        return 1
-    fi
-    return 0
-}
-
-# If cmake is missing or too old, install it via pip
-if ! cmake_version_check; then
-    echo "[Dependency] CMake is missing or too old (< 3.24.0). Installing/upgrading via pip..."
-    python3 -m pip install --user --upgrade cmake
-    if ! cmake_version_check; then
-        echo "Error: Failed to obtain a CMake version >= 3.24.0. Please install it manually."
-        exit 1
-    fi
+# Ensure we have a clean virtual environment to bypass system-wide site-packages permission issues
+if [ ! -d "venv" ]; then
+    echo "[Setup] Creating Python virtual environment (venv) to isolate build dependencies..."
+    python3 -m venv venv
 fi
+
+echo "[Setup] Activating Python virtual environment..."
+# Temporarily disable unbound variable checking because venv activation script references unset variables
+set +u
+source venv/bin/activate
+set -u
+
+echo "[Setup] Ensuring pip and basic build tools are updated inside the venv..."
+pip install --upgrade pip setuptools wheel
+
+echo "[Setup] Installing CMake and WarpX python dependencies inside the venv..."
+pip install cmake
+if [ -d "warpx" ] && [ -f "warpx/requirements.txt" ]; then
+    pip install -r warpx/requirements.txt
+fi
+pip install mpi4py
+
 
 echo "========================================================="
 echo "Starting WarpX + PInsight 4-GPU Run Setup"
@@ -141,7 +136,7 @@ echo "Launching 4-GPU WarpX Simulation under PInsight"
 echo "========================================================="
 
 # Note: We run with 4 MPI tasks (1 per GPU)
-mpirun -np 4 ./gpu_wrapper.sh python3 -m pinsight run_warpx_scaled.py
+mpirun -np 4 ./gpu_wrapper.sh "$PINSIGHT_ROOT/venv/bin/python3" -m pinsight run_warpx_scaled.py
 
 echo "========================================================="
 echo "Simulation Finished. Stopping Trace Collection."
