@@ -8,6 +8,34 @@ set -euo pipefail
 PINSIGHT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PINSIGHT_ROOT"
 
+# Ensure ~/.local/bin is in PATH (where pip installs binaries)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Function to check if cmake is available and >= 3.24.0
+cmake_version_check() {
+    if ! command -v cmake &>/dev/null; then
+        return 1
+    fi
+    local version
+    version=$(cmake --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
+    local major=$(echo "$version" | cut -d. -f1)
+    local minor=$(echo "$version" | cut -d. -f2)
+    if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 24 ]; }; then
+        return 1
+    fi
+    return 0
+}
+
+# If cmake is missing or too old, install it via pip
+if ! cmake_version_check; then
+    echo "[Dependency] CMake is missing or too old (< 3.24.0). Installing/upgrading via pip..."
+    python3 -m pip install --user --upgrade cmake
+    if ! cmake_version_check; then
+        echo "Error: Failed to obtain a CMake version >= 3.24.0. Please install it manually."
+        exit 1
+    fi
+fi
+
 echo "========================================================="
 echo "Starting WarpX + PInsight 4-GPU Run Setup"
 echo "========================================================="
