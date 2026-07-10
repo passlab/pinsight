@@ -72,26 +72,22 @@ echo "Starting WarpX + PInsight 4-GPU Run Setup"
 echo "========================================================="
 
 # 2. Build PInsight with Python, CUDA, MPI, and OpenMP domains
-if [ ! -f "build/libpinsight.so" ]; then
-    echo "[Build] Compiling PInsight..."
-    mkdir -p build
-    cd build
-    cmake -DCMAKE_BUILD_TYPE=Release \
-          -DPINSIGHT_PYTHON=TRUE \
-          -DPINSIGHT_CUDA=TRUE \
-          -DPINSIGHT_MPI=TRUE \
-          -DPINSIGHT_OPENMP=TRUE \
-          -DPython3_EXECUTABLE="$PY_EXE" \
-          -DPython3_INCLUDE_DIR="$PY_INC" \
-          -DPython3_LIBRARY="$PY_LIB" \
-          -DPython_EXECUTABLE="$PY_EXE" \
-          -DPython_INCLUDE_DIR="$PY_INC" \
-          -DPython_LIBRARY="$PY_LIB" ..
-    make -j"$(nproc)"
-    cd ..
-else
-    echo "[Build] PInsight is already compiled."
-fi
+echo "[Build] Compiling PInsight..."
+mkdir -p build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DPINSIGHT_PYTHON=TRUE \
+      -DPINSIGHT_CUDA=TRUE \
+      -DPINSIGHT_MPI=TRUE \
+      -DPINSIGHT_OPENMP=TRUE \
+      -DPython3_EXECUTABLE="$PY_EXE" \
+      -DPython3_INCLUDE_DIR="$PY_INC" \
+      -DPython3_LIBRARY="$PY_LIB" \
+      -DPython_EXECUTABLE="$PY_EXE" \
+      -DPython_INCLUDE_DIR="$PY_INC" \
+      -DPython_LIBRARY="$PY_LIB" ..
+make -j"$(nproc)"
+cd ..
 
 # 3. Build WarpX C-Extension / Python bindings
 if ! python3 -c "import pywarpx" 2>/dev/null; then

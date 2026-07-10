@@ -89,7 +89,7 @@
 // events between subdomains to reduce the complexity and overhead of checking
 // multiple subdomain configs. We however keep the event/subdomain info in the
 // domain_info_table
-#define MAX_NUM_LEXGIONS 512
+#define MAX_NUM_LEXGIONS 16384
 
 /**
  * We use a single bit (ON/OFF) to enable/disable the tracing of an event. For
