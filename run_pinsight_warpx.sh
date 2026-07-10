@@ -151,6 +151,11 @@ export PYTHONPATH="$PINSIGHT_ROOT/build:${PYTHONPATH:-}"
 export OMP_NUM_THREADS=8  # Number of OpenMP threads per MPI rank
 export AMREX_DEFAULT_INIT="amrex.use_gpu_aware_mpi=1"
 
+# Scale down local grid size slightly to fit within VM's available GPU memory (~28.5 GB free)
+# You can increase this (e.g. to 320 or 384) if more GPU memory becomes available.
+export WARPX_NZ_LOCAL=256
+
+
 # 7. Create local MPI rank to GPU binding wrapper
 cat << 'EOF' > gpu_wrapper.sh
 #!/usr/bin/env bash

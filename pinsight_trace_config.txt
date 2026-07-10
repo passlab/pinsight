@@ -1,0 +1,41 @@
+# pinsight_trace_config.txt
+# PInsight configuration file for scaling WarpX on 4 GPUs
+
+# =============================================================================
+# 1. Global Domain Controls
+# =============================================================================
+
+# Enable CUDA tracing (CUPTI kernel launches & memory copies)
+[CUDA.global]
+    trace_mode = TRACING
+
+# Enable MPI tracing (PMPI wrappers for collectives and p2p messages)
+[MPI.global]
+    trace_mode = TRACING
+
+# Enable OpenMP tracing (OMPT thread scheduling and barriers)
+[OpenMP.global]
+    trace_mode = TRACING
+
+# Enable Python tracing domain
+[Python.global]
+    trace_mode = TRACING
+    Python.thread = (0-0)  # Only monitor main Python thread (thread 0) to avoid worker noise
+
+# =============================================================================
+# 2. Python Domain Defaults & Whitelisting
+# =============================================================================
+
+[Python.default]
+    pysysmon_py_start  = on   # Python function begin
+    pysysmon_py_return = on   # Python function end
+    pysysmon_c_start   = off  # Bypasses raw C-extension boundaries to avoid numpy/mpi4py internal noise
+    pysysmon_c_return  = off
+
+# Deny-by-default: Suppress all common/third-party python functions
+[Lexgion(Python).default]: Python.default
+    max_num_traces = 0
+
+# Whitelist: Only trace our custom simulation callback
+[Lexgion(Python:my_simple_callback)]: Python.default
+    max_num_traces = -1  # Trace all invocations without limit
