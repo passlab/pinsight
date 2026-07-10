@@ -151,9 +151,8 @@ typedef struct lexgion_record_t {
 
 extern domain_trace_config_t domain_default_trace_config[];
 
-/* the max depth of nested lexgion, 16 should be enough if we do not have
- * recursive such as in OpenMP tasking */
-#define MAX_LEXGION_STACK_DEPTH 16
+/* the max depth of nested lexgion, 512 should be enough even for deep python call stacks and recursive functions */
+#define MAX_LEXGION_STACK_DEPTH 512
 /**
  * the thread-local object that store data for each thread
  */
