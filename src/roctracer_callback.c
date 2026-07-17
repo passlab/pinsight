@@ -5,6 +5,7 @@
 #include <roctracer/roctracer.h>
 #include <roctracer/roctracer_hip.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -67,14 +68,33 @@ static inline void hip_ensure_thread_init(void) {
  *
  * hipGetDevice() is cheap (~50 ns) but called on every callback.
  * Cache the result per-thread; invalidate when it changes (rare).
+ *
+ * hipGetDevice() reports the index RELATIVE TO this process's own
+ * visible-device list (as masked by ROCR_VISIBLE_DEVICES /
+ * HIP_VISIBLE_DEVICES), which is always 0 when a launcher restricts each
+ * process to exactly one GPU (e.g. one-GPU-per-rank binding) — regardless
+ * of which physical GPU that is. To record the actual physical device, add
+ * the first index named in ROCR_VISIBLE_DEVICES (or HIP_VISIBLE_DEVICES) as
+ * an offset; hipGetDevice()'s relative index is exactly an index into that
+ * visible-device list, so this generalizes correctly. Falls back to the
+ * plain hipGetDevice() value when neither variable is set (no masking).
  * ================================================================ */
 static __thread int hip_tls_dev_cached = 0;
 static __thread int hip_tls_devId = 0;
 
+static inline int hip_visible_device_offset(void) {
+    const char *v = getenv("ROCR_VISIBLE_DEVICES");
+    if (!v || !*v) v = getenv("HIP_VISIBLE_DEVICES");
+    if (!v || !*v) return 0;
+    return atoi(v); /* first comma-separated token; atoi stops at ',' */
+}
+
 static inline int hip_get_cached_device(void) {
     if (__builtin_expect(hip_tls_dev_cached, 1))
         return hip_tls_devId;
-    hipGetDevice(&hip_tls_devId);
+    int dev;
+    hipGetDevice(&dev);
+    hip_tls_devId = dev + hip_visible_device_offset();
     hip_tls_dev_cached = 1;
     return hip_tls_devId;
 }

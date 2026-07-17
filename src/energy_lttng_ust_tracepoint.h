@@ -14,6 +14,11 @@
 // devices, the element position is the source index, and an element is 0 when
 // that index was not measured.
 //
+// NOTE for multi-rank/node consumers: cpu_uj/gpu_uj are NODE-WIDE counters, not
+// per-process — every rank on a node reports the same values (mpirank does not
+// scope them). Dedupe by hostname before aggregating; summing across a node's
+// ranks overcounts energy by the local rank count.
+//
 #undef LTTNG_UST_TRACEPOINT_PROVIDER
 #define LTTNG_UST_TRACEPOINT_PROVIDER energy_pinsight_lttng_ust
 

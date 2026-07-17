@@ -4,6 +4,7 @@
 
 #include <pinsight.h>
 #include "pinsight_control_thread.h"
+#include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -36,6 +37,26 @@ extern void LTTNG_ROCTRACER_Init(void);
 extern void LTTNG_ROCTRACER_Fini(void);
 #endif
 
+#ifdef PINSIGHT_MPI
+/* enter_pinsight fires before MPI_Init, so the authoritative PMPI_Comm_rank()
+ * capture in pmpi_mpi.c's MPI_Init/MPI_Init_thread wrapper hasn't run yet and
+ * mpirank is still at its zero-initialized default — every rank's
+ * enter_pinsight event would otherwise show mpirank=0 regardless of its real
+ * rank (verified 2026-07-17 on a real multi-node run). Take a best-effort
+ * early guess from the launcher's own pre-MPI_Init rank env var, checking
+ * PMI_RANK (generic MPICH-family PMI convention) first, then
+ * OMPI_COMM_WORLD_RANK (Open MPI). Left at 0 if neither is set — matches the
+ * prior behavior, and the authoritative PMPI_Comm_rank() call in MPI_Init
+ * still runs afterward and overwrites this with the real value regardless,
+ * so this is purely a best-effort improvement for the pre-MPI_Init window,
+ * never the source of truth once MPI_Init has actually run. */
+static void pinsight_early_rank_init(void) {
+  const char *v = getenv("PMI_RANK");
+  if (!v || !*v) v = getenv("OMPI_COMM_WORLD_RANK");
+  if (v && *v) mpirank = atoi(v);
+}
+#endif
+
 /**
  * This has to be the initial/main thread of the main program and I do not see a
  * situation that this is not true
@@ -44,6 +65,9 @@ void enter_pinsight_func() {
   pid = getpid();
   gethostname(hostname, 48);
   // printf("entering pinsight at host: %s by process: %d\n", hostname, pid);
+#ifdef PINSIGHT_MPI
+  pinsight_early_rank_init();
+#endif
 #ifdef PINSIGHT_ENERGY
   /* Baseline energy snapshot precedes the enter_pinsight app-start marker. */
   pinsight_energy_init();
