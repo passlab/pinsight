@@ -112,3 +112,194 @@ kernel_launch, memcpy_{HtoD,DtoH,DtoD,HtoH,async}, stream/device_synchronize; th
 MPI/GPU/energy/kernels + 3 figures; devId=rank+4 maps activity→rank), overhead_experiment.sh
 (LOCAL_N/REPS/OUTDIR env-tunable), amg_trace_config.txt (corrected full),
 amg_trace_config_rate50.txt, ANALYSIS_amg4n30.md, OVERHEAD_results.md.
+
+## Multi-node (Flux) — first real run, 2026-07-16
+
+**Flux bank blocker resolved**: uid now enrolled, bank `asccasc`, queue `pdebug` confirmed
+working (`flux batch -q pdebug --bank=asccasc` succeeds). `amg2023_flux_multinode.sh` and
+`run_4rank_local.sh` were already written (pre-dating this session) for exactly this —
+per-node LTTng session writing to `$OUT/<hostname>/`, `flux run -g1` binds one APU/rank.
+
+**Critical bug found + fixed: `LTTNG_HOME` must be node-local, not the default `$HOME`.**
+Tuolumne's `$HOME` (`/g/g19/yan10`) is NFS (`cz-nfs-02-new.llnl.gov:/cz_g19`), shared across
+every node. `lttng-sessiond` defaults to keeping its lock/socket state under
+`$LTTNG_HOME` (falls back to `$HOME`) — so multiple nodes' session daemons collide on the
+*same* shared lock file (`Could not get lock file .../lttng-sessiond.lck, another instance
+is running`). This would have broken the real 4-node job identically to how it broke a
+1-node calibration run (caught there first, cheaply). **Fix, in both scripts**: each node's
+`flux run --tasks-per-node=1` block now does
+`export LTTNG_HOME=/tmp/$USER/lttng_home; mkdir -p "$LTTNG_HOME"; pkill -x lttng-sessiond
+2>/dev/null || true` before any `lttng` command — control-plane state goes node-local
+(`/tmp`), while trace **output** stays on shared FS via `--output=$OUT/$H` as before. Must be
+set in EVERY separate `flux run` block that calls `lttng` (create AND the later stop/destroy
+block — they're independent bash invocations, don't inherit each other's env).
+
+**Problem-size calibration (1 node, 4 ranks/GPUs, weak-scaled `-n L L L -P 1 2 2`)** — see
+`calib/` (calib_job.sh, parse_energy.py, out/L{100,200,300,400}):
+| L | elapsed | per-GPU power (avg) |
+|---|---|---|
+| 100 | 12.6s | 171 W |
+| 200 | 69.2s | 168 W |
+| 300 | 242.1s | 163 W (AMG Setup phase alone: 165.5s) |
+| 400 | cancelled | AMG Setup still unfinished after 10+ min — real cliff, not gradual |
+
+**Key finding: GPU power is FLAT (~160-190 W/APU) across L=100→300, if anything drifting
+slightly down.** AMG2023 is NOT power/compute-bound on MI300A in this range — consistent
+with AMG being bandwidth/irregular-access-bound, not FLOP-bound. So "increase L to saturate
+the GPUs" is the wrong lever — there's no power plateau to chase. (Matches the earlier
+n=60 canonical single-node run's 160-175 W/APU — good cross-check consistency.) The real
+constraint is AMG **Setup time exploding non-linearly** past L=300. **Chose LOCAL_N=200**
+for the production multi-node run: same power profile as 100/300, ~69s is long enough for
+real inter-node MPI halo-exchange to show up, well clear of the L=300+ setup-time cliff.
+Updated `amg2023_flux_multinode.sh`'s default accordingly.
+
+**Tool-use gotcha**: `flux jobs -a` TIME column plus polling — don't `sleep` past ~110s in one
+shell call (hits the harness's own command timeout); poll in shorter increments instead.
+
+## Multi-node — SUCCESS 2026-07-16, two more architectural bugs found+fixed en route
+
+First fully working real 4-node/16-GPU run (`BANK=asccasc QUEUE=pdebug NODES=4
+RANKS_PER_NODE=4`), after the LTTNG_HOME fix above plus two more bugs, both found by
+watching per-node event counts go from 0 → real numbers:
+
+**Bug 2 — session daemon dies when its originating `flux run` task's cgroup is torn
+down**, even though `lttng-sessiond` tries to daemonize (double-fork/detach doesn't
+survive a cgroup kill). The original 3-step design (separate `flux run --tasks-per-node=1`
+for session-start, then a separate `flux run -n$NRANKS -g1` for AMG, then a third
+`flux run --tasks-per-node=1` for stop/destroy) is fundamentally broken: step 1's daemon
+is dead before step 2 (AMG) ever launches. Symptom was insidious — `lttng create`/
+`enable-event`/`start` all succeeded with zero errors, AMG ran and produced correct FOM
+numbers, but **every node's trace was completely empty** (bare `ust/` dir, no `uid/`
+subtree). Confirmed via isolated diagnostic (calib/diag3_job.sh): start session in one
+`flux run` task, `pgrep lttng-sessiond` in a *separate* follow-up task → `NOT RUNNING`.
+**Fix**: merge session-start + AMG-run + session-stop into a **single**
+`flux run -N$NODES -n$NRANKS -g1` invocation (one task per rank, matching the AMG launch
+topology) so the daemon's lifetime is scoped to the task that also runs the app. Every
+local rank on a node attempts create/enable/start and later stop/destroy — no node-local
+lock/coordination needed, since `lttng create` on a duplicate name and `lttng destroy` on
+an already-gone session both fail harmlessly (suppressed `>/dev/null 2>&1`), so only the
+first-to-arrive/first-to-finish rank's attempt actually matters. Relies on MPI's
+collective `MPI_Finalize` keeping the 4 local ranks' completion times close together so
+the fastest rank's teardown doesn't cut off its siblings' trailing events — worked
+cleanly in practice.
+
+**Bug 3 — `LTTNG_HOME` must be set for the traced APPLICATION too, not just the `lttng`
+CLI.** After fixing bug 2, sessions still traced zero events (same empty-`ust/`-dir
+symptom) even with no errors anywhere. Root cause: the `env -i ... LTTNG_HOME=/tmp/...`
+wrapper was only used for the `lttng` control commands; the actual
+`env LD_PRELOAD=libpinsight.so ... $AMG ...` invocation never got `LTTNG_HOME` set, so
+liblttng-ust (linked into libpinsight.so) fell back to the default (`$HOME`, the shared
+NFS path) to find the sessiond's rendezvous socket — a completely different location from
+the node-local sessiond the CLI had just started. App and control-plane were talking to
+two different (non-existent, from each other's perspective) daemons; UST tracepoints
+silently no-op when no reachable sessiond is found, hence zero events with zero errors.
+**Fix**: add `LTTNG_HOME=/tmp/$USER/lttng_home` directly to the AMG launch's `env` line,
+matching the value used for the CLI wrapper.
+
+**Bug 4 (found 2026-07-17, via TraceCompass showing only 1 GPU/node): `-g1` does NOT
+rotate distinct GPUs across local ranks on this Flux instance.** Confirmed via a minimal
+diagnostic (`calib/diag5_job.sh`: `flux run -N4 -n16 -g1 ... echo $ROCR_VISIBLE_DEVICES`)
+— **every one of the 16 ranks across all 4 nodes got `ROCR_VISIBLE_DEVICES=3`**, i.e. all
+4 local ranks/node bound to the SAME physical GPU; the other 3 GPUs/node never ran
+anything. This is a real compute-placement bug, not just a trace-reporting artifact —
+confirmed via babeltrace2: host-side `hipKernelLaunch_begin` events split evenly across
+all 4 `mpirank`s (~9700-9900 each) but activity records (`hipKernelActivity`) *all* report
+`devId=7` (consistent with all physical execution landing on device 3, offset-encoded).
+Host-callback `devId` itself (`hip_get_cached_device()` → `hipGetDevice()`,
+roctracer_callback.c:77) is separately always 0 for every rank too — that part IS a
+process-relative-vs-physical numbering artifact (each process's HIP runtime only sees
+one masked device, so it calls itself "device 0" regardless of which physical GPU) and
+would exist even with correct binding; but the activity records' *single* devId value
+across all ranks reveals the deeper bug: binding itself is broken, not just the reported
+index.
+
+**Why this didn't surface in the single-node energy calibration**: PInsight's energy
+backend (AMD-SMI) reads all of a node's physical GPU power counters directly at the
+system level, bypassing `ROCR_VISIBLE_DEVICES` entirely — so seeing 4 different non-zero
+per-GPU wattages in `calib/parse_energy.py` output reflects the node's real 4-GPU power
+draw, NOT evidence that compute was spread across 4 GPUs by 4 different ranks. Don't
+mistake energy-backend GPU enumeration for confirmation of correct compute placement.
+
+**Fix (matches this project's own established precedent)**: `run_4rank_local.sh`
+*already* doesn't trust `-g1`'s automatic binding — it computes
+`ROCR_VISIBLE_DEVICES=$((FLUX_TASK_RANK % NRANKS))` itself. Applied the same pattern to
+`amg2023_flux_multinode.sh`: `export ROCR_VISIBLE_DEVICES=$((FLUX_TASK_RANK %
+RANKS_PER_NODE))` right before the AMG launch. Ranks are assigned in contiguous blocks
+per node (confirmed via diag5: global ranks 0-3 → node 1, 4-7 → node 2, etc.), so
+`FLUX_TASK_RANK % RANKS_PER_NODE` correctly gives the local-within-node index. **Not yet
+re-validated with a full production run** — next run should show devId spread across the
+node's 4 GPUs and ~4x lower per-GPU kernel-launch overlap (each GPU now doing 1/4 the
+work, not all 16 ranks' worth... actually 4 ranks' worth funneled onto 1 GPU).
+
+**Bug 4 fix CONFIRMED 2026-07-17 (both halves).** (a) Launcher-side:
+`ROCR_VISIBLE_DEVICES=$((FLUX_TASK_RANK % RANKS_PER_NODE))` in
+`amg2023_flux_multinode.sh` — verified via activity-record `devId`, now spread across
+4,5,6,7 per node (~9200-9900 kernels each, was 100% devId=7 before). (b) PInsight source:
+`hip_get_cached_device()` in `src/roctracer_callback.c` now adds
+`hip_visible_device_offset()` (parses `ROCR_VISIBLE_DEVICES`/`HIP_VISIBLE_DEVICES`, first
+comma-separated token via `atoi`, falls back to 0/plain `hipGetDevice()` if neither set —
+backward compatible) on top of `hipGetDevice()`'s process-relative index. Rebuilt
+`build_eval/libpinsight.so`. Verified on a real 4-node run: host-callback `devId` now
+shows 0,1,2,3 per node, **exactly matching each rank's local index**
+(e.g. tuolumne1039: mpirank 8/9/10/11 → devId 0/1/2/3) — fully consistent with the
+launcher fix, as predicted. Left `HIP_get_device_id()` (the separate device-range trace
+FILTER function used by `TRACE_PUNIT1` in trace_domain_HIP.h) untouched — out of scope,
+filter range is 0-16 so behavior is unaffected either way.
+
+**Numbering mismatch confirmed real, not reconciled**: host-callback devId (0-3, physical,
+via our fix) and activity-record devId (4-7, ROCm driver-level, unmodified) use DIFFERENT
+numbering for the same 4 physical GPUs. The +4 offset is now confirmed CONSISTENT across
+all 4 independently-allocated nodes in one run (not per-node noise) — likely a stable
+ROCm/HSA convention, but root cause not traced into ROCm internals. Not reconciled in the
+peam XML (which keys "HIP Device" on host-callback devId only, per its own code comment
+at line ~1100 — activity records are separately excluded from the timeline pending a
+future segment/Java analysis, so this mismatch doesn't currently bite the visualization).
+
+**Separate, unrelated finding (not a bug): "rank 0" appears once per node in
+`pinsight_enter_exit:enter_pinsight` events — expected.** `enter_pinsight_func()` is a
+GCC constructor (`enter_exit.c:21`, `__attribute__((constructor(200)))`) — runs at
+LD_PRELOAD load time, before `main()`/`MPI_Init`, before PMPI interception has captured
+the real rank, so `mpirank` is still at its zero-initialized default. Every rank's
+`enter_pinsight` event necessarily shows `mpirank=0` at that point — confirmed by
+matching `exit_pinsight` (same pid, fired at program end) showing the correct distinct
+rank. Don't trust `enter_pinsight`'s own mpirank field for rank identification —
+correlate by `pid` against a later event instead.
+
+**Verified 2026-07-17 (`calib/rank_check.c`, `calib/rank_check_job.sh`, 2 nodes/8 ranks):
+`PMI_RANK`, `FLUX_TASK_RANK`, and `PALS_RANKID` are all set by the launcher BEFORE
+`MPI_Init` and all EXACTLY match `MPI_Comm_rank(MPI_COMM_WORLD)` post-init, for every
+rank** (Cray MPICH + Flux + Cray PALS on Tuolumne). `OMPI_COMM_WORLD_RANK`/`MPI_RANK`/
+`PMI_ID` unset (not Open MPI). Gotcha: `flux batch --output=/--error=` with RELATIVE
+paths silently wrote to a location that never showed up (files never created where
+expected) — always use absolute paths for these, matching the working pattern in
+`amg2023_flux_multinode.sh`.
+
+**IMPLEMENTED + VERIFIED 2026-07-17: `enter_pinsight` early-rank fix.** Added
+`pinsight_early_rank_init()` in `src/enter_exit.c` (guarded `#ifdef PINSIGHT_MPI` —
+`mpirank` only exists in MPI builds, declared `extern` in each
+`*_lttng_ust_tracepoint.h`): checks `PMI_RANK` then `OMPI_COMM_WORLD_RANK`, `atoi()`s
+whichever is set, assigns to the global `mpirank` — called at the top of
+`enter_pinsight_func()` (a GCC constructor, `enter_exit.c` line ~21) before the
+`enter_pinsight` tracepoint fires. Deliberately did NOT remove the later authoritative
+`PMPI_Comm_rank()` capture in `pmpi_mpi.c`'s `MPI_Init`/`MPI_Init_thread` wrappers — that
+call is already a one-time, cached capture (not per-event, no performance cost to
+removing), and it's the only universally-correct source (works regardless of launcher;
+env vars are a best-effort guess that could be wrong/absent under e.g. Slurm's native
+launcher, which uses `SLURM_PROCID` instead). The two are complementary: env-var guess
+for the pre-MPI_Init window where nothing else is possible, real MPI API as ground truth
+once available (and it naturally overwrites the early guess). Needed `#include <stdlib.h>`
+in enter_exit.c for `getenv`/`atoi`. Rebuilt `build_eval/libpinsight.so`.
+
+**Verification (1-node/4-rank run via `amg2023_flux_multinode.sh NODES=1
+RANKS_PER_NODE=4`, safest path — avoid hand-writing one-off flux-run scripts, easy to
+introduce subtle quoting bugs; use the proven heredoc-generated script instead):**
+`enter_pinsight` now shows `mpirank=0,1,2,3` (previously always 0 for all 4), and each
+value exactly matches that same PID's later `exit_pinsight` mpirank — e.g. pid 3873017:
+rank 2 in both enter and exit. Fix confirmed working correctly.
+
+**Verification (4 nodes, 16 ranks, L=200, confirms README's own checklist)**:
+inter-rank MPI genuinely captured — 76266 `MPI_Irecv` + 75638 `MPI_Isend` + 11164
+`MPI_Waitall` + `MPI_Send`/`Recv`/`Allreduce`/`Barrier`/`Init`/`Finalize` per node (not
+just collectives); all `mpirank` 0-15 present across the 4 node traces; ~240K HIP events +
+8 energy + 8 enter_exit events per node. AMG itself: 19 iterations, FOM ~1.78e8,
+consistent with the single-node calibration numbers.
