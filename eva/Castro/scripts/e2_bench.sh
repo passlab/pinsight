@@ -1,8 +1,13 @@
 #!/bin/bash
-SEDOV=/home/yyan7/tools/pinsight/eva/Castro/Exec/hydro_tests/Sedov
+# E2 Castro Sedov 3D Overhead Benchmark — baseline vs full tracing
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CASTRO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PINSIGHT_ROOT="$(cd "$CASTRO_DIR/../.." && pwd)"
+
+SEDOV=$CASTRO_DIR/source/Exec/hydro_tests/Sedov
 BIN=$SEDOV/Castro3d.gnu.MPI.CUDA.ex
 INPUT=$SEDOV/inputs.3d.e2eval
-LIB=/home/yyan7/tools/pinsight/build/libpinsight.so
+LIB=$PINSIGHT_ROOT/build/libpinsight.so
 LLVMLIB=/usr/lib/llvm-21/lib
 CUDALIB=/usr/local/cuda/lib64
 

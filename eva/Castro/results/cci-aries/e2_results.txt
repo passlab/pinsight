@@ -1,0 +1,22 @@
+nohup: ignoring input
+=== BASELINE RUN 1 ===
+Run time = 29.57151387
+Run time without initialization = 29.54299686
+  Average number of zones advanced per microsecond: 98.416
+  Average number of zones advanced per microsecond per rank: 24.604
+=== BASELINE RUN 2 ===
+Run time = 29.7252259
+Run time without initialization = 29.69978037
+  Average number of zones advanced per microsecond: 97.897
+  Average number of zones advanced per microsecond per rank: 24.474
+=== PINSIGHT TRACING RUN 1 ===
+Run time = 37.05114743
+Run time without initialization = 37.011212
+  Average number of zones advanced per microsecond: 78.557
+  Average number of zones advanced per microsecond per rank: 19.639
+=== PINSIGHT TRACING RUN 2 ===
+Run time = 36.86799693
+Run time without initialization = 36.82731983
+  Average number of zones advanced per microsecond: 78.950
+  Average number of zones advanced per microsecond per rank: 19.737
+=== DONE ===

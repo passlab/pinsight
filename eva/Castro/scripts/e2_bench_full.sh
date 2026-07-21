@@ -1,14 +1,16 @@
 #!/bin/bash
 # E2 Castro Sedov 3D Overhead Benchmark — all modes
 # 4×A100, 128^3 base + 2 AMR levels, 200 steps
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CASTRO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PINSIGHT_ROOT="$(cd "$CASTRO_DIR/../.." && pwd)"
 
-SEDOV=/home/yyan7/tools/pinsight/eva/Castro/Exec/hydro_tests/Sedov
+SEDOV=$CASTRO_DIR/source/Exec/hydro_tests/Sedov
 BIN=$SEDOV/Castro3d.gnu.MPI.CUDA.ex
 INPUT=$SEDOV/inputs.3d.e2eval
-LIB=/home/yyan7/tools/pinsight/build/libpinsight.so
+LIB=$PINSIGHT_ROOT/build/libpinsight.so
 LLVMLIB=/usr/lib/llvm-21/lib
 CUDALIB=/usr/local/cuda/lib64
-EVA=/home/yyan7/tools/pinsight/eva
 
 cd $SEDOV
 
@@ -28,13 +30,13 @@ run_pinsight() {
     fi
 }
 
-echo "=== OFF MODE RUN 1 ===" ; run_pinsight $EVA/e2_off.install
-echo "=== OFF MODE RUN 2 ===" ; run_pinsight $EVA/e2_off.install
+echo "=== OFF MODE RUN 1 ===" ; run_pinsight $SCRIPT_DIR/e2_off.install
+echo "=== OFF MODE RUN 2 ===" ; run_pinsight $SCRIPT_DIR/e2_off.install
 
-echo "=== RATE-LIMITED (50 traces/lexgion) RUN 1 ===" ; run_pinsight $EVA/e2_rate_limited.install
-echo "=== RATE-LIMITED (50 traces/lexgion) RUN 2 ===" ; run_pinsight $EVA/e2_rate_limited.install
+echo "=== RATE-LIMITED (50 traces/lexgion) RUN 1 ===" ; run_pinsight $SCRIPT_DIR/e2_rate_limited.install
+echo "=== RATE-LIMITED (50 traces/lexgion) RUN 2 ===" ; run_pinsight $SCRIPT_DIR/e2_rate_limited.install
 
-echo "=== CUDA-ONLY SELECTIVE RUN 1 ===" ; run_pinsight $EVA/e2_cuda_only.install
-echo "=== CUDA-ONLY SELECTIVE RUN 2 ===" ; run_pinsight $EVA/e2_cuda_only.install
+echo "=== CUDA-ONLY SELECTIVE RUN 1 ===" ; run_pinsight $SCRIPT_DIR/e2_cuda_only.install
+echo "=== CUDA-ONLY SELECTIVE RUN 2 ===" ; run_pinsight $SCRIPT_DIR/e2_cuda_only.install
 
 echo "=== ALL DONE ==="

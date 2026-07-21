@@ -1,0 +1,20 @@
+nohup: ignoring input
+=== OFF MODE RUN 1 ===
+Run time = 29.86562185
+Run time without initialization = 29.83612998
+=== OFF MODE RUN 2 ===
+Run time = 30.00691785
+Run time without initialization = 29.96996807
+=== RATE-LIMITED (50 traces/lexgion) RUN 1 ===
+Run time = 35.77175625
+Run time without initialization = 35.74084
+=== RATE-LIMITED (50 traces/lexgion) RUN 2 ===
+Run time = 35.94766942
+Run time without initialization = 35.91343109
+=== CUDA-ONLY SELECTIVE RUN 1 ===
+Run time = 36.49608486
+Run time without initialization = 36.46680749
+=== CUDA-ONLY SELECTIVE RUN 2 ===
+Run time = 36.98050713
+Run time without initialization = 36.94207326
+=== ALL DONE ===

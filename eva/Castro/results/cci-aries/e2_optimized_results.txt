@@ -1,0 +1,32 @@
+nohup: ignoring input
+=== BASELINE RUN 1 ===
+Run time = 29.54906258
+Run time without initialization = 29.51692125
+=== BASELINE RUN 2 ===
+Run time = 29.70038377
+Run time without initialization = 29.67384993
+=== OFF MODE RUN 1 ===
+Run time = 29.9379715
+Run time without initialization = 29.9117729
+=== OFF MODE RUN 2 ===
+Run time = 29.98447747
+Run time without initialization = 29.95521479
+=== RATE-LIMITED (50) RUN 1 ===
+Run time = 35.50948051
+Run time without initialization = 35.47202393
+=== RATE-LIMITED (50) RUN 2 ===
+Run time = 35.56444784
+Run time without initialization = 35.53109963
+=== CUDA-ONLY RUN 1 ===
+Run time = 36.54100309
+Run time without initialization = 36.5043968
+=== CUDA-ONLY RUN 2 ===
+Run time = 36.64280671
+Run time without initialization = 36.60885443
+=== FULL TRACING RUN 1 ===
+Run time = 36.44415174
+Run time without initialization = 36.41056805
+=== FULL TRACING RUN 2 ===
+Run time = 36.73671405
+Run time without initialization = 36.70351064
+=== ALL DONE ===
