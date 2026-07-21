@@ -12,6 +12,7 @@
 #include <cupti.h>
 #include <cupti_activity.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 int CUDA_domain_index;
@@ -74,12 +75,73 @@ static inline int cuda_memcpy_event_id(int kind) {
 static _Atomic int cuda_thread_id_counter = 2000;
 
 /* ================================================================
+ * Physical device mapping (CUDA counterpart of the ROCm fix in
+ * roctracer_callback.c, commit 1f5b889)
+ *
+ * cudaGetDevice()/cuptiGetDeviceId() report the device ordinal
+ * RELATIVE TO this process's CUDA_VISIBLE_DEVICES-masked view, which
+ * is always 0 under one-GPU-per-rank launchers — regardless of which
+ * physical GPU the rank is bound to.  Verified on matrix (Slurm,
+ * 4×H100): all ranks traced devId=0 while actually bound to physical
+ * GPUs 1,0,3,2 (job 283220; eva/Castro/results/matrix/devid_findings.md).
+ *
+ * The relative ordinal is an index into the CUDA_VISIBLE_DEVICES
+ * token list, so we parse the list once and map ordinal -> token.
+ * Unlike the ROCm first-token-offset approach, an explicit map is
+ * also correct for non-contiguous and reordered lists (Slurm binds
+ * ranks to scrambled physical indices).
+ *
+ * Identity fallback (map empty) when the list cannot be trusted:
+ *   - variable unset/empty (no masking),
+ *   - UUID/MIG tokens ("GPU-...", "MIG-..."),
+ *   - malformed tokens,
+ *   - cgroup-constrained jobs that renumber devices (Slurm
+ *     --gpus-per-task): the env var names physical GPUs that are not
+ *     the cgroup's renumbered ordinals — but in that configuration
+ *     CUDA either fails to init (verified: CUDA error 100) or the
+ *     env var is "0", so identity is the best available answer.
+ * ================================================================ */
+#define CUDA_MAX_VISIBLE_DEVICES 64
+static int cuda_visible_map[CUDA_MAX_VISIBLE_DEVICES];
+static int cuda_visible_count = 0; /* 0 = identity mapping */
+
+/* Called once from pinsight_cuda_init(), before any callback fires. */
+static void cuda_parse_visible_devices(void) {
+  cuda_visible_count = 0;
+  const char *v = getenv("CUDA_VISIBLE_DEVICES");
+  if (!v || !*v)
+    return;
+  const char *p = v;
+  int n = 0;
+  while (n < CUDA_MAX_VISIBLE_DEVICES) {
+    char *end;
+    long d = strtol(p, &end, 10);
+    if (end == p || d < 0 || (*end != ',' && *end != '\0'))
+      return; /* non-integer or malformed token: keep identity */
+    cuda_visible_map[n++] = (int)d;
+    if (*end == '\0')
+      break;
+    p = end + 1;
+  }
+  cuda_visible_count = n;
+}
+
+/* Map a process-relative device ordinal to the physical device index.
+ * Ordinals beyond the parsed list pass through unchanged. */
+static inline unsigned int cuda_physical_devId(unsigned int devId) {
+  return (devId < (unsigned int)cuda_visible_count)
+             ? (unsigned int)cuda_visible_map[devId]
+             : devId;
+}
+
+/* ================================================================
  * Per-thread CUDA context/device cache (Level 2 optimization)
  *
  * In multi-GPU MPI apps like Castro, each rank uses a single GPU.
  * cuptiGetContextId/DeviceId cost ~200ns each per call, adding up
  * to ~0.5s over 1M CUPTI callbacks.  Cache the mapping in TLS so
  * the expensive CUPTI queries are done only once per thread.
+ * The cached devId is the PHYSICAL device index (mapped above).
  * ================================================================ */
 static __thread int cuda_tls_cached = 0;
 static __thread unsigned int cuda_tls_cxtId = 0;
@@ -94,7 +156,9 @@ static inline void cuda_cache_context_device(CUcontext ctx, unsigned int *cxtId,
     return;
   }
   cuptiGetContextId(ctx, cxtId);
-  cuptiGetDeviceId(ctx, devId);
+  unsigned int relDevId;
+  cuptiGetDeviceId(ctx, &relDevId);
+  *devId = cuda_physical_devId(relDevId);
   cuda_tls_cxtId = *cxtId;
   cuda_tls_devId = *devId;
   cuda_tls_context = ctx;
@@ -763,10 +827,13 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
        * For cudaMemcpyAsync, this is the only source of actual
        * transfer time. */
       CUpti_ActivityMemcpy5 *m = (CUpti_ActivityMemcpy5 *)record;
+      /* Activity deviceId is the same process-relative ordinal as the
+       * callback path (CUPTI numbers devices within this process's
+       * visible set), so the same physical mapping applies. */
       lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaMemcpyActivity,
-                           m->deviceId, m->correlationId, m->start, m->end,
-                           m->bytes, (int)m->copyKind, m->contextId,
-                           m->streamId);
+                           cuda_physical_devId(m->deviceId), m->correlationId,
+                           m->start, m->end, m->bytes, (int)m->copyKind,
+                           m->contextId, m->streamId);
       break;
     }
 
@@ -775,8 +842,9 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
       /* Actual GPU execution window — not just CPU-side launch time. */
       CUpti_ActivityKernel9 *k = (CUpti_ActivityKernel9 *)record;
       lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelActivity,
-                           k->deviceId, k->correlationId, k->start, k->end,
-                           k->contextId, k->streamId, k->name ? k->name : "");
+                           cuda_physical_devId(k->deviceId), k->correlationId,
+                           k->start, k->end, k->contextId, k->streamId,
+                           k->name ? k->name : "");
       break;
     }
 
@@ -838,6 +906,10 @@ static int cuda_permanently_off = 0; /* Once set, never apply again */
 static void pinsight_cuda_init(void) {
   pinsight_domain_mode_t mode =
       domain_default_trace_config[CUDA_domain_index].mode;
+
+  /* Parse CUDA_VISIBLE_DEVICES once, before any callback can fire,
+   * so cuda_physical_devId() is race-free (read-only afterwards). */
+  cuda_parse_visible_devices();
 
   if (mode == PINSIGHT_DOMAIN_OFF) {
     cuda_permanently_off = 1;
