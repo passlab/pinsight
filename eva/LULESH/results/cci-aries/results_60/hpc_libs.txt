@@ -1,0 +1,282 @@
+   3784660:	find library=libhpcrun_audit.so [1]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v3:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v2:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/x86_64/x86_64:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/x86_64:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/x86_64:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/x86_64/x86_64:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/x86_64:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/x86_64:/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64/glibc-hwcaps/x86-64-v3:/usr/local/cuda/lib64/glibc-hwcaps/x86-64-v2:/usr/local/cuda/lib64/tls/x86_64/x86_64:/usr/local/cuda/lib64/tls/x86_64:/usr/local/cuda/lib64/tls/x86_64:/usr/local/cuda/lib64/tls:/usr/local/cuda/lib64/x86_64/x86_64:/usr/local/cuda/lib64/x86_64:/usr/local/cuda/lib64/x86_64:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v3/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v2/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/x86_64/x86_64/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/x86_64/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/x86_64/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/tls/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/x86_64/x86_64/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/x86_64/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/x86_64/libhpcrun_audit.so
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so
+   3784660:	
+   3784660:	find library=libc.so.6 [1]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64/glibc-hwcaps/x86-64-v3:/usr/local/cuda/lib64/glibc-hwcaps/x86-64-v2:/usr/local/cuda/lib64/tls/x86_64/x86_64:/usr/local/cuda/lib64/tls/x86_64:/usr/local/cuda/lib64/tls/x86_64:/usr/local/cuda/lib64/tls:/usr/local/cuda/lib64/x86_64/x86_64:/usr/local/cuda/lib64/x86_64:/usr/local/cuda/lib64/x86_64:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/glibc-hwcaps/x86-64-v3/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/glibc-hwcaps/x86-64-v2/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/tls/x86_64/x86_64/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/tls/x86_64/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/tls/x86_64/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/tls/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/x86_64/x86_64/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/x86_64/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/x86_64/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/libc.so.6
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libc.so.6
+   3784660:	
+   3784660:	find library=ld-linux-x86-64.so.2 [1]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+   3784660:	  trying file=/usr/local/cuda/lib64/ld-linux-x86-64.so.2
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libc.so.6
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so
+   3784660:	
+   3784660:	/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so: error: symbol lookup error: undefined symbol: la_objsearch (fatal)
+   3784660:	/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so: error: symbol lookup error: undefined symbol: la_preinit (fatal)
+   3784660:	/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so: error: symbol lookup error: undefined symbol: la_x86_64_gnu_pltenter (fatal)
+   3784660:	/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so: error: symbol lookup error: undefined symbol: la_x86_64_gnu_pltexit (fatal)
+   3784660:	find library=libhpcrun_preload.so [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_preload.so
+   3784660:	
+   3784660:	find library=libm.so.6 [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libm.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/libm.so.6
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libm.so.6
+   3784660:	
+   3784660:	find library=libstdc++.so.6 [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libstdc++.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/libstdc++.so.6
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libstdc++.so.6
+   3784660:	
+   3784660:	find library=libomp.so.5 [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libomp.so.5
+   3784660:	  trying file=/usr/local/cuda/lib64/libomp.so.5
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libomp.so.5
+   3784660:	
+   3784660:	find library=libgcc_s.so.1 [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libgcc_s.so.1
+   3784660:	  trying file=/usr/local/cuda/lib64/libgcc_s.so.1
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libgcc_s.so.1
+   3784660:	
+   3784660:	find library=libc.so.6 [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libc.so.6
+   3784660:	  trying file=/usr/local/cuda/lib64/libc.so.6
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libc.so.6
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib64/ld-linux-x86-64.so.2
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libc.so.6
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libgcc_s.so.1
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libomp.so.5
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libm.so.6
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libstdc++.so.6
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_preload.so
+   3784660:	
+   3784660:	find library=libhpcrun.so [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun.so
+   3784660:	
+   3784660:	find library=libelf.so [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libelf.so
+   3784660:	
+   3784660:	find library=liblzma.so [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/liblzma.so
+   3784660:	
+   3784660:	find library=libpfm.so [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libpfm.so
+   3784660:	
+   3784660:	find library=libz.so.1 [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libz.so.1
+   3784660:	  trying file=/usr/local/cuda/lib64/libz.so.1
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libz.so.1
+   3784660:	
+   3784660:	
+   3784660:	calling init: /lib/x86_64-linux-gnu/libz.so.1
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libpfm.so
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/liblzma.so
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libelf.so
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun.so
+   3784660:	
+   3784660:	./lulesh2.0: error: symbol lookup error: undefined symbol: hpcrun_connect_to_auditor (fatal)
+   3784660:	find library=libhpcrun_unwind.so [1]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_unwind.so
+   3784660:	
+   3784660:	find library=libunwind.so.9 [1]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libunwind.so.9
+   3784660:	
+   3784660:	find library=liblzma.so [1]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/liblzma.so
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/liblzma.so
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libunwind.so.9
+   3784660:	
+   3784660:	
+   3784660:	calling init: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_unwind.so
+   3784660:	
+   3784660:	
+   3784660:	initialize program: ./lulesh2.0
+   3784660:	
+   3784660:	
+   3784660:	transferring control: ./lulesh2.0
+   3784660:	
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: __tgt_target_nowait_query (fatal)
+   3784660:	find library=libmemkind.so [0]; searching
+   3784660:	 search path=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu:/usr/local/cuda/lib64		(LD_LIBRARY_PATH)
+   3784660:	  trying file=/home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libmemkind.so
+   3784660:	  trying file=/usr/local/cuda/lib64/libmemkind.so
+   3784660:	 search cache=/etc/ld.so.cache
+   3784660:	 search path=/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v3:/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v2:/lib/x86_64-linux-gnu/tls/x86_64/x86_64:/lib/x86_64-linux-gnu/tls/x86_64:/lib/x86_64-linux-gnu/tls/x86_64:/lib/x86_64-linux-gnu/tls:/lib/x86_64-linux-gnu/x86_64/x86_64:/lib/x86_64-linux-gnu/x86_64:/lib/x86_64-linux-gnu/x86_64:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v3:/usr/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v2:/usr/lib/x86_64-linux-gnu/tls/x86_64/x86_64:/usr/lib/x86_64-linux-gnu/tls/x86_64:/usr/lib/x86_64-linux-gnu/tls/x86_64:/usr/lib/x86_64-linux-gnu/tls:/usr/lib/x86_64-linux-gnu/x86_64/x86_64:/usr/lib/x86_64-linux-gnu/x86_64:/usr/lib/x86_64-linux-gnu/x86_64:/usr/lib/x86_64-linux-gnu:/lib/glibc-hwcaps/x86-64-v3:/lib/glibc-hwcaps/x86-64-v2:/lib/tls/x86_64/x86_64:/lib/tls/x86_64:/lib/tls/x86_64:/lib/tls:/lib/x86_64/x86_64:/lib/x86_64:/lib/x86_64:/lib:/usr/lib/glibc-hwcaps/x86-64-v3:/usr/lib/glibc-hwcaps/x86-64-v2:/usr/lib/tls/x86_64/x86_64:/usr/lib/tls/x86_64:/usr/lib/tls/x86_64:/usr/lib/tls:/usr/lib/x86_64/x86_64:/usr/lib/x86_64:/usr/lib/x86_64:/usr/lib		(system search path)
+   3784660:	  trying file=/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v3/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v2/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/tls/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/tls/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64-linux-gnu/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v3/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/glibc-hwcaps/x86-64-v2/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/tls/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/tls/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64-linux-gnu/libmemkind.so
+   3784660:	  trying file=/lib/glibc-hwcaps/x86-64-v3/libmemkind.so
+   3784660:	  trying file=/lib/glibc-hwcaps/x86-64-v2/libmemkind.so
+   3784660:	  trying file=/lib/tls/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/tls/libmemkind.so
+   3784660:	  trying file=/lib/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/x86_64/libmemkind.so
+   3784660:	  trying file=/lib/libmemkind.so
+   3784660:	  trying file=/usr/lib/glibc-hwcaps/x86-64-v3/libmemkind.so
+   3784660:	  trying file=/usr/lib/glibc-hwcaps/x86-64-v2/libmemkind.so
+   3784660:	  trying file=/usr/lib/tls/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/tls/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/tls/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/x86_64/libmemkind.so
+   3784660:	  trying file=/usr/lib/libmemkind.so
+   3784660:	
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_alloc_host (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_alloc_shared (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_alloc_device (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_free_host (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_free_shared (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_free_device (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_lock_mem (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: llvm_omp_target_unlock_mem (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: __tgt_get_mem_resources (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: __tgt_omp_alloc (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: __tgt_omp_free (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: __tgt_get_num_devices (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: omp_get_num_devices (fatal)
+   3784660:	/lib/x86_64-linux-gnu/libomp.so.5: error: symbol lookup error: undefined symbol: _Offload_number_of_devices (fatal)
+   3784660:	
+   3784660:	calling fini: ./lulesh2.0 [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_preload.so [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /lib/x86_64-linux-gnu/libstdc++.so.6 [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /lib/x86_64-linux-gnu/libomp.so.5 [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /lib/x86_64-linux-gnu/libgcc_s.so.1 [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun.so [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /lib/x86_64-linux-gnu/libm.so.6 [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libelf.so [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/liblzma.so [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libpfm.so [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /lib/x86_64-linux-gnu/libz.so.1 [0]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_unwind.so [1]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libunwind.so.9 [1]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libhpcrun_audit.so [1]
+   3784660:	
+   3784660:	
+   3784660:	calling fini: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/liblzma.so [1]
+   3784660:	

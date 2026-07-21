@@ -1,0 +1,38 @@
+# PInsight Application Knob Configuration for LULESH
+# Per-region num_threads control (max 6 threads)
+#   Heavy (H) regions: 6 threads - computation-intensive loops
+#   Medium (M) regions: 4 threads - moderate computation + memory
+#   Light (L) regions: 2 threads - simple element-wise ops
+# Edit values and 'kill -USR1 <pid>' to apply at runtime
+
+[Knob]
+    init_stress                    =  2    # L - InitStressTermsForElems
+    integrate_stress_elem          =  6    # H - IntegrateStressForElems
+    integrate_stress_node          =  4    # M - IntegrateStressForElems
+    hourglass_force                =  6    # H - CalcFBHourglassForceForElems
+    hourglass_node                 =  4    # M - CalcFBHourglassForceForElems
+    hourglass_control              =  6    # H - CalcHourglassControlForElems
+    volume_force_determ            =  2    # L - CalcVolumeForceForElems
+    force_nodes_init               =  2    # L - CalcForceForNodes
+    acceleration                   =  2    # L - CalcAccelerationForNodes
+    accel_boundary                 =  2    # L - ApplyAccelerationBoundaryConditionsForNodes
+    velocity                       =  2    # L - CalcVelocityForNodes
+    position                       =  2    # L - CalcPositionForNodes
+    kinematics                     =  6    # H - CalcKinematicsForElems
+    lagrange_elem_error            =  2    # L - CalcLagrangeElements
+    monotonic_q_grad               =  6    # H - CalcMonotonicQGradientsForElems
+    monotonic_q_region             =  6    # H - CalcMonotonicQRegionForElems
+    pressure_bvc                   =  2    # L - CalcPressureForElems
+    pressure_calc                  =  4    # M - CalcPressureForElems
+    energy_init                    =  2    # L - CalcEnergyForElems
+    energy_compress                =  4    # M - CalcEnergyForElems
+    energy_q_half                  =  2    # L - CalcEnergyForElems
+    energy_q_full                  =  4    # M - CalcEnergyForElems
+    energy_q_final                 =  4    # M - CalcEnergyForElems
+    sound_speed                    =  4    # M - CalcSoundSpeedForElems
+    eos_alloc                      =  4    # M - EvalEOSForElems
+    eos_region                     =  2    # L - EvalEOSForElems
+    material_props                 =  4    # M - ApplyMaterialPropertiesForElems
+    update_volumes                 =  2    # L - UpdateVolumesForElems
+    courant_constraint             =  4    # M - CalcCourantConstraintForElems
+    hydro_constraint               =  4    # M - CalcHydroConstraintForElems

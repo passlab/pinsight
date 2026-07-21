@@ -1,0 +1,13 @@
+================================================================
+Energy Analysis — LULESH 2.0 at T=24
+Date: Fri Mar 20 01:30:51 PM EDT 2026
+Machine: cci-aries
+CPU: AMD EPYC 7413 24-Core Processor
+Problem: -s 50 -i 100 (125000 elements)
+Runs per config: 5
+Configs: Baseline (uniform 24T), Tuned (H=24/M=12/L=2)
+Energy: perf stat -e power/energy-pkg/ (RAPL, both packages)
+================================================================
+
+=== Configuration: baseline ===
+--- Run 1/5 ---

@@ -1,0 +1,53 @@
+================================================================
+PInsight Overhead Evaluation — LULESH 2.0 (size=30, with LTTng)
+Date: Fri Mar 13 01:18:20 PM EDT 2026
+PInsight: /home/yyan7/work/tools/pinsight/build/libpinsight.so
+Runs per config: 5 (all values are elapsed time in seconds)
+================================================================
+
+--- OMP_NUM_THREADS=1 ---
+                                    run1      run2      run3      run4      run5  FOM          Traces
+------------------------------------------------------------------------------------
+BASELINE:                             24        24        25        24        24  FOM=1041.8151
+OFF:                                  24        24        25        24        24  FOM=1048.7897    Traces=160K
+MONITORING:                           24        24        25        24        24  FOM=1049.7525    Traces=160K
+TRACING_nosess:                       26        25        25        25        25  FOM=1013.3821
+TRACING_sess:                         27        26        27        26        27  FOM=921.86866    Traces=204M
+RATE_100_1_MONITOR:                   24        24        25        25        25  FOM=994.17456    Traces=264K
+RATE_100_1_OFF:                       24        24        25        24        25  FOM=1007.3504    Traces=264K
+
+--- OMP_NUM_THREADS=2 ---
+                                    run1      run2      run3      run4      run5  FOM          Traces
+------------------------------------------------------------------------------------
+BASELINE:                             16        16        16        17        16  FOM=1558.6305
+OFF:                                  16        16        17        16        16  FOM=1560.9427    Traces=160K
+MONITORING:                           17        17        16        16        18  FOM=1433.5711    Traces=160K
+TRACING_nosess:                       17        17        17        18        17  FOM=1473.4248
+TRACING_sess:                         19        20        19        19        20  FOM=1246.5562    Traces=544M
+RATE_100_1_MONITOR:                   16        16        16        17        16  FOM=1566.7147    Traces=444K
+RATE_100_1_OFF:                       16        17        17        16        16  FOM=1562.4631    Traces=444K
+
+--- OMP_NUM_THREADS=4 ---
+                                    run1      run2      run3      run4      run5  FOM          Traces
+------------------------------------------------------------------------------------
+BASELINE:                             11        11        11        11        10  FOM=2455.4156
+OFF:                                  10        12        10        10        10  FOM=2498.5757    Traces=160K
+MONITORING:                           10        10        11        10        10  FOM=2446.1285    Traces=160K
+TRACING_nosess:                       11        11        13        11        11  FOM=2218.7984
+TRACING_sess:                         14        14        16        14        14  FOM=1791.5515    Traces=1.1G
+RATE_100_1_MONITOR:                   11        11        11        10        10  FOM=2439.9157    Traces=700K
+RATE_100_1_OFF:                       10        10        12        10        10  FOM=2499.5358    Traces=700K
+
+--- OMP_NUM_THREADS=6 ---
+                                    run1      run2      run3      run4      run5  FOM          Traces
+------------------------------------------------------------------------------------
+BASELINE:                            8.4       8.9       8.3        12         9  FOM=2796.3704
+OFF:                                 8.5       8.3       9.1       8.4        12  FOM=2106.865     Traces=160K
+MONITORING:                          9.1       8.7       8.6       8.6       8.5  FOM=2953.4083    Traces=160K
+TRACING_nosess:                       13        10       9.5       9.8       9.9  FOM=2533.484
+TRACING_sess:                         13        17        13        13        13  FOM=1907.6414    Traces=1.5G
+RATE_100_1_MONITOR:                   11        13       9.5        10       9.2  FOM=2734.4037    Traces=956K
+RATE_100_1_OFF:                      9.4        11       8.8       8.3       8.4  FOM=2997.0036    Traces=956K
+
+================================================================
+Done.

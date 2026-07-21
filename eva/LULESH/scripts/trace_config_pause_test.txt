@@ -1,0 +1,4 @@
+[Lexgion.default]
+    max_num_traces = 10
+    tracing_rate = 1
+    trace_mode_after = PAUSE:5:-:TRACING

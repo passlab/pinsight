@@ -1,0 +1,86 @@
+================================================================
+Energy Analysis — LULESH 2.0 at T=24
+Date: Fri Mar 20 01:31:07 PM EDT 2026
+Machine: cci-aries
+CPU: AMD EPYC 7413 24-Core Processor
+Problem: -s 50 -i 100 (125000 elements)
+Runs per config: 5
+Configs: Baseline (uniform 24T), Tuned (H=24/M=12/L=2)
+Energy: perf stat -e power/energy-pkg/ (RAPL, both packages)
+================================================================
+
+=== Configuration: baseline ===
+--- Run 1/5 ---
+Elapsed time         =        2.8 (s)
+FOM                  =  4441.9822 (z/s)
+  Energy:
+                698.16 Joules power/energy-pkg/                                                     
+           2.874949706 seconds time elapsed
+
+--- Run 2/5 ---
+Elapsed time         =        2.9 (s)
+FOM                  =  4260.1384 (z/s)
+  Energy:
+                722.50 Joules power/energy-pkg/                                                     
+           2.992987780 seconds time elapsed
+
+--- Run 3/5 ---
+Elapsed time         =        3.4 (s)
+FOM                  =  3695.8838 (z/s)
+  Energy:
+                813.87 Joules power/energy-pkg/                                                     
+           3.445615850 seconds time elapsed
+
+--- Run 4/5 ---
+Elapsed time         =        3.2 (s)
+FOM                  =  3850.2754 (z/s)
+  Energy:
+                780.36 Joules power/energy-pkg/                                                     
+           3.300626968 seconds time elapsed
+
+--- Run 5/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4585.0208 (z/s)
+  Energy:
+                686.49 Joules power/energy-pkg/                                                     
+           2.768128702 seconds time elapsed
+
+=== Configuration: tuned ===
+--- Run 1/5 ---
+Elapsed time         =        2.9 (s)
+FOM                  =  4275.7993 (z/s)
+  Energy:
+                731.20 Joules power/energy-pkg/                                                     
+           3.020095312 seconds time elapsed
+
+--- Run 2/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4636.4297 (z/s)
+  Energy:
+                686.23 Joules power/energy-pkg/                                                     
+           2.786308662 seconds time elapsed
+
+--- Run 3/5 ---
+Elapsed time         =        2.8 (s)
+FOM                  =  4389.6723 (z/s)
+  Energy:
+                722.34 Joules power/energy-pkg/                                                     
+           2.962322051 seconds time elapsed
+
+--- Run 4/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4567.4714 (z/s)
+  Energy:
+                695.04 Joules power/energy-pkg/                                                     
+           2.827054109 seconds time elapsed
+
+--- Run 5/5 ---
+Elapsed time         =        2.9 (s)
+FOM                  =   4372.623 (z/s)
+  Energy:
+                722.45 Joules power/energy-pkg/                                                     
+           2.971620466 seconds time elapsed
+
+================================================================
+Done. Results saved to: /home/yyan7/tools/pinsight/eva/LULESH/energy_results_20260320_133107.txt
+================================================================

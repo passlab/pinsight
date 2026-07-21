@@ -1,0 +1,57 @@
+[OpenMP.global]
+    trace_mode = TRACING
+    OpenMP.team = (0, 255)
+    OpenMP.thread = (0, 255)
+    OpenMP.device = (0, 16)
+
+[OpenMP(parallel).default]
+    omp_parallel_begin = on
+    omp_parallel_end = on
+    omp_implicit_task = on
+
+[OpenMP(thread).default]
+    omp_thread_begin = on
+    omp_thread_end = on
+
+[OpenMP(task).default]
+    omp_task_create = on
+    omp_task_schedule = on
+    omp_dependences = off
+    omp_task_dependence = off
+
+[OpenMP(workshare).default]
+    omp_work = on
+    omp_masked = on
+    omp_reduction = off
+    omp_dispatch = off
+
+[OpenMP(sync).default]
+    omp_sync_region_wait = on
+    omp_sync_region = on
+
+[OpenMP(critical).default]
+    omp_mutex_released = off
+    omp_lock_init = off
+    omp_lock_destroy = off
+    omp_mutex_acquire = off
+    omp_mutex_acquired = off
+    omp_nest_lock = off
+    omp_flush = off
+
+[OpenMP(target).default]
+    omp_target = off
+    omp_target_data_op = off
+    omp_device_initialize = off
+    omp_device_finalize = off
+    omp_device_load = off
+    omp_device_unload = off
+    omp_target_emi = off
+    omp_target_data_op_emi = off
+    omp_target_submit_emi = off
+    omp_target_map_emi = off
+
+[OpenMP(others).default]
+    omp_control_tool = off
+    omp_cancel = off
+    omp_error = off
+

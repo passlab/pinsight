@@ -1,0 +1,15 @@
+================================================================
+PInsight Application Knob Benchmark — LULESH 2.0
+Date: Fri Mar 20 12:26:17 PM EDT 2026
+Machine: cci-aries
+CPU: AMD EPYC 7413 24-Core Processor
+Cores: 96 HW threads, 48 physical
+Problem: -s 50 -i 100 ( elements)
+Runs per config: 5
+PInsight lib: /home/yyan7/tools/pinsight/build/libpinsight.so
+================================================================
+
+--- OMP_NUM_THREADS=1  (Tuned: H=1, M=2, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 1T):                      9.6

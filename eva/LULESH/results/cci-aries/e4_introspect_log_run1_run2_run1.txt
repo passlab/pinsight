@@ -1,0 +1,64 @@
+
+
+=== PInsight In-Situ Knob Tuning === Tue Apr  7 01:25:02 AM EDT 2026
+PID=4021943  Config=/home/yyan7/tools/pinsight/eva/LULESH/results_e4/autotuned_cfg_run1.cfg  Chunk=/home/yyan7/lttng-traces
+Thread plan: H=24  M=12  L=4 (max=24)
+--- Applying Knobs ---
+=== PInsight In-Situ Knob Tuning === Tue Apr  7 01:25:02 AM EDT 2026
+PID=4021943  Config=/home/yyan7/tools/pinsight/eva/LULESH/results_e4/autotuned_cfg_run1.cfg  Chunk=/home/yyan7/lttng-traces
+Thread plan: H=24  M=12  L=4 (max=24)
+--- Applying Knobs ---
+  eos_region: 24 -> 4
+  eos_region: 24 -> 4
+  material_props: 24 -> 12
+  material_props: 24 -> 12
+  energy_q_full: 24 -> 12
+  energy_q_full: 24 -> 12
+  hourglass_node: 24 -> 12
+  hourglass_node: 24 -> 12
+  pressure_calc: 24 -> 12
+  pressure_calc: 24 -> 12
+  energy_q_final: 24 -> 12
+  energy_q_final: 24 -> 12
+  velocity: 24 -> 4
+  velocity: 24 -> 4
+  init_stress: 24 -> 4
+  init_stress: 24 -> 4
+  energy_compress: 24 -> 12
+  energy_compress: 24 -> 12
+  lagrange_elem_error: 24 -> 4
+  lagrange_elem_error: 24 -> 4
+  pressure_bvc: 24 -> 4
+  pressure_bvc: 24 -> 4
+  energy_init: 24 -> 4
+  energy_init: 24 -> 4
+  courant_constraint: 24 -> 12
+  courant_constraint: 24 -> 12
+  hydro_constraint: 24 -> 12
+  hydro_constraint: 24 -> 12
+  position: 24 -> 4
+  position: 24 -> 4
+  force_nodes_init: 24 -> 4
+  force_nodes_init: 24 -> 4
+  accel_boundary: 24 -> 4
+  accel_boundary: 24 -> 4
+  sound_speed: 24 -> 12
+  sound_speed: 24 -> 12
+  volume_force_determ: 24 -> 4
+  volume_force_determ: 24 -> 4
+  eos_alloc: 24 -> 12
+  eos_alloc: 24 -> 12
+  energy_q_half: 24 -> 4
+  energy_q_half: 24 -> 4
+  acceleration: 24 -> 4
+  acceleration: 24 -> 4
+  update_volumes: 24 -> 4
+  update_volumes: 24 -> 4
+  integrate_stress_node: 24 -> 12
+Changes applied: 24
+  integrate_stress_node: 24 -> 12
+Changes applied: 24
+SIGUSR1 sent to PID 4021943
+=== Done ===
+SIGUSR1 sent to PID 4021943
+=== Done ===
