@@ -1,0 +1,6 @@
+[OpenMP.global]
+    trace_mode = OFF
+[Lexgion.default]
+    trace_starts_at = 0
+    max_num_traces = 10000
+    tracing_rate = 1

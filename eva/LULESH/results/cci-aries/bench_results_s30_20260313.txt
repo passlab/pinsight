@@ -1,0 +1,93 @@
+================================================================
+PInsight Overhead Evaluation — LULESH 2.0 (size=30)
+Date: Fri Mar 13 12:05:44 PM EDT 2026
+PInsight: /home/yyan7/work/tools/pinsight/build/libpinsight.so
+Runs per config: 5 (all values are elapsed time in seconds)
+================================================================
+
+--- OMP_NUM_THREADS=1 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                             24        25        24        25        25  FOM=1016.4109
+OFF:                                  25        25        24        25        25  FOM=1010.6317
+MONITORING:                           24        25        24        24        25  FOM=1002.8751
+TRACING_nosess:                       26        25        25        25        26  FOM=985.04814
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_1
+ust event ompt_pinsight_lttng_ust:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         26        27        27        27        27  FOM=939.47631
+RATE_100_1_MONITOR:                   24        25        24        25        25  FOM=1009.4343
+RATE_100_1_OFF:                       24        24        25        24        25  FOM=1019.2508
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (1T): 1020M
+
+--- OMP_NUM_THREADS=2 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                             17        16        16        17        17  FOM=1511.1835
+OFF:                                  17        17        17        17        16  FOM=1540.1972
+MONITORING:                           17        17        16        17        17  FOM=1474.5034
+TRACING_nosess:                       18        18        18        18        18  FOM=1435.2862
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_2
+ust event ompt_pinsight_lttng_ust:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         20        20        19        20        20  FOM=1245.0824
+RATE_100_1_MONITOR:                   17        17        17        17        16  FOM=1528.2907
+RATE_100_1_OFF:                       16        16        17        16        17  FOM=1508.325
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (2T): 2.7G
+
+--- OMP_NUM_THREADS=4 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                             11        11        10        10        10  FOM=2453.1622
+OFF:                                  11        11        11        10        10  FOM=2450.7317
+MONITORING:                           10        11        11        11        10  FOM=2417.1589
+TRACING_nosess:                       12        12        12        12        12  FOM=2184.6467
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_4
+ust event ompt_pinsight_lttng_ust:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         15        14        14        15        14  FOM=1796.8135
+RATE_100_1_MONITOR:                   11        11        11        11        11  FOM=2329.0955
+RATE_100_1_OFF:                       10        11        10        11        11  FOM=2296.4962
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (4T): 5.1G
+
+--- OMP_NUM_THREADS=6 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                            8.9       8.7       8.7       9.4       8.7  FOM=2887.6414
+OFF:                                  11         9       8.5       8.8       8.6  FOM=2929.2904
+MONITORING:                          9.2       9.4        12       9.2       8.7  FOM=2892.138
+TRACING_nosess:                       10        10        13        11       9.9  FOM=2554.4645
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_6
+ust event ompt_pinsight_lttng_ust:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         13        14        18        13        13  FOM=1933.269
+RATE_100_1_MONITOR:                  9.1       9.2        10        11       9.4  FOM=2690.2468
+RATE_100_1_OFF:                      8.4         9         9        11        11  FOM=2192.3098
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (6T): 7.5G
+
+================================================================
+Done.

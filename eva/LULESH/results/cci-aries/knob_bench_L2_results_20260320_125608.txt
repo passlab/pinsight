@@ -1,0 +1,64 @@
+================================================================
+PInsight Application Knob Benchmark — LULESH 2.0 (Light=2)
+Date: Fri Mar 20 12:56:08 PM EDT 2026
+Machine: cci-aries
+CPU: AMD EPYC 7413 24-Core Processor
+Cores: 96 HW threads, 48 physical
+Problem: -s 50 -i 100 (125000 elements)
+Runs per config: 5
+Tuning: H=T, M=max(2,T/2), L=2 (constant)
+PInsight lib: /home/yyan7/tools/pinsight/build/libpinsight.so
+================================================================
+
+--- OMP_NUM_THREADS=1  (Tuned: H=1, M=2, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 1T):                      9.8         9.9         9.9         9.6         9.8  FOM_avg=1274.93      Time_avg=9.8000
+KNOB_UNIFORM (all=1T):                       10         9.8         9.8         9.8         9.8  FOM_avg=1271.48      Time_avg=9.8400
+KNOB_TUNED (H=1/M=2/L=2):                   9.9         9.8         9.8         9.8         9.8  FOM_avg=1276.21      Time_avg=9.8200
+
+--- OMP_NUM_THREADS=4  (Tuned: H=4, M=2, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 4T):                      6.3         5.9         6.2         5.7           6  FOM_avg=2076.92      Time_avg=6.0200
+KNOB_UNIFORM (all=4T):                      5.8         5.9         6.1         5.7         6.2  FOM_avg=2099.16      Time_avg=5.9400
+KNOB_TUNED (H=4/M=2/L=2):                   6.3           6         6.4         6.6         5.9  FOM_avg=2013.25      Time_avg=6.2400
+
+--- OMP_NUM_THREADS=8  (Tuned: H=8, M=4, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 8T):                      4.6         4.4         4.5         4.6         3.6  FOM_avg=2887.84      Time_avg=4.3400
+KNOB_UNIFORM (all=8T):                      4.6         4.5         4.5         4.6           4  FOM_avg=2812.70      Time_avg=4.4400
+KNOB_TUNED (H=8/M=4/L=2):                   3.9         4.1         4.6         4.8         4.1  FOM_avg=2937.23      Time_avg=4.3000
+
+--- OMP_NUM_THREADS=16  (Tuned: H=16, M=8, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 16T):                     3.4         3.6         3.3           3         3.5  FOM_avg=3728.59      Time_avg=3.3600
+KNOB_UNIFORM (all=16T):                     3.1         3.7         3.3         3.6         3.2  FOM_avg=3736.09      Time_avg=3.3800
+KNOB_TUNED (H=16/M=8/L=2):                  3.6           3         3.1         3.6           3  FOM_avg=3865.42      Time_avg=3.2600
+
+--- OMP_NUM_THREADS=24  (Tuned: H=24, M=12, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 24T):                     2.7         2.7         2.7         3.1         2.7  FOM_avg=4502.89      Time_avg=2.7800
+KNOB_UNIFORM (all=24T):                     2.7         2.8           3         2.8         2.7  FOM_avg=4449.72      Time_avg=2.8000
+KNOB_TUNED (H=24/M=12/L=2):                 3.1           3         2.8         2.7         2.7  FOM_avg=4383.80      Time_avg=2.8600
+
+--- OMP_NUM_THREADS=32  (Tuned: H=32, M=16, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 32T):                     2.7         2.6         2.6         2.6         2.7  FOM_avg=4748.09      Time_avg=2.6400
+KNOB_UNIFORM (all=32T):                     2.7         2.7         2.6         2.6         2.6  FOM_avg=4709.23      Time_avg=2.6400
+KNOB_TUNED (H=32/M=16/L=2):                 2.7         2.7         2.7         2.6         2.6  FOM_avg=4683.98      Time_avg=2.6600
+
+--- OMP_NUM_THREADS=48  (Tuned: H=48, M=24, L=2) ---
+                                           run1        run2        run3        run4        run5  FOM_avg        Time_avg
+------------------------------------------------------------------------------------------------------
+BASELINE (uniform 48T):                     2.6         2.8         2.5         2.7         2.6  FOM_avg=4733.92      Time_avg=2.6400
+KNOB_UNIFORM (all=48T):                     2.8         2.7         2.6         2.5         2.7  FOM_avg=4676.30      Time_avg=2.6600
+KNOB_TUNED (H=48/M=24/L=2):                 2.7         2.8         2.7         2.7         2.6  FOM_avg=4604.46      Time_avg=2.7000
+
+================================================================
+Done. Results saved to: /home/yyan7/tools/pinsight/eva/LULESH/knob_bench_L2_results_20260320_125608.txt
+================================================================

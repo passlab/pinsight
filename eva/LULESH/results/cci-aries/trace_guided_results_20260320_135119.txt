@@ -1,0 +1,121 @@
+================================================================
+Trace-Guided Knob Benchmark — LULESH 2.0 at T=48
+Date: Fri Mar 20 01:51:19 PM EDT 2026
+Machine: cci-aries
+Problem: -s 50 -i 100 (125000 elements)
+Runs per config: 5
+Configs: Baseline, Uniform (all=48), Trace-Guided (H=48/M=24/L=2)
+Energy: perf stat -e power/energy-pkg/ (RAPL)
+================================================================
+
+=== Configuration: baseline ===
+--- Run 1/5 ---
+Elapsed time         =        2.6 (s)
+FOM                  =   4898.528 (z/s)
+  Energy:
+                756.15 Joules power/energy-pkg/                                                     
+           2.618731670 seconds time elapsed
+
+--- Run 2/5 ---
+Elapsed time         =        2.8 (s)
+FOM                  =  4538.6581 (z/s)
+  Energy:
+                805.44 Joules power/energy-pkg/                                                     
+           2.812555846 seconds time elapsed
+
+--- Run 3/5 ---
+Elapsed time         =        2.6 (s)
+FOM                  =  4850.0293 (z/s)
+  Energy:
+                762.21 Joules power/energy-pkg/                                                     
+           2.621443109 seconds time elapsed
+
+--- Run 4/5 ---
+Elapsed time         =        2.5 (s)
+FOM                  =  4943.9651 (z/s)
+  Energy:
+                750.09 Joules power/energy-pkg/                                                     
+           2.582938245 seconds time elapsed
+
+--- Run 5/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4652.7261 (z/s)
+  Energy:
+                798.13 Joules power/energy-pkg/                                                     
+           2.739533901 seconds time elapsed
+
+=== Configuration: uniform ===
+--- Run 1/5 ---
+Elapsed time         =        2.6 (s)
+FOM                  =  4770.5335 (z/s)
+  Energy:
+                797.61 Joules power/energy-pkg/                                                     
+           2.736373872 seconds time elapsed
+
+--- Run 2/5 ---
+Elapsed time         =        2.6 (s)
+FOM                  =  4804.7263 (z/s)
+  Energy:
+                784.34 Joules power/energy-pkg/                                                     
+           2.717429338 seconds time elapsed
+
+--- Run 3/5 ---
+Elapsed time         =        2.6 (s)
+FOM                  =  4720.3923 (z/s)
+  Energy:
+                810.44 Joules power/energy-pkg/                                                     
+           2.815226198 seconds time elapsed
+
+--- Run 4/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4695.1425 (z/s)
+  Energy:
+                811.51 Joules power/energy-pkg/                                                     
+           2.850141379 seconds time elapsed
+
+--- Run 5/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4584.7954 (z/s)
+  Energy:
+                809.09 Joules power/energy-pkg/                                                     
+           2.851982046 seconds time elapsed
+
+=== Configuration: trace_guided ===
+--- Run 1/5 ---
+Elapsed time         =        2.6 (s)
+FOM                  =   4755.687 (z/s)
+  Energy:
+                788.24 Joules power/energy-pkg/                                                     
+           2.764959033 seconds time elapsed
+
+--- Run 2/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4647.9961 (z/s)
+  Energy:
+                816.50 Joules power/energy-pkg/                                                     
+           2.926664130 seconds time elapsed
+
+--- Run 3/5 ---
+Elapsed time         =        2.8 (s)
+FOM                  =  4453.9668 (z/s)
+  Energy:
+                839.11 Joules power/energy-pkg/                                                     
+           2.929604809 seconds time elapsed
+
+--- Run 4/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4667.4149 (z/s)
+  Energy:
+                803.48 Joules power/energy-pkg/                                                     
+           2.819778845 seconds time elapsed
+
+--- Run 5/5 ---
+Elapsed time         =        2.8 (s)
+FOM                  =   4528.449 (z/s)
+  Energy:
+                814.37 Joules power/energy-pkg/                                                     
+           2.888162386 seconds time elapsed
+
+================================================================
+Done. Results saved to: /home/yyan7/tools/pinsight/eva/LULESH/trace_guided_results_20260320_135119.txt
+================================================================

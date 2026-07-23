@@ -1,0 +1,40 @@
+PInsight: Launched analysis script '/home/yyan7/tools/pinsight/eva/LULESH/analyze_and_tune.sh' (pid 36868)
+PInsight: Application paused for introspection
+PInsight: INTROSPECT woken by SIGUSR1, resuming
+PInsight: Application resumed
+PInsight: Auto-trigger: OpenMP mode -> STANDBY
+PInsight: Auto-trigger: MPI mode -> STANDBY
+PInsight: Auto-trigger: CUDA mode -> STANDBY
+PInsight: Launched analysis script '/home/yyan7/tools/pinsight/eva/LULESH/analyze_and_tune.sh' (pid 36869)
+PInsight: Application paused for introspection
+PInsight: INTROSPECT woken by SIGUSR1, resuming
+PInsight: Application resumed
+PInsight: Control thread reloading config
+PInsight: Control thread reloading config
+Running problem size 32^3 per domain until completion
+Num processors: 1
+Num threads: 24
+Total number of elements: 32768 
+
+To run other sizes, use -s <integer>.
+To run a fixed number of iterations, use -i <integer>.
+To run a more or less balanced region set, use -b <integer>.
+To change the relative costs of regions, use -c <integer>.
+To print out progress, use -p
+To write an output file for VisIt, use -v
+See help (-h) for more options
+
+Run completed:
+   Problem size        =  32
+   MPI tasks           =  1
+   Iteration count     =  1000
+   Final Origin Energy =  2.283254e+05
+   Testing Plane 0 of Energy Array on rank 0:
+        MaxAbsDiff   = 5.093170e-11
+        TotalAbsDiff = 9.970536e-10
+        MaxRelDiff   = 2.068520e-12
+
+Elapsed time         =        4.2 (s)
+Grind time (us/z/c)  = 0.12683905 (per dom)  (  4.156262 overall)
+FOM                  =  7884.0073 (z/s)
+

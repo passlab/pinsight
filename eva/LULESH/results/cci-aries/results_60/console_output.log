@@ -1,0 +1,171 @@
+nohup: ignoring input
+================================================================
+E1 Full: LULESH 2.0 OpenMP + TBB Allocator Evaluation
+  Size=60x60x60, Runs=5
+  Thread counts: 8 16 24 32 48
+  TBB Proxy: /home/yyan7/tools/hpctoolkit-install/lib/x86_64-linux-gnu/libtbbmalloc_proxy.so
+  Date: Sun Apr  5 06:01:50 PM EDT 2026
+================================================================
+
+================================================================
+=== OMP_NUM_THREADS=8 ===
+================================================================
+(FOM z/s)                                run1      run2      run3      run4      run5
+------------------------------------------------------------------------
+Baseline:                             3041.93   3374.44   3426.09   3075.28   3279.95
+Baseline_TBB:                         3275.79   3367.68   3351.21   3401.47   3563.45
+ScoreP:                            run_e1_full_eval.sh: line 111: 3212109 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212159 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212249 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212283 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212301 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+ScoreP_TBB:                        run_e1_full_eval.sh: line 111: 3212379 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212415 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212489 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212507 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_full_eval.sh: line 111: 3212540 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+PInsight_Full:                        2826.67   2702.85   2857.38   2839.02   2863.74
+PInsight_Full_TBB:                    3094.07   3363.27   3049.95   3023.65   3053.44
+PInsight_50_STANDBY:                  3424.30   2944.82   3585.29   3310.92   3155.11
+PInsight_50_STANDBY_TBB:              3752.96   3455.58   3153.64   3345.86   3092.23
+Nsight_Systems:                    nohup: ignoring input
+
+================================================================
+E1 Continuation: Sun Apr  5 09:16:23 PM EDT 2026
+================================================================
+=== Finishing OMP_NUM_THREADS=8 (HPCToolkit) ===
+(FOM z/s)                                run1      run2      run3      run4      run5
+HPCToolkit:                           6119.21   5731.24   6505.21   6752.27   6084.72
+================================================================
+=== OMP_NUM_THREADS=16 ===
+================================================================
+(FOM z/s)                                run1      run2      run3      run4      run5
+------------------------------------------------------------------------
+Baseline:                             4453.25   4432.42   4574.20   4476.54   4492.52
+Baseline_TBB:                         4857.16   4753.11   4335.98   4589.15   4061.47
+ScoreP:                            run_e1_continue.sh: line 57: 3281512 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3281575 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3281662 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3281726 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3281742 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+ScoreP_TBB:                        run_e1_continue.sh: line 57: 3281841 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3281906 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3281943 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3282014 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3282071 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+PInsight_Full:                            ERR       ERR       ERR       ERR       ERR
+PInsight_Full_TBB:                        ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY:                      ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY_TBB:                  ERR       ERR       ERR       ERR       ERR
+HPCToolkit:                          10045.06   9723.34   9896.64  10363.63   9993.89
+
+--- Trace Sizes (Thread=16) ---
+  PInsight_Full:                      1.9G
+  PInsight_Full_TBB:                  1.7G
+  PInsight_50_STANDBY:                8.3M
+  PInsight_50_STANDBY_TBB:            8.3M
+  HPCToolkit:                         51M
+
+================================================================
+=== OMP_NUM_THREADS=24 ===
+================================================================
+(FOM z/s)                                run1      run2      run3      run4      run5
+------------------------------------------------------------------------
+Baseline:                             5161.40   5337.31       ERR       ERR       ERR
+Baseline_TBB:                             ERR       ERR       ERR       ERR       ERR
+ScoreP:                            run_e1_continue.sh: line 57: 3302173 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302200 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302275 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302306 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302321 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+ScoreP_TBB:                        run_e1_continue.sh: line 57: 3302398 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302427 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302500 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302511 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3302544 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+PInsight_Full:                            ERR       ERR       ERR       ERR       ERR
+PInsight_Full_TBB:                        ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY:                      ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY_TBB:                  ERR       ERR       ERR       ERR       ERR
+HPCToolkit:                               ERR       ERR       ERR       ERR       ERR
+
+--- Trace Sizes (Thread=24) ---
+  PInsight_Full:                      1.6G
+  PInsight_Full_TBB:                  1.6G
+  PInsight_50_STANDBY:                12M
+  PInsight_50_STANDBY_TBB:            12M
+  HPCToolkit:                         71M
+
+================================================================
+=== OMP_NUM_THREADS=32 ===
+================================================================
+(FOM z/s)                                run1      run2      run3      run4      run5
+------------------------------------------------------------------------
+Baseline:                                 ERR       ERR       ERR       ERR       ERR
+Baseline_TBB:                             ERR       ERR       ERR       ERR       ERR
+ScoreP:                            run_e1_continue.sh: line 57: 3320910 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3320952 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3320979 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3321052 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3321072 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+ScoreP_TBB:                        run_e1_continue.sh: line 57: 3321106 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3321176 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3321207 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3321260 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3321295 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+PInsight_Full:                            ERR       ERR       ERR       ERR       ERR
+PInsight_Full_TBB:                        ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY:                      ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY_TBB:                  ERR       ERR       ERR       ERR       ERR
+HPCToolkit:                               ERR       ERR       ERR       ERR       ERR
+
+--- Trace Sizes (Thread=32) ---
+  PInsight_Full:                      1.5G
+  PInsight_Full_TBB:                  1.6G
+  PInsight_50_STANDBY:                16M
+  PInsight_50_STANDBY_TBB:            16M
+  HPCToolkit:                         92M
+
+================================================================
+=== OMP_NUM_THREADS=48 ===
+================================================================
+(FOM z/s)                                run1      run2      run3      run4      run5
+------------------------------------------------------------------------
+Baseline:                                 ERR       ERR       ERR       ERR       ERR
+Baseline_TBB:                             ERR       ERR       ERR       ERR       ERR
+ScoreP:                            run_e1_continue.sh: line 57: 3338729 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3338764 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3338829 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3338864 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3338914 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+ScoreP_TBB:                        run_e1_continue.sh: line 57: 3338954 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3338990 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3339055 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3339072 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERRrun_e1_continue.sh: line 57: 3339142 Aborted                 "$@" -s $S > /tmp/lulesh_e1.log 2> /tmp/lulesh_e1_err.log
+       ERR
+PInsight_Full:                            ERR       ERR       ERR       ERR       ERR
+PInsight_Full_TBB:                        ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY:                      ERR       ERR       ERR       ERR       ERR
+PInsight_50_STANDBY_TBB:                  ERR       ERR       ERR       ERR       ERR
+HPCToolkit:                               ERR       ERR       ERR       ERR       ERR
+
+--- Trace Sizes (Thread=48) ---
+  PInsight_Full:                      1.5G
+  PInsight_Full_TBB:                  1.5G
+  PInsight_50_STANDBY:                23M
+  PInsight_50_STANDBY_TBB:            23M
+  HPCToolkit:                         132M
+
+================================================================
+E1 Continuation Complete. Mon Apr  6 12:39:56 AM EDT 2026
+================================================================

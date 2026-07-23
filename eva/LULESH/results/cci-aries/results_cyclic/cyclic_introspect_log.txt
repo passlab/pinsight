@@ -1,0 +1,155 @@
+=== INTROSPECT Cycle 1 ===
+  Timestamp: 2026-04-13 16:49:41.645976620
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+=== INTROSPECT Cycle 2 ===
+  Timestamp: 2026-04-13 16:49:41.649537682
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+=== INTROSPECT Cycle 3 ===
+  Timestamp: 2026-04-13 16:49:41.656405842
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  LTTng rotate: Error: Rotation already pending for this session
+  LTTng rotate: Error: Rotation already pending for this session
+  Recent chunks:
+  Recent chunks:
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (1.6M)
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (1.6M)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 2
+
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 3
+
+=== INTROSPECT Cycle 4 ===
+  Timestamp: 2026-04-13 16:49:41.736614095
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  LTTng rotate: Error: Rotation already pending for this session
+  Recent chunks:
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (3.3M)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 4
+
+=== INTROSPECT Cycle 5 ===
+  Timestamp: 2026-04-13 16:49:41.766351148
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  LTTng rotate: Error: Rotation already pending for this session
+  Recent chunks:
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (3.8M)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 5
+
+=== INTROSPECT Cycle 6 ===
+  Timestamp: 2026-04-13 16:49:41.822507572
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  LTTng rotate: Error: Rotation already pending for this session
+  Recent chunks:
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (5.1M)
+=== INTROSPECT Cycle 6 ===
+  Timestamp: 2026-04-13 16:49:41.833996856
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+=== INTROSPECT Cycle 1 ===
+=== INTROSPECT Cycle 1 ===
+  Timestamp: 2026-04-13 16:49:41.834219746
+  Timestamp: 2026-04-13 16:49:41.834253848
+  Chunk path: /home/yyan7/lttng-traces
+=== INTROSPECT Cycle 1 ===
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+=== INTROSPECT Cycle 1 ===
+  App PID: 1426673
+  Timestamp: 2026-04-13 16:49:41.834309561
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  Timestamp: 2026-04-13 16:49:41.834311741
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  Chunk path: /home/yyan7/lttng-traces
+  Chunk path: /home/yyan7/lttng-traces
+  App PID: 1426673
+  App PID: 1426673
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+  Config file: /home/yyan7/tools/pinsight/eva/LULESH/cyclic_introspect.cfg
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+  LTTng rotate: Error: Rotation already pending for this session
+  LTTng rotate: Error: Rotation already pending for this session
+  LTTng rotate: Error: Rotation already pending for this session
+  LTTng rotate: Error: Rotation already pending for this session
+  LTTng rotate: Error: Rotation already pending for this session
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+  Recent chunks:
+  Recent chunks:
+  Recent chunks:
+  Recent chunks:
+  Recent chunks:
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 6
+
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (5.1M)
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (5.1M)
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (5.1M)
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (5.1M)
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (5.1M)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 1
+
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 1
+
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 1
+
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 6
+
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 1
+
+  LTTng rotate: Waiting for rotation to complete...
+Trace chunk archive for session cyclic_introspect is now readable at /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/archives/20260413T164941-0400-20260413T164941-0400-0
+  Recent chunks:
+    /home/yyan7/lttng-traces/cyclic_introspect-20260413-164941/ (7.0M)
+    /home/yyan7/lttng-traces/e4test7-20260407-010813/ (796K)
+    /home/yyan7/lttng-traces/e4test6-20260407-010653/ (796K)
+    /home/yyan7/lttng-traces/e4test5-20260407-010539/ (796K)
+    /home/yyan7/lttng-traces/e4test4-20260407-010418/ (796K)
+  Script completed in cycle 1
+

@@ -1,0 +1,56 @@
+[MPI.global]
+    trace_mode = TRACING
+    MPI.rank = (0, 127)
+
+[MPI(init).default]
+    MPI_Init = on
+    MPI_Init_thread = on
+    MPI_Finalize = on
+
+[MPI(p2p).default]
+    MPI_Send = on
+    MPI_Recv = on
+    MPI_Sendrecv = on
+
+[MPI(asyncp2p).default]
+    MPI_Isend = on
+    MPI_Irecv = on
+    MPI_Wait = on
+    MPI_Waitall = on
+    MPI_Test = off
+
+[MPI(collective).default]
+    MPI_Bcast = on
+    MPI_Barrier = on
+    MPI_Reduce = on
+    MPI_Allreduce = on
+    MPI_Scatter = on
+    MPI_Gather = on
+    MPI_Allgather = on
+    MPI_Alltoall = on
+
+[MPI(others).default]
+    MPI_Comm_rank = off
+    MPI_Comm_size = off
+    MPI_Comm_split = off
+    MPI_Comm_create = off
+    MPI_Comm_dup = off
+    MPI_Type_commit = off
+    MPI_Type_free = off
+    MPI_Wtime = off
+    MPI_Wtick = off
+
+[MPI(oneside).default]
+    MPI_Win_create = off
+    MPI_Win_lock = off
+    MPI_Win_unlock = off
+    MPI_Put = off
+    MPI_Get = off
+    MPI_Accumulate = off
+
+[MPI(io).default]
+    MPI_File_open = off
+    MPI_File_close = off
+    MPI_File_read = off
+    MPI_File_write = off
+

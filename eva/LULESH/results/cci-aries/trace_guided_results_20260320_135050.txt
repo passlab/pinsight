@@ -1,0 +1,33 @@
+================================================================
+Trace-Guided Knob Benchmark — LULESH 2.0 at T=48
+Date: Fri Mar 20 01:50:50 PM EDT 2026
+Machine: cci-aries
+Problem: -s 50 -i 100 (125000 elements)
+Runs per config: 5
+Configs: Baseline, Uniform (all=48), Trace-Guided (H=48/M=24/L=2)
+Energy: perf stat -e power/energy-pkg/ (RAPL)
+================================================================
+
+=== Configuration: baseline ===
+--- Run 1/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4680.1633 (z/s)
+  Energy:
+                790.04 Joules power/energy-pkg/                                                     
+           2.731027782 seconds time elapsed
+
+--- Run 2/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4698.8153 (z/s)
+  Energy:
+                775.08 Joules power/energy-pkg/                                                     
+           2.710789487 seconds time elapsed
+
+--- Run 3/5 ---
+Elapsed time         =        2.7 (s)
+FOM                  =  4574.7546 (z/s)
+  Energy:
+                798.08 Joules power/energy-pkg/                                                     
+           2.786841550 seconds time elapsed
+
+--- Run 4/5 ---

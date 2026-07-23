@@ -1,0 +1,113 @@
+================================================================
+PInsight Overhead Evaluation — LULESH 2.0 (size=30)
+Date: Wed Mar 11 11:52:14 AM EDT 2026
+PInsight: /home/yyan7/work/tools/pinsight/build/libpinsight.so
+Runs per config: 5 (all values are elapsed time in seconds)
+================================================================
+
+--- OMP_NUM_THREADS=1 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                             24        24        24        24        24  FOM=1052.1431
+OFF:                                  24        24        24        24        24  FOM=1056.6416
+MONITORING:                           25        25        25        25        25  FOM=1013.7631
+TRACING_nosess:                       25        25        25        25        25  FOM=1017.88
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_1
+ust event lttng_pinsight_ompt:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         25        25        25        25        25  FOM=1008.8675
+RATE_100_1_MONITOR:                   25        25        25        25        25  FOM=1013.778
+RATE_100_1_OFF:               run_lulesh_bench.sh: line 24: 1330335 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        24run_lulesh_bench.sh: line 24: 1330398 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        24run_lulesh_bench.sh: line 24: 1330650 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        24run_lulesh_bench.sh: line 24: 1330734 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        24run_lulesh_bench.sh: line 24: 1330991 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        24  FOM=1046.1744
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (1T): 124K
+
+--- OMP_NUM_THREADS=2 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                             16        16        16        16        16  FOM=1571.3973
+OFF:                                  17        16        16        16        16  FOM=1542.0499
+MONITORING:                           17        17        17        18        17  FOM=1459.3592
+TRACING_nosess:                       17        17        18        17        17  FOM=1484.8858
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_2
+ust event lttng_pinsight_ompt:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         17        17        17        17        18  FOM=1433.9704
+RATE_100_1_MONITOR:                   17        17        17        17        17  FOM=1462.3984
+RATE_100_1_OFF:               run_lulesh_bench.sh: line 24: 1333932 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        16run_lulesh_bench.sh: line 24: 1334007 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        17run_lulesh_bench.sh: line 24: 1334251 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        16run_lulesh_bench.sh: line 24: 1334320 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        16run_lulesh_bench.sh: line 24: 1334397 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        16  FOM=1559.3081
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (2T): 124K
+
+--- OMP_NUM_THREADS=4 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                             11        10        10        10        10  FOM=2479.8436
+OFF:                                  10        11        10        10        10  FOM=2471.9226
+MONITORING:                           11        11        11        11        11  FOM=2244.8876
+TRACING_nosess:                       11        11        12        11        11  FOM=2196.0685
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_4
+ust event lttng_pinsight_ompt:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         11        11        11        12        11  FOM=2256.6124
+RATE_100_1_MONITOR:                   11        11        11        12        11  FOM=2217.4109
+RATE_100_1_OFF:               run_lulesh_bench.sh: line 24: 1336955 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        11run_lulesh_bench.sh: line 24: 1337007 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        11run_lulesh_bench.sh: line 24: 1337077 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        10run_lulesh_bench.sh: line 24: 1337146 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        11run_lulesh_bench.sh: line 24: 1337387 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+        11  FOM=2386.8695
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (4T): 124K
+
+--- OMP_NUM_THREADS=6 ---
+                                    run1      run2      run3      run4      run5  FOM
+------------------------------------------------------------------------
+BASELINE:                            8.8       8.5       9.1       9.1       8.3  FOM=3049.4274
+OFF:                                  10         9         9       8.8       8.3  FOM=3049.8189
+MONITORING:                           10        11        10       9.3       9.8  FOM=2576.1528
+TRACING_nosess:                      9.9        10        11        11       9.8  FOM=2560.0848
+Session pinsight_bench created.
+Traces will be output to /tmp/pinsight_lulesh_traces_6
+ust event lttng_pinsight_ompt:* created in channel channel0
+ust event pinsight_enter_exit_lttng_ust:* created in channel channel0
+Tracing started for session pinsight_bench
+TRACING_sess:                         10        11       9.9        11        10  FOM=2414.395
+RATE_100_1_MONITOR:                  9.8       9.7        10       9.8        11  FOM=2368.1051
+RATE_100_1_OFF:               run_lulesh_bench.sh: line 24: 1339826 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+       9.4run_lulesh_bench.sh: line 24: 1339881 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+       9.1run_lulesh_bench.sh: line 24: 1339952 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+       8.9run_lulesh_bench.sh: line 24: 1340023 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+       8.8run_lulesh_bench.sh: line 24: 1340097 Aborted                 (core dumped) "$@" "$SCRIPT_DIR/lulesh2.0" -s $S > /tmp/lulesh_out.txt 2> /dev/null
+         9  FOM=2802.0507
+Waiting for data availability.
+Tracing stopped for session pinsight_bench
+Destroying session pinsight_bench..
+Session pinsight_bench destroyed
+Trace volume (6T): 124K
+
+================================================================
+Done.

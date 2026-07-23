@@ -1,0 +1,10 @@
+=== E4 Summary ===
+Date: Tue Apr  7 09:08:52 AM EDT 2026
+Size: 32^3  Threads: 24  Iter: 1000  Runs: 4
+Ratios: H=24T / M=16T / L=8T
+
+Configuration             Avg FOM  vs Baseline
+Baseline (TBB)                0.5          —
+Uniform-24                    0.5        +0.0%
+Static H/M/L                  0.5        +0.0%
+Auto-tuned                    0.5        +0.0%
