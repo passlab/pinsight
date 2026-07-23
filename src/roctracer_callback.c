@@ -34,6 +34,62 @@ domain_trace_config_t *HIP_trace_config;
 #define HIP_EVENT_KERNEL_LAUNCH       32
 
 /* ================================================================
+ * Intercepted HIP API operations — SINGLE SOURCE OF TRUTH.
+ *
+ * Callbacks are registered PER-OP (roctracer_enable_op_callback), not
+ * domain-wide: with domain-wide registration the callback fired for EVERY
+ * HIP API call the application makes (~450 op kinds, twice per call for
+ * enter+exit) only to be software-rejected here — measured at +15% solve
+ * time on AMG2023 16-node/64-GPU (2026-07-20 attribution experiment, where
+ * MONITORING-with-zero-emission still cost +14.7%). Per-op registration
+ * makes unlisted ops take the runtime's no-subscriber fast path: they never
+ * enter PInsight at all. The fast-reject switch in hip_api_callback is kept
+ * as defense-in-depth.
+ *
+ * Adding a new op: add one X(...) line here AND a handler block in
+ * hip_api_callback. The cid array, registration helpers, and the
+ * fast-reject switch all derive from this list.
+ * ================================================================ */
+#define PINSIGHT_HIP_API_OPS(X) \
+    X(hipLaunchKernel)          \
+    X(hipMemcpy)                \
+    X(hipMemcpyAsync)           \
+    X(hipMalloc)                \
+    X(hipFree)                  \
+    X(hipDeviceSynchronize)     \
+    X(hipStreamSynchronize)     \
+    X(hipDeviceReset)           \
+    X(hipSetDevice)
+
+static const uint32_t hip_api_op_cids[] = {
+#define PINSIGHT_HIP_API_OP_CID(op) HIP_API_ID_##op,
+    PINSIGHT_HIP_API_OPS(PINSIGHT_HIP_API_OP_CID)
+#undef PINSIGHT_HIP_API_OP_CID
+};
+#define NUM_HIP_API_OPS \
+    (sizeof(hip_api_op_cids) / sizeof(hip_api_op_cids[0]))
+
+static void hip_api_callback(uint32_t domain, uint32_t cid,
+                             const void *callback_data, void *arg);
+
+static void hip_api_callbacks_enable(void) {
+    for (size_t i = 0; i < NUM_HIP_API_OPS; i++) {
+        if (roctracer_enable_op_callback(ACTIVITY_DOMAIN_HIP_API,
+                                         hip_api_op_cids[i], hip_api_callback,
+                                         NULL) != ROCTRACER_STATUS_SUCCESS)
+            fprintf(stderr,
+                    "PInsight: roctracer_enable_op_callback(cid=%u) failed: %s\n",
+                    hip_api_op_cids[i], roctracer_error_string());
+    }
+}
+
+static void hip_api_callbacks_disable(void) {
+    for (size_t i = 0; i < NUM_HIP_API_OPS; i++)
+        roctracer_disable_op_callback(ACTIVITY_DOMAIN_HIP_API,
+                                      hip_api_op_cids[i]);
+}
+
+/* ================================================================
  * Helper functions
  * ================================================================ */
 
@@ -155,6 +211,29 @@ static inline void hip_calibrate_once(void) {
  * ================================================================ */
 static roctracer_pool_t *activity_pool = NULL;
 
+/* Whether THIS process should collect the GPU activity pool, per the
+ * [HIP.default] device_activity node-policy (off/on/anyone_per_node/
+ * leader_per_node/rotate_per_node). Resolved once at startup (per-run) via
+ * pinsight_node_role. Host callbacks are NEVER gated by this — only the
+ * activity pool (no pool open / no ACTIVITY_DOMAIN_HIP_OPS collection when 0),
+ * so host tracing stays on all ranks. Replaces PINSIGHT_HIP_DISABLE_ACTIVITY.
+ * See doc/node_singleton_measurement_design.md. */
+static int hip_activity_should_collect(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        /* Name lookup once (cached) — avoids including trace_domain_HIP.h just
+         * for the index constant; resolution is per-run, not hot-path. */
+        int idx = pinsight_get_nodepolicy_index(HIP_domain_index,
+                                                "device_activity");
+        pinsight_nodepolicy_t p =
+            (idx >= 0)
+                ? domain_default_trace_config[HIP_domain_index].nodepolicy[idx].policy
+                : PINSIGHT_NODEPOLICY_OFF;
+        cached = pinsight_node_role("hip_activity", p);
+    }
+    return cached;
+}
+
 /* Gate for emitting activity records on flush.  NOT the live domain mode: the
  * pool batches records and is flushed on buffer-full or at transitions, so the
  * mode at flush time may differ from the mode when the records were captured.
@@ -225,19 +304,18 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
             domain_default_trace_config[HIP_domain_index].mode))
         return;
 
-    /* 3. Fast reject: the callback fires for every HIP API call, but only a
-     * handful do real work.  Skip thread init, clock calibration, and the
-     * device query for everything else. */
-    if (cid != HIP_API_ID_hipLaunchKernel      &&
-        cid != HIP_API_ID_hipMemcpy            &&
-        cid != HIP_API_ID_hipMemcpyAsync       &&
-        cid != HIP_API_ID_hipMalloc            &&
-        cid != HIP_API_ID_hipFree              &&
-        cid != HIP_API_ID_hipDeviceSynchronize &&
-        cid != HIP_API_ID_hipStreamSynchronize &&
-        cid != HIP_API_ID_hipDeviceReset       &&
-        cid != HIP_API_ID_hipSetDevice)
+    /* 3. Fast reject (defense-in-depth): registration is per-op, so only
+     * the PINSIGHT_HIP_API_OPS cids should ever arrive here — but keep the
+     * check in case a roctracer version routes unexpected cids. Generated
+     * from the same single-source op table as the registration. */
+    switch (cid) {
+#define PINSIGHT_HIP_API_OP_CASE(op) case HIP_API_ID_##op:
+    PINSIGHT_HIP_API_OPS(PINSIGHT_HIP_API_OP_CASE)
+#undef PINSIGHT_HIP_API_OP_CASE
+        break;
+    default:
         return;
+    }
 
     const hip_api_data_t *api_data = (const hip_api_data_t *)callback_data;
 
@@ -673,7 +751,7 @@ void pinsight_control_hip_apply_mode(void) {
                 roctracer_close_pool_expl(activity_pool);
                 activity_pool = NULL;
             }
-            roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
+            hip_api_callbacks_disable();
         }
         /* STANDBY→OFF or STANDBY→STANDBY: nothing to do */
         hip_activity_emit = 0;
@@ -685,21 +763,24 @@ void pinsight_control_hip_apply_mode(void) {
         /* STANDBY → MONITORING/TRACING: enable the API callback and open the pool
          * (kept allocated across MONITORING so MONITORING↔TRACING only toggles the
          * activity domain, not a 2 MB alloc).  Start collection only for TRACING. */
-        roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API,
-                                         hip_api_callback, NULL);
-        roctracer_properties_t props;
-        memset(&props, 0, sizeof(props));
-        props.buffer_size         = 0x200000; /* 2 MB */
-        props.buffer_callback_fun = hip_activity_callback;
-        roctracer_open_pool_expl(&props, &activity_pool);
-        if (mode == PINSIGHT_DOMAIN_TRACING) {
-            roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
-            hip_activity_emit = 1;
+        hip_api_callbacks_enable();
+        if (hip_activity_should_collect()) {
+            roctracer_properties_t props;
+            memset(&props, 0, sizeof(props));
+            props.buffer_size         = 0x200000; /* 2 MB (reverted 2026-07-23; 8 MB probe showed flush was not the bottleneck) */
+            props.buffer_callback_fun = hip_activity_callback;
+            roctracer_open_pool_expl(&props, &activity_pool);
+            if (mode == PINSIGHT_DOMAIN_TRACING) {
+                roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+                hip_activity_emit = 1;
+            }
         }
     } else if (mode == PINSIGHT_DOMAIN_TRACING) {
         /* MONITORING → TRACING: pool already open; (re)start collection. */
-        roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
-        hip_activity_emit = 1;
+        if (hip_activity_should_collect()) {
+            roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
+            hip_activity_emit = 1;
+        }
     }
     /* TRACING → MONITORING was fully handled by the leaving-TRACING block above. */
 }
@@ -719,11 +800,13 @@ void LTTNG_ROCTRACER_Init(void) {
         /* Clock calibration is deferred to the first callback (roctracer
          * timestamp + LTTng provider are not ready at constructor time). */
         if (PINSIGHT_DOMAIN_ACTIVE(mode)) {
-            roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API,
-                                             hip_api_callback, NULL);
+            hip_api_callbacks_enable();
+            /* device_activity node-policy gates the pool entirely (host tracing
+             * stays on regardless) — see hip_activity_should_collect(). */
+            if (hip_activity_should_collect()) {
             roctracer_properties_t props;
             memset(&props, 0, sizeof(props));
-            props.buffer_size         = 0x200000; /* 2 MB */
+            props.buffer_size         = 0x200000; /* 2 MB (reverted 2026-07-23; 8 MB probe showed flush was not the bottleneck) */
             props.buffer_callback_fun = hip_activity_callback;
             roctracer_open_pool_expl(&props, &activity_pool);
             /* Start activity COLLECTION only in TRACING (MONITORING opens the
@@ -734,6 +817,7 @@ void LTTNG_ROCTRACER_Init(void) {
             if (mode == PINSIGHT_DOMAIN_TRACING) {
                 roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
                 hip_activity_emit = 1;
+            }
             }
         }
         /* STANDBY: callback and pool stay unregistered until first active transition */
@@ -754,7 +838,7 @@ void LTTNG_ROCTRACER_Fini(void) {
         roctracer_close_pool_expl(activity_pool);
         activity_pool = NULL;
     }
-    roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
+    hip_api_callbacks_disable();
     hip_activity_emit = 0;
     hip_permanently_off = 1;
 }

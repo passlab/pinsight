@@ -10,6 +10,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <stdint.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#include <strings.h>
 #ifdef PINSIGHT_MPI
 #include "trace_domain_MPI.h"
 #endif
@@ -288,6 +292,13 @@ void initial_setup_trace_config() {
     domain_default_trace_config[i].mode_change_fired = 0;
     domain_default_trace_config[i].mode = domain_info_table[i].starting_mode;
     domain_default_trace_config[i].last_mode = PINSIGHT_DOMAIN_NONE;
+    // Seed node-policy values from the DSL-declared defaults ([Domain.default]
+    // parsing overrides them).
+    for (int k = 0; k < domain_info_table[i].num_nodepolicy_keys; k++) {
+      domain_default_trace_config[i].nodepolicy[k].policy =
+          domain_info_table[i].nodepolicy_keys[k].dflt;
+      domain_default_trace_config[i].nodepolicy[k].param = 0;
+    }
   }
 
   // Initialize the default lexgion trace config
@@ -796,4 +807,161 @@ unsigned long env_get_ulong(const char *varname, unsigned long default_value) {
     out = default_value;
   }
   return out;
+}
+
+// ============================================================
+// Node-policy resolution (device_activity / energy measure).
+// Resolved once at startup (per-run). WHO measures; the domain mode / windowing
+// is orthogonal. See doc/node_singleton_measurement_design.md.
+// ============================================================
+
+// Local rank within node, published by the MPI wrapper (§6.5); -1 if unknown.
+int pinsight_mpi_local_rank = -1;
+
+// Energy node-singleton policy (default ON = every rank; today's behavior).
+// Defined here so the standalone config-parser test links without energy.c.
+pinsight_nodepolicy_t energy_measure_policy = PINSIGHT_NODEPOLICY_ON;
+
+const char *pinsight_nodepolicy_str(pinsight_nodepolicy_t p) {
+  switch (p) {
+  case PINSIGHT_NODEPOLICY_OFF:            return "off";
+  case PINSIGHT_NODEPOLICY_ON:             return "on";
+  case PINSIGHT_NODEPOLICY_ANYONE_PER_NODE:return "anyone_per_node";
+  case PINSIGHT_NODEPOLICY_LEADER_PER_NODE:return "leader_per_node";
+  case PINSIGHT_NODEPOLICY_ROTATE_PER_NODE:return "rotate_per_node";
+  default:                                 return "off";
+  }
+}
+
+pinsight_nodepolicy_val_t
+pinsight_parse_nodepolicy(const char *val, pinsight_nodepolicy_t dflt) {
+  pinsight_nodepolicy_val_t r = {dflt, 0};
+  if (!val) return r;
+  while (*val == ' ' || *val == '\t') val++;
+  const char *colon = strchr(val, ':');
+  size_t n = colon ? (size_t)(colon - val) : strlen(val);
+  char base[64];
+  if (n >= sizeof(base)) n = sizeof(base) - 1;
+  memcpy(base, val, n);
+  base[n] = '\0';
+  while (n > 0 && (base[n - 1] == ' ' || base[n - 1] == '\t' ||
+                   base[n - 1] == '\r' || base[n - 1] == '\n'))
+    base[--n] = '\0';
+
+  if (strcasecmp(base, "off") == 0)
+    r.policy = PINSIGHT_NODEPOLICY_OFF;
+  else if (strcasecmp(base, "on") == 0)
+    r.policy = PINSIGHT_NODEPOLICY_ON;
+  else if (strcasecmp(base, "anyone_per_node") == 0)
+    r.policy = PINSIGHT_NODEPOLICY_ANYONE_PER_NODE;
+  else if (strcasecmp(base, "leader_per_node") == 0)
+    r.policy = PINSIGHT_NODEPOLICY_LEADER_PER_NODE;
+  else if (strcasecmp(base, "rotate_per_node") == 0) {
+    r.policy = PINSIGHT_NODEPOLICY_ROTATE_PER_NODE;
+    r.param = colon ? atoi(colon + 1) : 0;
+    if (r.param <= 0) r.param = 1000; /* default period ms */
+  } else {
+    fprintf(stderr, "PInsight: unknown nodepolicy value '%s' — using '%s'\n",
+            base, pinsight_nodepolicy_str(dflt));
+    r.policy = dflt;
+  }
+  return r;
+}
+
+int pinsight_get_nodepolicy_index(int domain_index, const char *key) {
+  if (domain_index < 0 || domain_index >= num_domain) return -1;
+  struct domain_info *d = &domain_info_table[domain_index];
+  for (int i = 0; i < d->num_nodepolicy_keys; i++)
+    if (strcmp(d->nodepolicy_keys[i].name, key) == 0) return i;
+  return -1;
+}
+
+typedef enum { NODE_UNKNOWN = -1, NODE_NONLEADER = 0, NODE_LEADER = 1 }
+    node_leader_status_t;
+
+static int local_rank_from_env(void) {
+  static const char *vars[] = {"FLUX_TASK_LOCAL_ID", "SLURM_LOCALID",
+                               "OMPI_COMM_WORLD_LOCAL_RANK", "MPI_LOCALRANKID",
+                               NULL};
+  for (int i = 0; vars[i]; i++) {
+    const char *v = getenv(vars[i]);
+    if (v && *v) return atoi(v);
+  }
+  return -1;
+}
+
+/* §4.3 chain: launcher env -> local-rank env -> MPI local rank -> UNKNOWN. */
+static node_leader_status_t node_leader_status(void) {
+  const char *v = getenv("PINSIGHT_NODE_LEADER");
+  if (v && *v) return (atoi(v) == 1) ? NODE_LEADER : NODE_NONLEADER;
+  int lr = local_rank_from_env();
+  if (lr >= 0) return (lr == 0) ? NODE_LEADER : NODE_NONLEADER;
+  if (pinsight_mpi_local_rank >= 0)
+    return (pinsight_mpi_local_rank == 0) ? NODE_LEADER : NODE_NONLEADER;
+  return NODE_UNKNOWN;
+}
+
+/* flock a node-local file; exactly one process/node wins & holds it. Cached. */
+static int claim_node_singleton(const char *name) {
+  static struct { char name[32]; int won; } cache[8];
+  static int ncache = 0;
+  for (int i = 0; i < ncache; i++)
+    if (strcmp(cache[i].name, name) == 0) return cache[i].won;
+
+  const char *user = getenv("USER");
+  if (!user || !*user) user = "pinsight";
+  char dir[256], path[400];
+  snprintf(dir, sizeof(dir), "/tmp/%s", user);
+  mkdir(dir, 0700); /* best-effort */
+  snprintf(path, sizeof(path), "%s/pinsight_%s_singleton.lock", dir, name);
+
+  int won = 0;
+  int fd = open(path, O_CREAT | O_RDWR, 0600);
+  if (fd >= 0) {
+    won = (flock(fd, LOCK_EX | LOCK_NB) == 0) ? 1 : 0;
+    if (!won) close(fd); /* winner keeps fd for process lifetime */
+  }
+  if (ncache < (int)(sizeof(cache) / sizeof(cache[0]))) {
+    strncpy(cache[ncache].name, name, sizeof(cache[ncache].name) - 1);
+    cache[ncache].won = won;
+    ncache++;
+  }
+  return won;
+}
+
+int pinsight_node_role(const char *lockname, pinsight_nodepolicy_t policy) {
+  static struct { char name[32]; int role; } cache[8];
+  static int ncache = 0;
+  for (int i = 0; i < ncache; i++)
+    if (strcmp(cache[i].name, lockname) == 0) return cache[i].role;
+
+  int role;
+  switch (policy) {
+  case PINSIGHT_NODEPOLICY_OFF:
+    role = 0;
+    break;
+  case PINSIGHT_NODEPOLICY_ON:
+    role = 1;
+    break;
+  case PINSIGHT_NODEPOLICY_ANYONE_PER_NODE:
+    role = claim_node_singleton(lockname);
+    break;
+  case PINSIGHT_NODEPOLICY_LEADER_PER_NODE:
+  case PINSIGHT_NODEPOLICY_ROTATE_PER_NODE: { /* Phase 1: rotate == leader */
+    node_leader_status_t s = node_leader_status();
+    role = (s == NODE_LEADER)      ? 1
+           : (s == NODE_NONLEADER) ? 0
+                                   : claim_node_singleton(lockname);
+    break;
+  }
+  default:
+    role = 0;
+    break;
+  }
+  if (ncache < (int)(sizeof(cache) / sizeof(cache[0]))) {
+    strncpy(cache[ncache].name, lockname, sizeof(cache[ncache].name) - 1);
+    cache[ncache].role = role;
+    ncache++;
+  }
+  return role;
 }

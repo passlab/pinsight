@@ -16,6 +16,16 @@
 /* Brings in PINSIGHT_ENERGY_AMD_GPU / PINSIGHT_ENERGY_VARIORUM so every energy
  * translation unit (coordinator and backends) sees which backends are enabled. */
 #include "pinsight_config.h"
+#include "trace_config.h" /* pinsight_nodepolicy_t */
+
+/* WHICH ranks measure energy (node-singleton policy). Default ON = every rank
+ * (today's behavior). Set by env PINSIGHT_MEASURE_ENERGY (overrides) or the
+ * minimal `[Energy] measure` config key; resolved once at startup (per-run).
+ * anyone_per_node/leader_per_node => exactly one rank/node measures (fixes the
+ * multi-rank node-energy multi-count). See doc/node_singleton_measurement_design.md.
+ * (Folds into energy_power_config_t when that struct is built.)
+ * DECLARED in trace_config.h / DEFINED in trace_config.c (so the standalone
+ * config-parser test, which doesn't link energy.c, still resolves it). */
 
 #define MAX_ENERGY_PACKAGES 16
 #define MAX_ENERGY_GPU_DEVS 16

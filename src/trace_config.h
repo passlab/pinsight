@@ -83,6 +83,8 @@
 // MAX 64 events per domain because we use a 64-bit BitSet to store event config
 #define MAX_NUM_DOMAIN_EVENTS 64
 #define MAX_EVENT_ID (MAX_NUM_DOMAIN_EVENTS - 1) /* 63 */
+// Max node-policy keys a domain can declare (e.g. HIP/CUDA "device_activity").
+#define MAX_NUM_NODEPOLICY_KEYS 4
 // Each domain has its own multiple subdomains, e.g. OpenMP domain can have
 // parallel, tasking, synchronization subdomain For MPI, we have p2p, collective
 // communication, async communication. In the tracing, we do not differentiate
@@ -178,6 +180,23 @@ typedef enum {
   PINSIGHT_DOMAIN_TRACING = 4,    /* Full tracing (default) */
 } pinsight_domain_mode_t;
 
+/* Node-policy — WHICH ranks perform a per-process capability measurement
+ * (HIP/CUDA GPU-activity pool, energy). Resolved once at startup (per-run).
+ * See doc/node_singleton_measurement_design.md. */
+typedef enum {
+  PINSIGHT_NODEPOLICY_OFF = 0,         /* skip everywhere                          */
+  PINSIGHT_NODEPOLICY_ON,              /* every rank measures/collects             */
+  PINSIGHT_NODEPOLICY_ANYONE_PER_NODE, /* 1 arbitrary rank/node (lock-file)        */
+  PINSIGHT_NODEPOLICY_LEADER_PER_NODE, /* 1 deterministic leader rank/node         */
+  PINSIGHT_NODEPOLICY_ROTATE_PER_NODE, /* 1 rotating collector/node (Phase 3; HIP/CUDA) */
+} pinsight_nodepolicy_t;
+
+/* Runtime value = policy + optional param (rotate period ms; 0 unless ROTATE). */
+typedef struct {
+  pinsight_nodepolicy_t policy;
+  int param;
+} pinsight_nodepolicy_val_t;
+
 /* True if domain is active (MONITORING or TRACING — does lexgion work) */
 #define PINSIGHT_DOMAIN_ACTIVE(mode) ((mode) >= PINSIGHT_DOMAIN_MONITORING)
 /* True if domain should emit LTTng tracepoints */
@@ -216,6 +235,9 @@ typedef struct domain_trace_config { // The trace config for a domain
               // domain_info->events
   volatile int mode_change_fired; // Once-per-domain latch: set when end_action
                                   // fires, reset on config reload
+  // Parsed node-policy values, indexed the same as domain_info.nodepolicy_keys[].
+  // Set from [Domain.default]; defaults copied from the DSL-declared defaults.
+  volatile pinsight_nodepolicy_val_t nodepolicy[MAX_NUM_NODEPOLICY_KEYS];
 } domain_trace_config_t;
 extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
@@ -365,6 +387,14 @@ typedef struct domain_info {
     int num_arg; // 0 or 1 argument for the punit_id_func,
   } punits[MAX_NUM_PUNIT_KINDS]; // max 4 punit kinds
   int num_punits;
+  // Node-policy keys this domain declares via TRACE_NODEPOLICY (e.g. HIP/CUDA
+  // "device_activity"). Name + DSL-declared default; the runtime value lives in
+  // domain_trace_config_t.nodepolicy[] at the same index.
+  struct nodepolicy_key {
+    char name[32];
+    pinsight_nodepolicy_t dflt;
+  } nodepolicy_keys[MAX_NUM_NODEPOLICY_KEYS];
+  int num_nodepolicy_keys;
 } domain_info_t;
 extern int num_domain;
 extern struct domain_info domain_info_table[MAX_NUM_DOMAINS];
@@ -376,6 +406,25 @@ extern void print_domain_trace_config(FILE *out);
 extern void print_lexgion_trace_config(FILE *out);
 extern void pinsight_load_trace_config(char *filepath);
 extern void pinsight_invalidate_config_mtime(void);
+
+// ---- Node-policy (device_activity / energy measure) ---------------------
+// Parse "off|on|anyone_per_node|leader_per_node|rotate_per_node[:<ms>]"
+// (case-insensitive). Unknown/NULL -> {dflt, 0}. rotate suffix -> {ROTATE, ms}.
+extern pinsight_nodepolicy_val_t
+pinsight_parse_nodepolicy(const char *val, pinsight_nodepolicy_t dflt);
+extern const char *pinsight_nodepolicy_str(pinsight_nodepolicy_t p);
+// Index of nodepolicy key <key> in domain <domain_index>, or -1. Parser/init use.
+extern int pinsight_get_nodepolicy_index(int domain_index, const char *key);
+// Does THIS process perform measurement <lockname> under <policy>? 1=yes, 0=skip.
+// Handles OFF/ON/ANYONE/LEADER (ROTATE falls back to LEADER in Phase 1). Cached
+// per <lockname> (incl. any held flock fd).
+extern int pinsight_node_role(const char *lockname, pinsight_nodepolicy_t policy);
+// Local rank within node, published by the MPI wrapper (-1 until set / no MPI).
+extern int pinsight_mpi_local_rank;
+// Energy node-singleton policy (default ON). Set by env PINSIGHT_MEASURE_ENERGY
+// or [Energy] measure; read by energy.c. Defined here (not energy.c) so the
+// standalone config-parser test links without energy.c. See energy.h.
+extern pinsight_nodepolicy_t energy_measure_policy;
 
 // --------------------------------------------------------
 // Safe environment variable query functions

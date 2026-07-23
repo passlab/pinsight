@@ -18,5 +18,6 @@ void dsl_add_punit(const char *name, unsigned low, unsigned high,
 void dsl_add_subdomain(const char *name);
 void dsl_add_event(const char *name, int initial_status, int native_id,
                    void *callback);
+void dsl_add_nodepolicy(const char *name, pinsight_nodepolicy_t dflt);
 
 #endif /* TRACE_DOMAIN_LOADER_H */

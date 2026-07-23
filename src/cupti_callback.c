@@ -252,6 +252,23 @@ static void cupti_activity_disable_collection(void) {
   cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
 }
 
+/* Whether THIS process collects the CUPTI activity pool, per [CUDA.default]
+ * device_activity node-policy. Resolved once (per-run). Host callbacks are never
+ * gated by this — only activity collection. See
+ * doc/node_singleton_measurement_design.md. */
+static int cuda_activity_should_collect(void) {
+  static int cached = -1;
+  if (cached < 0) {
+    int idx = pinsight_get_nodepolicy_index(CUDA_domain_index, "device_activity");
+    pinsight_nodepolicy_t p =
+        (idx >= 0)
+            ? domain_default_trace_config[CUDA_domain_index].nodepolicy[idx].policy
+            : PINSIGHT_NODEPOLICY_OFF;
+    cached = pinsight_node_role("cuda_activity", p);
+  }
+  return cached;
+}
+
 /* Deferred one-time activity setup, run from the first CUPTI callback (when a
  * CUDA context exists).  Registers the buffer callbacks always; starts
  * COLLECTION only if the starting mode is TRACING — MONITORING registers but
@@ -265,7 +282,8 @@ static void cupti_activity_init_once(void) {
     return;
   cupti_activity_register_once();
   if (domain_default_trace_config[CUDA_domain_index].mode ==
-      PINSIGHT_DOMAIN_TRACING) {
+          PINSIGHT_DOMAIN_TRACING &&
+      cuda_activity_should_collect()) {
     cupti_activity_enable_collection();
     cuda_activity_emit = 1;
   }
@@ -975,14 +993,16 @@ void pinsight_control_cuda_apply_mode(void) {
     /* STANDBY → MONITORING/TRACING: enable the API callbacks; start collection
      * only for TRACING. */
     cupti_set_all_callbacks(1);
-    if (mode == PINSIGHT_DOMAIN_TRACING) {
+    if (mode == PINSIGHT_DOMAIN_TRACING && cuda_activity_should_collect()) {
       cupti_activity_enable_collection();
       cuda_activity_emit = 1;
     }
   } else if (mode == PINSIGHT_DOMAIN_TRACING) {
     /* MONITORING → TRACING: callbacks already on; (re)start collection. */
-    cupti_activity_enable_collection();
-    cuda_activity_emit = 1;
+    if (cuda_activity_should_collect()) {
+      cupti_activity_enable_collection();
+      cuda_activity_emit = 1;
+    }
   }
   /* TRACING → MONITORING was fully handled by the leaving-TRACING block above. */
 }

@@ -21,8 +21,8 @@ Specifies how the new configuration interacts with the existing configuration. T
 
 #### 2. Target
 Specifies what is being configured. There are five types of targets:
-- **`Domain.global`**: Domain-wide structural settings — trace mode and punit scope (e.g., `OpenMP.global`).
-- **`Domain.default`**: Default event configuration for a domain (e.g., `OpenMP.default`).
+- **`Domain.global`**: Domain-wide structural settings — trace mode and punit scope (e.g., `OpenMP.global`). It is also, by convention, where a domain's *available option-sets* would be declared; but the `trace_mode` and node-policy value-sets are hard-coded in PInsight, so any such listing here is **informational and ignored** — only the punit `(Range)` is functional.
+- **`Domain.default`**: Default **settings** for a domain — per-event on/off, plus node-policy keys such as `device_activity` (HIP/CUDA). E.g., `OpenMP.default`, `HIP.default`.
 - **`Domain.PunitKind(PunitSet)`**: Configuration for a subset of parallel units (e.g., `OpenMP.team(0-3, 7, 12-20)`, `MPI.rank(0-4)`).
 - **`Lexgion.default`**: Default configuration for all code regions across all domains.
 - **`Lexgion(Domain).default`**: Default lexgion configuration for a specific domain (e.g., `Lexgion(OpenMP).default`). Eagerly initialized as `Lexgion.default ⊕ Domain.default` (rate triple from global default, events from domain default).
@@ -70,8 +70,65 @@ Additional punit constraints from other domains, separated by commas. **Only app
 - **Trace Mode**: `trace_mode = OFF|STANDBY|MONITORING|TRACING`
 - **Punit Scope**: `Domain.PunitKind = (Range)` (e.g., `OpenMP.thread = (0-15)`)
 
+> **Convention — settings vs. available options.** `Domain.global` holds *structural*
+> domain-wide keys. The *value-sets* of `trace_mode` and node-policy keys are hard-coded in
+> PInsight, so listing them here (e.g. `trace_mode = OFF, MONITORING, STANDBY, TRACING`) is
+> informational and **ignored** — only the punit `(Range)` is parsed from `[Domain.global]`.
+> Per-domain *settings* (events, `device_activity`) belong in `[Domain.default]`.
+>
+> **Implementation status:** `trace_mode` is currently parsed from `[Domain.global]`. A
+> planned convention change moves the trace-mode *setting* to `[Domain.default]` (keeping
+> `[global]` for range/option declarations); until then, **keep `trace_mode` in
+> `[Domain.global]`**.
+
 #### Domain Default Configuration (`Domain.default`)
 - **Event Control**: `EventName = on|off`
+- **GPU activity node-policy** (HIP/CUDA only): `device_activity = off | on | anyone_per_node | leader_per_node | rotate_per_node:<ms>` — controls *which ranks* open the GPU activity pool (ROCTracer/CUPTI). Default **`off`**. See **Node-Policy Keys** below.
+
+#### Node-Policy Keys (`device_activity`, energy `measure`)
+
+A *node-policy* selects **which ranks perform a per-process capability measurement** — the
+GPU activity pool (`device_activity`, HIP/CUDA) or energy (`measure`, `[Energy]`). It is
+resolved **once at startup (per-run)** and is **not windowed** (use `trace_mode` for
+per-window on/off). Full design: `doc/node_singleton_measurement_design.md`.
+
+Values (case-insensitive):
+
+| Value | Meaning |
+|---|---|
+| `off` | disabled |
+| `on` | every rank measures/collects |
+| `anyone_per_node` | exactly one **arbitrary** rank/node (elected via a node-local `flock` file) |
+| `leader_per_node` | exactly one **deterministic** rank/node — the node leader (`PINSIGHT_NODE_LEADER` env → local-rank env `FLUX_TASK_LOCAL_ID`/`SLURM_LOCALID`/`OMPI_COMM_WORLD_LOCAL_RANK`/`MPI_LOCALRANKID` → MPI `Comm_split_type` → lock fallback) |
+| `rotate_per_node:<ms>` | one **rotating** collector/node, cycling every `<ms>`. **Phase 3 — not yet implemented; currently falls back to `leader_per_node`.** `device_activity` only. |
+
+- **`device_activity`** gates **only** the GPU activity pool — **host-side HIP/CUDA tracing
+  stays on for all ranks** regardless. Default **`off`** (activity is the expensive GPU-side
+  path, now opt-in). `off` keeps host launch/memcpy/sync events but drops kernel/memcpy
+  *activity* (GPU-exec) records; `anyone_per_node`/`leader_per_node` collect on exactly one
+  GPU/node (≈¼ the overhead at 4 ranks/node, at the cost of 1 GPU/node of activity coverage).
+  Set in `[HIP.default]` / `[CUDA.default]`. **Replaces the removed
+  `PINSIGHT_HIP_DISABLE_ACTIVITY` env** (which was equivalent to `device_activity = off`).
+- **Implementation status:** `off`/`on`/`anyone_per_node`/`leader_per_node` implemented and
+  hardware-validated (Phase 1). `rotate_per_node` parses but is not yet active.
+
+#### `[Energy]` Section
+
+Energy/power is a measurement **service** — *not* a domain (no modes, lexgions, or punits),
+so it uses a plain `[Energy]` section. The only runtime key today is `measure`:
+
+```ini
+[Energy]
+    measure = off | on | anyone_per_node | leader_per_node
+```
+- Selects **which ranks measure energy** (same node-policy values; `rotate_per_node` is
+  **not** valid for energy). Default **`on`** (every rank — today's behavior).
+  `leader_per_node`/`anyone_per_node` → exactly one rank/node measures, yielding one clean
+  node-energy series (fixes multi-rank multi-counting of the shared node counters).
+- Also settable via env **`PINSIGHT_MEASURE_ENERGY`** (`ON|OFF|ANYONE_PER_NODE|LEADER_PER_NODE`),
+  which **overrides** the config key.
+- **Limitation:** per-platform enables and socket/device masks are future work
+  (`doc/energy_power_implementation_plan.md`); any other `[Energy]` keys are currently ignored.
 
 #### Lexgion Configuration (applies to `Lexgion.default`, `Lexgion(Domain).default`, and `Lexgion(Address)`)
 - **Tracing Rate**: `tracing_rate = N` (Trace 1 out of N executions)
@@ -299,6 +356,26 @@ every cycle, so each window is bounded.
     window_end_action = INTROSPECT:30:analyze.sh:TRACING
 ```
 
+### 24. GPU Activity on One Rank/Node (`device_activity`)
+Trace host-side HIP on every rank, but collect the GPU activity pool on only the node
+leader — cutting the multi-rank activity-collection overhead while keeping GPU-exec data
+for one GPU/node. (Set `on` for all GPUs, `off` for host-only.)
+```ini
+[HIP.global]
+    trace_mode = TRACING
+[HIP.default]
+    HIP_kernel_launch = on
+    device_activity   = leader_per_node
+```
+
+### 25. One-Rank-Per-Node Energy (`[Energy] measure`)
+Measure node energy on exactly one rank/node (avoids multiple-counting the shared node
+counters). Equivalent env: `PINSIGHT_MEASURE_ENERGY=LEADER_PER_NODE` (overrides the file).
+```ini
+[Energy]
+    measure = leader_per_node
+```
+
 ---
 
 ## Environment Variables
@@ -310,6 +387,10 @@ Configuration can also be supplied without a file:
 | `PINSIGHT_TRACE_CONFIG_FILE` | Path to a trace-config file (otherwise `./pinsight_trace_config.txt`). |
 | `PINSIGHT_TRACE_<DOMAIN>` | Override one domain's mode, e.g. `PINSIGHT_TRACE_HIP=MONITORING`. Accepts `OFF`/`STANDBY`/`MONITORING`/`TRACING` (and `ON`/`1`/`TRUE` → TRACING). |
 | `PINSIGHT_TRACE_WINDOW` | Configure the default tracing window (replaces `[Lexgion.default]` rate/window/mode-after knobs). |
+| `PINSIGHT_MEASURE_ENERGY` | Energy node-policy: `ON`/`OFF`/`ANYONE_PER_NODE`/`LEADER_PER_NODE`. **Overrides** `[Energy] measure`. One-time at startup (per-run). |
+| `PINSIGHT_NODE_LEADER` | Optional launcher-set hint (`1` on the chosen rank) that designates the node leader for `leader_per_node` policies; otherwise a local-rank env var / MPI is used. |
+
+> **Removed:** `PINSIGHT_HIP_DISABLE_ACTIVITY` — replaced by `[HIP.default] device_activity = off` (config-only; `device_activity` also defaults to `off`).
 
 ### `PINSIGHT_TRACE_WINDOW` grammar
 ```

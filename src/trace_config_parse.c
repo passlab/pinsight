@@ -35,7 +35,8 @@ typedef enum {
   SECTION_LEXGION_ADDRESS_NAME,
   SECTION_LEXGION_DEFAULT,
   SECTION_LEXGION_DOMAIN_DEFAULT,
-  SECTION_KNOB
+  SECTION_KNOB,
+  SECTION_ENERGY /* [Energy] — minimal: only `measure` for now */
 } SectionType;
 
 typedef enum {
@@ -489,6 +490,11 @@ static int parse_section_header(char *line) {
   else if (strcmp(target, "Knob") == 0) {
     current_section_type = SECTION_KNOB;
   }
+  // Case 2a': Energy section (minimal — only `measure` for now; the full
+  // [Energy]/[Power] struct + masks are future work in the energy plan).
+  else if (strcmp(target, "Energy") == 0) {
+    current_section_type = SECTION_ENERGY;
+  }
   // Case 2b: Domain.global (must match before .default)
   else if (strstr(target, ".global")) {
     current_section_type = SECTION_DOMAIN_GLOBAL;
@@ -901,8 +907,22 @@ static void parse_key_value(char *line) {
     // --- Domain.default and Domain.punit key-value parsing ---
     // Both accept: EventName = on/off
     struct domain_info *d = &domain_info_table[current_domain_idx];
+
+    // Node-policy key (e.g. HIP/CUDA "device_activity") — [Domain.default] only.
+    // Only HIP/CUDA declare such keys via TRACE_NODEPOLICY, so this is a no-op
+    // (npidx<0) for other domains, enforcing the "HIP/CUDA + energy only" scope.
+    if (current_section_type == SECTION_DOMAIN_DEFAULT) {
+      int npidx = pinsight_get_nodepolicy_index(current_domain_idx, key);
+      if (npidx >= 0) {
+        pinsight_nodepolicy_val_t nv = pinsight_parse_nodepolicy(
+            val, d->nodepolicy_keys[npidx].dflt);
+        domain_default_trace_config[current_domain_idx].nodepolicy[npidx] = nv;
+        d = NULL; // handled as nodepolicy; skip event lookup below
+      }
+    }
+
     int eid = -1;
-    for (int k = 0; k < d->num_events; k++) {
+    for (int k = 0; d && k < d->num_events; k++) { // d==NULL if handled as nodepolicy
       if (strcmp(d->event_table[k].name, key) == 0) {
         eid = k;
         break;
@@ -960,6 +980,13 @@ static void parse_key_value(char *line) {
           pinsight_set_knob_string(idx, val);
       }
     }
+  } else if (current_section_type == SECTION_ENERGY) {
+    // --- [Energy] key-value parsing (minimal: only `measure`) ---
+    // NOTE: env PINSIGHT_MEASURE_ENERGY overrides this at energy init.
+    if (strcmp(key, "measure") == 0) {
+      energy_measure_policy = pinsight_parse_nodepolicy(val, energy_measure_policy).policy;
+    }
+    // (per-platform enables + socket/device masks are future work — ignored.)
   }
 }
 

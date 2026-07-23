@@ -38,6 +38,9 @@ extern domain_trace_config_t *CUDA_trace_config;
   /* [CUDA.device(0-16)] */                                                    \
   TRACE_PUNIT1("device", 0, 16, CUDA_get_device_id, NULL)                      \
                                                                                \
+  /* node-policy: which ranks collect the CUPTI activity pool (default OFF) */ \
+  TRACE_NODEPOLICY("device_activity", PINSIGHT_NODEPOLICY_OFF)                 \
+                                                                               \
   /* [CUDA(contextdevice)] */                                                  \
   TRACE_SUBDOMAIN_BEGIN("contextdevice")                                       \
   TRACE_EVENT("CUDA_context_create",     0,  0, NULL)  /* - not registered */ \
@@ -138,10 +141,13 @@ static inline struct domain_info *register_CUDA_trace_domain(void) {
 #define TRACE_IMPL_EVENT(name, initial_status, native_id, callback_fn)         \
   dsl_add_event((name), (initial_status), (native_id), (void *)(callback_fn));
 
+#define TRACE_IMPL_NODEPOLICY(name, dflt) dsl_add_nodepolicy((name), (dflt));
+
   /* Expand the CUDA definition into actual calls */
   CUDA_DOMAIN_DEFINITION;
 
 /* Cleanup macro namespace */
+#undef TRACE_IMPL_NODEPOLICY
 #undef TRACE_IMPL_EVENT
 #undef TRACE_IMPL_SUBDOMAIN_END
 #undef TRACE_IMPL_SUBDOMAIN_BEGIN

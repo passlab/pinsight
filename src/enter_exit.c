@@ -68,14 +68,16 @@ void enter_pinsight_func() {
 #ifdef PINSIGHT_MPI
   pinsight_early_rank_init();
 #endif
+  /* Parse config first so energy `measure` (and domain node-policies) are known
+   * before energy init / the activity pool decide who measures. */
+  initial_setup_trace_config();
+
 #ifdef PINSIGHT_ENERGY
   /* Baseline energy snapshot precedes the enter_pinsight app-start marker. */
   pinsight_energy_init();
   pinsight_energy_snapshot_enter();
 #endif
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
-
-  initial_setup_trace_config();
 
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Init();

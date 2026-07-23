@@ -53,4 +53,9 @@
 #define TRACE_EVENT(name, initial_status, native_id, callback_fn)              \
   TRACE_IMPL_EVENT(name, initial_status, native_id, callback_fn)
 
+/* Declare a node-policy key for the domain (e.g. "device_activity"). The value
+ * is set in [Domain.default]; default_policy is a pinsight_nodepolicy_t. */
+#define TRACE_NODEPOLICY(name, default_policy)                                  \
+  TRACE_IMPL_NODEPOLICY(name, default_policy)
+
 #endif /* TRACE_DOMAIN_DSL_H */

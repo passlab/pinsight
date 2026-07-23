@@ -123,3 +123,16 @@ void dsl_add_event(const char *name, int initial_status, int native_id,
   if (event_id + 1 > d->event_id_upper)
     d->event_id_upper = event_id + 1;
 }
+
+void dsl_add_nodepolicy(const char *name, pinsight_nodepolicy_t dflt) {
+  struct domain_info *d = &domain_info_table[current_domain];
+  if (d->num_nodepolicy_keys >= MAX_NUM_NODEPOLICY_KEYS) {
+    fprintf(stderr, "DSL ERROR: too many nodepolicy keys in domain '%s'\n",
+            d->name);
+    return;
+  }
+  int idx = d->num_nodepolicy_keys++;
+  strncpy(d->nodepolicy_keys[idx].name, name,
+          sizeof(d->nodepolicy_keys[idx].name) - 1);
+  d->nodepolicy_keys[idx].dflt = dflt;
+}

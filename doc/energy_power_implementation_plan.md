@@ -5,6 +5,28 @@
 **Status:** Feature 1 (enter/exit energy) implemented & validated on Tuolumne MI300A;
 Feature 2 (power polling) and the `[Energy]`/`[Power]` config sections still TODO
 
+> **2026-07-23 update — runtime `measure` config (env + `[Energy] measure`), via the shared
+> node-policy.** Energy gains its **first runtime control** (it is compile-time-only today —
+> no env, no config parser; see "Current Status"). One policy selects *which ranks* measure:
+> `off | on | anyone_per_node | leader_per_node`. Two inputs, both writing a single global
+> `energy_measure_policy` in `energy.{h,c}` (default `on` = today's all-ranks behavior):
+> - **Env `PINSIGHT_MEASURE_ENERGY`** = `ON|OFF|ANYONE_PER_NODE|LEADER_PER_NODE` (one-time at
+>   startup) — **overrides** —
+> - **`[Energy] measure`** = `off|on|anyone_per_node|leader_per_node`: a **minimal new
+>   `[Energy]` section handler** (the first one; the full `[Energy]`/`[Power]` struct + masks
+>   below remain TODO).
+>
+> `anyone_per_node`/`leader_per_node` make exactly **one rank/node** measure — the **in-tool
+> fix for the multi-rank multi-count caveat** (previously "use one rank per hostname" in
+> analysis). `leader_per_node` = deterministic (node leader via launcher env / MPI split);
+> `anyone_per_node` = arbitrary (flock on `/tmp/$USER/pinsight_energy_singleton.lock`).
+> Resolved **once at startup (per-run)** — energy is not windowed (enter/exit are per-run;
+> phase-gate power via `follow_mode`). Shares the `pinsight_nodepolicy_t` enum +
+> `pinsight_parse_nodepolicy()` + `pinsight_node_role()` with HIP/CUDA `device_activity`, but
+> energy is **not a domain**, so it does **not** use the `TRACE_NODEPOLICY` DSL. When the
+> `energy_power_config_t` struct below is built, `measure` folds into it (drop the global).
+> Full design + rationale: **doc/node_singleton_measurement_design.md**.
+
 > **2026-06-11 implementation note (Feature 1).** Built on branch
 > `energy-power-cleanup`. Several design points evolved during implementation — where this
 > note conflicts with the older plan body below, this note wins:
@@ -75,7 +97,11 @@ All work is on branch `energy-power-cleanup`. Implementation commits, in order:
 ### TODO queue (dependency order)
 
 1. `[Energy]` config section — per-platform on/off + socket/device `BitSet` masks
-   (parser notes in this doc; `bitset_parse_ranges()` exists).
+   (parser notes in this doc; `bitset_parse_ranges()` exists). **(2026-07-23)** A minimal
+   `measure`-only `[Energy]` handler + the `PINSIGHT_MEASURE_ENERGY` env land **first** (the
+   node-singleton `measure` policy, stored as a global — see the top note); the per-platform
+   enables + masks + the `energy_power_config_t` struct are the remainder, into which
+   `measure` later folds.
 2. Feature 2 `PINSIGHT_POWER` — control-thread timed polling + `energy_sample` (§2.x);
    on/off design decided: `enabled` master switch + `follow_mode` + `pinsight_power_on/off()` API.
 3. `pinsight_energy_marker(label)` — arbitrary-point snapshots; primitive for the future
@@ -121,7 +147,10 @@ Evaluation caveats:
   there is no CPU/GPU split on this hardware. `cpu_uj` is empty (RAPL root-locked).
 - **Multi-rank nodes**: every rank's libpinsight reads the same 4 node-local APU counters.
   For node energy, use **one rank per hostname** (events carry `hostname` + `pid`);
-  summing across ranks on the same node multiple-counts.
+  summing across ranks on the same node multiple-counts. **(2026-07-23) In-tool fix:** set
+  `PINSIGHT_MEASURE_ENERGY=LEADER_PER_NODE` (env) or `[Energy] measure = leader_per_node`
+  (config) so only one rank/node emits energy — no analysis-side dedup needed (see the
+  2026-07-23 note near the top).
 - **Baseline**: idle is ~120 W/APU — subtract an idle-run baseline if you want
   application-attributable energy rather than wall-clock node energy.
 - **Short runs**: counters update at ~ms scale; runs ≪ 1 s give noisy W estimates.
@@ -328,6 +357,11 @@ to write what differs from the snapshot selection.
 
 ```ini
 [Energy]
+# WHICH RANKS measure (node-singleton policy; default on = every rank). Env
+# PINSIGHT_MEASURE_ENERGY overrides this. Resolved once at startup (per-run).
+# See the 2026-07-23 note + doc/node_singleton_measurement_design.md.
+measure             = leader_per_node   # off | on | anyone_per_node | leader_per_node
+
 # Per-platform enable (default: on for platforms detected at runtime)
 # Per-platform socket/device selection (default: all when key absent)
 intel_cpu           = on

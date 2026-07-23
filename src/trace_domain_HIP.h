@@ -7,6 +7,10 @@
 
 extern int HIP_get_device_id(void *);
 
+/* Index of the "device_activity" nodepolicy key in this domain (declaration
+ * order; it is declared first). Gate sites index nodepolicy[] with this. */
+#define HIP_NODEPOLICY_DEVICE_ACTIVITY 0
+
 extern struct domain_info domain_info_table[];
 extern int num_domain;
 extern int HIP_domain_index;
@@ -43,6 +47,9 @@ extern domain_trace_config_t *HIP_trace_config;
                                                                                \
   /* [HIP.device(0-16)] */                                                     \
   TRACE_PUNIT1("device", 0, 16, HIP_get_device_id, NULL)                      \
+                                                                               \
+  /* node-policy: which ranks open the GPU activity pool (default OFF) */      \
+  TRACE_NODEPOLICY("device_activity", PINSIGHT_NODEPOLICY_OFF)                 \
                                                                                \
   /* [HIP(device)] — IDs 0-5 */                                                \
   TRACE_SUBDOMAIN_BEGIN("device")                                              \
@@ -165,8 +172,11 @@ static inline struct domain_info *register_HIP_trace_domain(void) {
 #define TRACE_IMPL_EVENT(name, initial_status, native_id, callback_fn)         \
   dsl_add_event((name), (initial_status), (native_id), (void *)(callback_fn));
 
+#define TRACE_IMPL_NODEPOLICY(name, dflt) dsl_add_nodepolicy((name), (dflt));
+
   HIP_DOMAIN_DEFINITION;
 
+#undef TRACE_IMPL_NODEPOLICY
 #undef TRACE_IMPL_EVENT
 #undef TRACE_IMPL_SUBDOMAIN_END
 #undef TRACE_IMPL_SUBDOMAIN_BEGIN
