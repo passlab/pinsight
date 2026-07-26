@@ -193,6 +193,30 @@ int MPI_get_rank(void) {
 
 _EXTERN_C_ int PMPI_Init_thread(int *argc, char ***argv, int required,
                                 int *provided);
+
+/* Publish node-local rank + ranks/node for the node-policy machinery
+ * (leader election step 3, rotate_per_node N). Authoritative and
+ * launcher-agnostic; runs once right after MPI init. Uses PMPI_* directly so
+ * no PInsight wrappers fire. Failure leaves the globals at -1 (callers fall
+ * back to env / degrade to leader). */
+extern void pinsight_control_thread_wakeup(int reason);
+
+static void pinsight_mpi_publish_node_info(void) {
+  MPI_Comm node_comm;
+  if (PMPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
+                           MPI_INFO_NULL, &node_comm) == MPI_SUCCESS) {
+    PMPI_Comm_rank(node_comm, &pinsight_mpi_local_rank);
+    PMPI_Comm_size(node_comm, &pinsight_mpi_ranks_per_node);
+    PMPI_Comm_free(&node_comm);
+    /* Node topology just became known: poke the control thread (benign wake,
+     * reason 0) so a rotate_per_node policy that degraded to leader at the
+     * constructor (topology unknown pre-MPI_Init) re-evaluates and starts its
+     * rotation boundary wakes (Phase 2 §6.9.5). Without this the loop stays
+     * blocked in sem_wait and rotation never engages. */
+    pinsight_control_thread_wakeup(0);
+  }
+}
+
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int MPI_Init_thread(int *argc, char ***argv, int required,
                                int *provided) {
@@ -200,6 +224,7 @@ _EXTERN_C_ int MPI_Init_thread(int *argc, char ***argv, int required,
 
   int return_val = PMPI_Init_thread(argc, argv, required, provided);
   PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
+  pinsight_mpi_publish_node_info();
   // printf("process %d rank: %d\n", pid, mpirank);
 
   PMPI_CALL_EPILOGUE(MPI_Init_thread, *provided, return_val);
@@ -213,6 +238,7 @@ _EXTERN_C_ int MPI_Init(int *argc, char ***argv) {
   PMPI_CALL_PROLOGUE(MPI_Init, 0);
   int return_val = PMPI_Init(argc, argv);
   PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
+  pinsight_mpi_publish_node_info();
   PMPI_CALL_EPILOGUE(MPI_Init, return_val);
 
   // printf("process %d rank: %d\n", pid, mpirank);

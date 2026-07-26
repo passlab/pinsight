@@ -149,7 +149,21 @@ int parse_window_end_action(const char *val, window_end_action_t *out) {
 
         int d_idx = find_domain_index(domain_name);
         if (d_idx >= 0) {
-          out->mode[d_idx] = parse_mode_value(ms);
+          if (strncasecmp(ms, "device_activity=", 16) == 0) {
+            /* Phase 2 §6.9.6: activity-only target — leaves trace_mode alone
+             * so host tracing stays on (the state trace_mode can't express). */
+            if (pinsight_get_nodepolicy_index(d_idx, "device_activity") >= 0) {
+              out->np_target[d_idx] =
+                  pinsight_parse_nodepolicy(ms + 16, PINSIGHT_NODEPOLICY_OFF);
+              out->np_set[d_idx] = 1;
+            } else {
+              fprintf(stderr, "PInsight config: domain '%s' has no "
+                              "device_activity key (window_end_action)\n",
+                      domain_name);
+            }
+          } else {
+            out->mode[d_idx] = parse_mode_value(ms);
+          }
         } else {
           fprintf(stderr, "PInsight config: unknown domain '%s' in "
                           "window_end_action\n", domain_name);
@@ -164,6 +178,19 @@ int parse_window_end_action(const char *val, window_end_action_t *out) {
           out->mode[i] = m;
       }
       token = strtok_r(NULL, ",", &saveptr);
+    }
+  }
+
+  /* Contradictory combo: an activity target only matters in TRACING; pairing it
+   * with a mode change away from TRACING for the same domain is moot. */
+  for (int d = 0; d < num_domain; d++) {
+    if (out->np_set[d] && out->mode[d] != PINSIGHT_DOMAIN_NONE &&
+        out->mode[d] != PINSIGHT_DOMAIN_TRACING) {
+      fprintf(stderr,
+              "PInsight config Warning: window_end_action sets both %s mode=%s "
+              "and device_activity — the activity target has no effect outside "
+              "TRACING\n",
+              domain_info_table[d].name, pinsight_mode_str(out->mode[d]));
     }
   }
 

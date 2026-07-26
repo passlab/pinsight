@@ -34,6 +34,11 @@
 #include "trace_domain_HIP.h"
 #endif
 
+#ifdef PINSIGHT_LAYOUT_PAD
+/* Layout-perturbation probe — see roctracer_callback.c twin. Shifts the
+ * hot per-event-read config arrays below by PINSIGHT_LAYOUT_PAD bytes. */
+__attribute__((used)) static char pinsight_layout_pad_cfg[PINSIGHT_LAYOUT_PAD] = {1};
+#endif
 struct domain_info domain_info_table[MAX_NUM_DOMAINS];
 domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
 punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
@@ -817,6 +822,8 @@ unsigned long env_get_ulong(const char *varname, unsigned long default_value) {
 
 // Local rank within node, published by the MPI wrapper (§6.5); -1 if unknown.
 int pinsight_mpi_local_rank = -1;
+// Ranks per node, published by the MPI wrapper (§6.5); -1 if unknown.
+int pinsight_mpi_ranks_per_node = -1;
 
 // Energy node-singleton policy (default ON = every rank; today's behavior).
 // Defined here so the standalone config-parser test links without energy.c.
@@ -886,6 +893,25 @@ static int local_rank_from_env(void) {
   for (int i = 0; vars[i]; i++) {
     const char *v = getenv(vars[i]);
     if (v && *v) return atoi(v);
+  }
+  return -1;
+}
+
+/* Public accessors (Phase 2 rotate needs these; leader election uses the same
+ * sources internally). Env is authoritative-at-constructor; MPI-published
+ * values fill in post-MPI_Init when no env var exists. */
+int pinsight_local_rank(void) {
+  int lr = local_rank_from_env();
+  if (lr >= 0) return lr;
+  return pinsight_mpi_local_rank; /* -1 if unknown */
+}
+
+int pinsight_ranks_per_node(void) {
+  if (pinsight_mpi_ranks_per_node > 0) return pinsight_mpi_ranks_per_node;
+  const char *v = getenv("SLURM_NTASKS_PER_NODE");
+  if (v && *v) {
+    int n = atoi(v); /* handles "4" and the "4(x16)" form (atoi stops at '(') */
+    if (n > 0) return n;
   }
   return -1;
 }

@@ -252,40 +252,139 @@ static void cupti_activity_disable_collection(void) {
   cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
 }
 
-/* Whether THIS process collects the CUPTI activity pool, per [CUDA.default]
- * device_activity node-policy. Resolved once (per-run). Host callbacks are never
- * gated by this — only activity collection. See
- * doc/node_singleton_measurement_design.md. */
-static int cuda_activity_should_collect(void) {
-  static int cached = -1;
-  if (cached < 0) {
-    int idx = pinsight_get_nodepolicy_index(CUDA_domain_index, "device_activity");
-    pinsight_nodepolicy_t p =
-        (idx >= 0)
-            ? domain_default_trace_config[CUDA_domain_index].nodepolicy[idx].policy
-            : PINSIGHT_NODEPOLICY_OFF;
-    cached = pinsight_node_role("cuda_activity", p);
+/* ================================================================
+ * Runtime-live activity gate (Phase 2 — design doc §6.9). CUDA mirror of the
+ * HIP implementation in roctracer_callback.c: the collect decision is
+ * evaluated LIVE, value changes (reload) and rotate boundaries re-toggle
+ * collection; the election / selection method stays pinned per-run. Host
+ * callbacks are never gated — only activity collection.
+ * CUPTI asymmetry (§6.9.2): there is NO unregister API for the activity
+ * buffer callbacks, so "off" = FlushAll + cuptiActivityDisable(all kinds);
+ * disabled kinds generate no records and request no buffers — the dormant
+ * registration is zero-cost.
+ * ================================================================ */
+static pinsight_nodepolicy_t cuda_pinned_method; /* valid iff cuda_method_pinned */
+static int cuda_method_pinned = 0;
+static int cuda_pinned_rotate_ms = 0;
+static int cuda_method_warned = 0;
+static int cuda_permanently_off; /* tentative decl; defined (=0) further down */
+
+static inline int cuda_nodepolicy_idx(void) {
+  static int idx = -2;
+  if (idx == -2)
+    idx = pinsight_get_nodepolicy_index(CUDA_domain_index, "device_activity");
+  return idx;
+}
+
+static inline uint64_t cuda_mono_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000L);
+}
+
+/* Live per-rank collect decision:
+ *   (trace_mode == TRACING) AND (device_activity selects this rank NOW). */
+static int cuda_should_collect_now(void) {
+  if (domain_default_trace_config[CUDA_domain_index].mode !=
+      PINSIGHT_DOMAIN_TRACING)
+    return 0;
+  int idx = cuda_nodepolicy_idx();
+  if (idx < 0)
+    return 0;
+  pinsight_nodepolicy_val_t v =
+      domain_default_trace_config[CUDA_domain_index].nodepolicy[idx];
+  switch (v.policy) {
+  case PINSIGHT_NODEPOLICY_OFF:
+    return 0;
+  case PINSIGHT_NODEPOLICY_ON:
+    return 1;
+  default: /* ANYONE / LEADER / ROTATE */
+    if (!cuda_method_pinned) {
+      cuda_pinned_method = v.policy;
+      cuda_pinned_rotate_ms = (v.param > 0) ? v.param : 1000;
+      cuda_method_pinned = 1;
+    } else if (v.policy != cuda_pinned_method && !cuda_method_warned) {
+      fprintf(stderr,
+              "PInsight: CUDA device_activity selection method changed at "
+              "runtime (%s -> %s) — IGNORED, method is pinned per-run\n",
+              pinsight_nodepolicy_str(cuda_pinned_method),
+              pinsight_nodepolicy_str(v.policy));
+      cuda_method_warned = 1;
+    }
+    if (cuda_pinned_method == PINSIGHT_NODEPOLICY_ROTATE_PER_NODE) {
+      int lr = pinsight_local_rank();
+      int n = pinsight_ranks_per_node();
+      if (lr < 0 || n <= 0) /* unknown topology → degrade to leader */
+        return pinsight_node_role("cuda_activity",
+                                  PINSIGHT_NODEPOLICY_LEADER_PER_NODE);
+      return (int)((cuda_mono_ms() / (uint64_t)cuda_pinned_rotate_ms) %
+                   (uint64_t)n) == lr;
+    }
+    return pinsight_node_role("cuda_activity", cuda_pinned_method);
   }
-  return cached;
+}
+
+/* >0 (period ms) iff the live policy is rotate in TRACING with known topology. */
+int pinsight_control_cuda_rotate_period_ms(void) {
+  if (cuda_permanently_off)
+    return 0;
+  if (domain_default_trace_config[CUDA_domain_index].mode !=
+      PINSIGHT_DOMAIN_TRACING)
+    return 0;
+  int idx = cuda_nodepolicy_idx();
+  if (idx < 0)
+    return 0;
+  pinsight_nodepolicy_val_t v =
+      domain_default_trace_config[CUDA_domain_index].nodepolicy[idx];
+  pinsight_nodepolicy_t m = cuda_method_pinned ? cuda_pinned_method : v.policy;
+  if (m != PINSIGHT_NODEPOLICY_ROTATE_PER_NODE)
+    return 0;
+  if (v.policy == PINSIGHT_NODEPOLICY_OFF)
+    return 0; /* rotation paused by a live off */
+  if (pinsight_local_rank() < 0 || pinsight_ranks_per_node() <= 0)
+    return 0; /* degraded to leader — no tick needed */
+  return cuda_method_pinned ? cuda_pinned_rotate_ms
+                            : ((v.param > 0) ? v.param : 1000);
+}
+
+/* Activity apply driver (Phase 2 §6.9.2), CUDA flavor. Control-thread-owned
+ * (plus the first-callback init below). Idempotent. "off" cannot deregister
+ * the buffer callbacks (CUPTI API limitation) — it flushes and disables all
+ * activity kinds instead, which stops record generation entirely. */
+static int cuda_collect_state = 0; /* last applied collect state */
+
+void pinsight_control_cuda_apply_collect_state(void) {
+  if (cuda_permanently_off)
+    return;
+  if (!activity_init_done)
+    return; /* first CUPTI callback applies the initial state (needs a context) */
+  int s = cuda_should_collect_now();
+  if (s == cuda_collect_state)
+    return;
+  if (s) {
+    cupti_activity_enable_collection();
+    cuda_activity_emit = 1;
+  } else {
+    cuptiActivityFlushAll(1); /* emit==1 → tail emitted (blocking) */
+    cuda_activity_emit = 0;
+    cupti_activity_disable_collection();
+  }
+  cuda_collect_state = s;
 }
 
 /* Deferred one-time activity setup, run from the first CUPTI callback (when a
- * CUDA context exists).  Registers the buffer callbacks always; starts
- * COLLECTION only if the starting mode is TRACING — MONITORING registers but
- * does not collect, otherwise it would fill buffers and fire bufferCompleted for
- * records that are dropped by the emit gate (pure overhead).  Runtime
- * MONITORING<->TRACING transitions are handled by the control thread in
- * pinsight_control_cuda_apply_mode(). */
+ * CUDA context exists).  Registers the buffer callbacks always; the live gate
+ * then decides whether collection starts (TRACING + this rank selected).
+ * Runtime transitions are handled by the control thread. */
 static void cupti_activity_init_once(void) {
   if (activity_init_done ||
       __atomic_exchange_n(&activity_init_done, 1, __ATOMIC_SEQ_CST) != 0)
     return;
   cupti_activity_register_once();
-  if (domain_default_trace_config[CUDA_domain_index].mode ==
-          PINSIGHT_DOMAIN_TRACING &&
-      cuda_activity_should_collect()) {
+  if (cuda_should_collect_now()) {
     cupti_activity_enable_collection();
     cuda_activity_emit = 1;
+    cuda_collect_state = 1;
   }
 }
 
@@ -964,18 +1063,11 @@ void pinsight_control_cuda_apply_mode(void) {
   if (mode == last)
     return;
 
-  /* --- Leaving TRACING (→ MONITORING/STANDBY/OFF): drain THEN stop collection. ---
-   * Activity collection is enabled ONLY while TRACING, so MONITORING does not
-   * keep filling buffers and firing bufferCompleted (which would be pure
-   * overhead since nothing is emitted).  Flush first (blocking, so all in-flight
-   * buffers are delivered) while cuda_activity_emit is still 1 — the in-flight
-   * TRACING batch is emitted; then clear the gate and disable collection at the
-   * source. */
-  if (last == PINSIGHT_DOMAIN_TRACING && mode != PINSIGHT_DOMAIN_TRACING) {
-    cuptiActivityFlushAll(1); /* emit==1 → emitted */
-    cuda_activity_emit = 0;
-    cupti_activity_disable_collection();
-  }
+  /* Activity first: the live gate flushes + disables collection when the new
+   * mode / collector selection says stop, and (re)enables when it says start
+   * (Phase 2 §6.9 — collection exists only while TRACING AND this rank is the
+   * selected collector). */
+  pinsight_control_cuda_apply_collect_state();
 
   if (mode == PINSIGHT_DOMAIN_OFF) {
     if (PINSIGHT_DOMAIN_ACTIVE(last))
@@ -987,24 +1079,11 @@ void pinsight_control_cuda_apply_mode(void) {
   } else if (mode == PINSIGHT_DOMAIN_STANDBY) {
     if (PINSIGHT_DOMAIN_ACTIVE(last))
       cupti_set_all_callbacks(0);
-    /* Collection already stopped above for last==TRACING; for last==MONITORING
-     * it was never on. */
   } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
-    /* STANDBY → MONITORING/TRACING: enable the API callbacks; start collection
-     * only for TRACING. */
+    /* STANDBY → MONITORING/TRACING: enable the host API callbacks. */
     cupti_set_all_callbacks(1);
-    if (mode == PINSIGHT_DOMAIN_TRACING && cuda_activity_should_collect()) {
-      cupti_activity_enable_collection();
-      cuda_activity_emit = 1;
-    }
-  } else if (mode == PINSIGHT_DOMAIN_TRACING) {
-    /* MONITORING → TRACING: callbacks already on; (re)start collection. */
-    if (cuda_activity_should_collect()) {
-      cupti_activity_enable_collection();
-      cuda_activity_emit = 1;
-    }
   }
-  /* TRACING → MONITORING was fully handled by the leaving-TRACING block above. */
+  /* MONITORING↔TRACING: host callbacks already on; activity handled above. */
 }
 
 void LTTNG_CUPTI_Init(void) {

@@ -209,29 +209,108 @@ static inline void hip_calibrate_once(void) {
  *
  * Linked to callback records via correlation_id.
  * ================================================================ */
+#ifdef PINSIGHT_LAYOUT_PAD
+/* Layout-perturbation probe (2026-07-24 bimodal-anomaly discriminator, design
+ * doc §6.9 / code-memory OPEN ANOMALY): an inert, referenced .data pad that
+ * shifts every subsequent global by PINSIGHT_LAYOUT_PAD bytes. Identical
+ * source semantics; only binary layout differs between the two builds. */
+__attribute__((used)) static char pinsight_layout_pad_hip[PINSIGHT_LAYOUT_PAD] = {1};
+#endif
 static roctracer_pool_t *activity_pool = NULL;
 
-/* Whether THIS process should collect the GPU activity pool, per the
- * [HIP.default] device_activity node-policy (off/on/anyone_per_node/
- * leader_per_node/rotate_per_node). Resolved once at startup (per-run) via
- * pinsight_node_role. Host callbacks are NEVER gated by this — only the
- * activity pool (no pool open / no ACTIVITY_DOMAIN_HIP_OPS collection when 0),
- * so host tracing stays on all ranks. Replaces PINSIGHT_HIP_DISABLE_ACTIVITY.
- * See doc/node_singleton_measurement_design.md. */
-static int hip_activity_should_collect(void) {
-    static int cached = -1;
-    if (cached < 0) {
-        /* Name lookup once (cached) — avoids including trace_domain_HIP.h just
-         * for the index constant; resolution is per-run, not hot-path. */
-        int idx = pinsight_get_nodepolicy_index(HIP_domain_index,
-                                                "device_activity");
-        pinsight_nodepolicy_t p =
-            (idx >= 0)
-                ? domain_default_trace_config[HIP_domain_index].nodepolicy[idx].policy
-                : PINSIGHT_NODEPOLICY_OFF;
-        cached = pinsight_node_role("hip_activity", p);
+/* ================================================================
+ * Runtime-live activity gate (Phase 2 — design doc §6.9).
+ *
+ * Whether THIS process collects the GPU activity pool, per the [HIP.default]
+ * device_activity node-policy — evaluated LIVE (control thread) so it can
+ * change within a run: config reload flips the VALUE (off/on), and
+ * rotate_per_node derives the collector from the node-wide monotonic clock.
+ * The ELECTION / selection METHOD stays pinned per-run (§4.5): the first
+ * anyone/leader/rotate value seen pins the method (+ rotate period); a later
+ * method change is warned once and ignored. Host callbacks are NEVER gated by
+ * any of this — only the activity pool — so host tracing stays on all ranks.
+ * ================================================================ */
+static pinsight_nodepolicy_t hip_pinned_method; /* valid iff hip_method_pinned */
+static int hip_method_pinned = 0;
+static int hip_pinned_rotate_ms = 0;
+static int hip_method_warned = 0;
+
+static inline int hip_nodepolicy_idx(void) {
+    static int idx = -2; /* -2 = not looked up yet */
+    if (idx == -2)
+        idx = pinsight_get_nodepolicy_index(HIP_domain_index, "device_activity");
+    return idx;
+}
+
+static inline uint64_t hip_mono_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000L);
+}
+
+/* Live per-rank collect decision:
+ *   (trace_mode == TRACING) AND (device_activity selects this rank NOW). */
+static int hip_should_collect_now(void) {
+    if (domain_default_trace_config[HIP_domain_index].mode !=
+        PINSIGHT_DOMAIN_TRACING)
+        return 0; /* master gate: activity capture only in TRACING */
+    int idx = hip_nodepolicy_idx();
+    if (idx < 0)
+        return 0;
+    pinsight_nodepolicy_val_t v =
+        domain_default_trace_config[HIP_domain_index].nodepolicy[idx];
+    switch (v.policy) {
+    case PINSIGHT_NODEPOLICY_OFF:
+        return 0;
+    case PINSIGHT_NODEPOLICY_ON:
+        return 1;
+    default: /* ANYONE / LEADER / ROTATE — method-bearing values */
+        if (!hip_method_pinned) {
+            hip_pinned_method = v.policy;
+            hip_pinned_rotate_ms = (v.param > 0) ? v.param : 1000;
+            hip_method_pinned = 1;
+        } else if (v.policy != hip_pinned_method && !hip_method_warned) {
+            fprintf(stderr,
+                    "PInsight: device_activity selection method changed at "
+                    "runtime (%s -> %s) — IGNORED, method is pinned per-run\n",
+                    pinsight_nodepolicy_str(hip_pinned_method),
+                    pinsight_nodepolicy_str(v.policy));
+            hip_method_warned = 1;
+        }
+        if (hip_pinned_method == PINSIGHT_NODEPOLICY_ROTATE_PER_NODE) {
+            int lr = pinsight_local_rank();
+            int n = pinsight_ranks_per_node();
+            if (lr < 0 || n <= 0) /* unknown topology → degrade to leader */
+                return pinsight_node_role("hip_activity",
+                                          PINSIGHT_NODEPOLICY_LEADER_PER_NODE);
+            /* Node-wide clock → all local ranks agree with zero IPC. */
+            return (int)((hip_mono_ms() / (uint64_t)hip_pinned_rotate_ms) %
+                         (uint64_t)n) == lr;
+        }
+        return pinsight_node_role("hip_activity", hip_pinned_method);
     }
-    return cached;
+}
+
+/* Rotate period for the control thread's boundary wake: >0 (ms) iff the live
+ * policy is rotate and the domain is TRACING with known topology; else 0. */
+int pinsight_control_hip_rotate_period_ms(void) {
+    if (domain_default_trace_config[HIP_domain_index].mode !=
+        PINSIGHT_DOMAIN_TRACING)
+        return 0;
+    int idx = hip_nodepolicy_idx();
+    if (idx < 0)
+        return 0;
+    pinsight_nodepolicy_val_t v =
+        domain_default_trace_config[HIP_domain_index].nodepolicy[idx];
+    pinsight_nodepolicy_t m = hip_method_pinned ? hip_pinned_method : v.policy;
+    if (m != PINSIGHT_NODEPOLICY_ROTATE_PER_NODE)
+        return 0;
+    if (v.policy == PINSIGHT_NODEPOLICY_OFF)
+        return 0; /* rotation paused by a live off */
+    if (pinsight_local_rank() < 0 || pinsight_ranks_per_node() <= 0)
+        return 0; /* degraded to leader — no tick needed */
+    return hip_method_pinned ? hip_pinned_rotate_ms
+                             : ((v.param > 0) ? v.param : 1000);
 }
 
 /* Gate for emitting activity records on flush.  NOT the live domain mode: the
@@ -712,11 +791,74 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
 
 static int hip_permanently_off = 0;
 
+/* ================================================================
+ * Activity apply driver (Phase 2 §6.9.2). Control-thread-owned (plus the
+ * pre-thread Init call). Idempotent: compares the live decision against the
+ * last applied state and does a FULL teardown / setup on change:
+ *   off: flush (emits the on-window tail while emit==1) → clear emit →
+ *        disable_domain_activity (stops the per-op HSA instrumentation) →
+ *        close_pool (frees the buffer + DEREGISTERS the buffer callback).
+ *   on : open_pool (registers callback, allocs) → enable → set emit.
+ * No dormant pool remains while not collecting.
+ * ================================================================ */
+static int hip_collect_state = 0; /* last applied collect state */
+
+/* Diagnostic: PINSIGHT_DEBUG_ACTIVITY=1 logs every activity-machinery action
+ * with monotonic timestamp + the (normally unchecked) roctracer return codes. */
+static int hip_dbg_activity(void) {
+    static int on = -1;
+    if (on < 0) { const char *v = getenv("PINSIGHT_DEBUG_ACTIVITY"); on = (v && *v && *v != '0'); }
+    return on;
+}
+#define HIP_DBG(...) do { if (hip_dbg_activity()) { \
+    struct timespec _ts; clock_gettime(CLOCK_MONOTONIC, &_ts); \
+    fprintf(stderr, "PINSIGHT_DBG t=%ld.%03ld pid=%d ", (long)_ts.tv_sec, \
+            _ts.tv_nsec/1000000L, getpid()); \
+    fprintf(stderr, __VA_ARGS__); fputc('\n', stderr); } } while (0)
+
+void pinsight_control_hip_apply_collect_state(void) {
+    if (hip_permanently_off)
+        return;
+    int s = hip_should_collect_now();
+    if (s == hip_collect_state)
+        return;
+    if (s) {
+        int rc_open = -999, rc_en;
+        if (!activity_pool) {
+            roctracer_properties_t props;
+            memset(&props, 0, sizeof(props));
+            props.buffer_size         = 0x200000; /* 2 MB (8 MB probe: flush was not the bottleneck) */
+            props.buffer_callback_fun = hip_activity_callback;
+            rc_open = roctracer_open_pool_expl(&props, &activity_pool);
+        }
+        rc_en = roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS,
+                                                      activity_pool);
+        hip_activity_emit = 1;
+        HIP_DBG("apply 0->1 open_rc=%d enable_rc=%d pool=%p", rc_open, rc_en,
+                (void *)activity_pool);
+    } else {
+        int rc_fl = -999, rc_dis, rc_cl = -999;
+        if (activity_pool)
+            rc_fl = roctracer_flush_activity_expl(activity_pool); /* emit==1 → tail emitted */
+        hip_activity_emit = 0;
+        rc_dis = roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
+        if (activity_pool) {
+            rc_cl = roctracer_close_pool_expl(activity_pool);
+            activity_pool = NULL;
+        }
+        HIP_DBG("apply 1->0 flush_rc=%d disable_rc=%d close_rc=%d", rc_fl,
+                rc_dis, rc_cl);
+    }
+    hip_collect_state = s;
+}
+
 /* Called by the control thread for runtime mode transitions.
  * Precondition: pinsight_hip_init() has run, so last_mode is never NONE.
- * Lifecycle: the API callback + activity pool are tied to ACTIVE (MONITORING or
- * TRACING); activity COLLECTION (enable/disable_domain_activity) is tied to
- * TRACING only — so MONITORING does not capture or flush activity records. */
+ * Lifecycle: the host API callbacks are tied to ACTIVE (MONITORING or
+ * TRACING); the activity pool + collection are handled entirely by the live
+ * gate (hip_should_collect_now → apply_collect_state): collection exists only
+ * while TRACING *and* this rank is the selected collector, with full pool
+ * teardown otherwise (Phase 2 §6.9 — no dormant pool in MONITORING). */
 void pinsight_control_hip_apply_mode(void) {
     if (hip_permanently_off)
         return;
@@ -729,60 +871,23 @@ void pinsight_control_hip_apply_mode(void) {
     if (mode == last)
         return;
 
-    /* --- Leaving TRACING (→ MONITORING/STANDBY/OFF): drain THEN stop capture. ---
-     * Activity collection is enabled ONLY while TRACING, so MONITORING does not
-     * keep filling the pool and firing flush callbacks (which would be pure
-     * overhead since nothing is emitted).  Flush first, while hip_activity_emit
-     * is still 1, so the in-pool TRACING batch is emitted; then clear the gate
-     * and disable collection at the source. */
-    if (last == PINSIGHT_DOMAIN_TRACING && mode != PINSIGHT_DOMAIN_TRACING) {
-        if (activity_pool)
-            roctracer_flush_activity_expl(activity_pool);   /* emit==1 → emitted */
-        hip_activity_emit = 0;
-        roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_OPS);
-    }
+    /* Activity first (flush/close while the runtime is still fully alive;
+     * the gate reads the already-committed new mode). */
+    pinsight_control_hip_apply_collect_state();
 
     if (mode == PINSIGHT_DOMAIN_OFF || mode == PINSIGHT_DOMAIN_STANDBY) {
-        if (PINSIGHT_DOMAIN_ACTIVE(last)) {
-            /* ACTIVE → STANDBY/OFF: close the pool + disable the API callback.
-             * Activity collection is already stopped above for last==TRACING;
-             * for last==MONITORING it was never on. */
-            if (activity_pool) {
-                roctracer_close_pool_expl(activity_pool);
-                activity_pool = NULL;
-            }
+        if (PINSIGHT_DOMAIN_ACTIVE(last))
             hip_api_callbacks_disable();
-        }
         /* STANDBY→OFF or STANDBY→STANDBY: nothing to do */
-        hip_activity_emit = 0;
         if (mode == PINSIGHT_DOMAIN_OFF) {
             hip_permanently_off = 1;
             fprintf(stderr, "PInsight: HIP domain permanently OFF\n");
         }
     } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
-        /* STANDBY → MONITORING/TRACING: enable the API callback and open the pool
-         * (kept allocated across MONITORING so MONITORING↔TRACING only toggles the
-         * activity domain, not a 2 MB alloc).  Start collection only for TRACING. */
+        /* STANDBY → MONITORING/TRACING: enable the host API callbacks. */
         hip_api_callbacks_enable();
-        if (hip_activity_should_collect()) {
-            roctracer_properties_t props;
-            memset(&props, 0, sizeof(props));
-            props.buffer_size         = 0x200000; /* 2 MB (reverted 2026-07-23; 8 MB probe showed flush was not the bottleneck) */
-            props.buffer_callback_fun = hip_activity_callback;
-            roctracer_open_pool_expl(&props, &activity_pool);
-            if (mode == PINSIGHT_DOMAIN_TRACING) {
-                roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
-                hip_activity_emit = 1;
-            }
-        }
-    } else if (mode == PINSIGHT_DOMAIN_TRACING) {
-        /* MONITORING → TRACING: pool already open; (re)start collection. */
-        if (hip_activity_should_collect()) {
-            roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
-            hip_activity_emit = 1;
-        }
     }
-    /* TRACING → MONITORING was fully handled by the leaving-TRACING block above. */
+    /* MONITORING↔TRACING: host callbacks already on; activity handled above. */
 }
 
 /* ================================================================
@@ -801,24 +906,12 @@ void LTTNG_ROCTRACER_Init(void) {
          * timestamp + LTTng provider are not ready at constructor time). */
         if (PINSIGHT_DOMAIN_ACTIVE(mode)) {
             hip_api_callbacks_enable();
-            /* device_activity node-policy gates the pool entirely (host tracing
-             * stays on regardless) — see hip_activity_should_collect(). */
-            if (hip_activity_should_collect()) {
-            roctracer_properties_t props;
-            memset(&props, 0, sizeof(props));
-            props.buffer_size         = 0x200000; /* 2 MB (reverted 2026-07-23; 8 MB probe showed flush was not the bottleneck) */
-            props.buffer_callback_fun = hip_activity_callback;
-            roctracer_open_pool_expl(&props, &activity_pool);
-            /* Start activity COLLECTION only in TRACING (MONITORING opens the
-             * pool but does not collect — otherwise it would fill the pool and
-             * fire flush callbacks for records that are never emitted).
-             * _expl routes records into our pool; the no-arg variant sends to
-             * the default pool which has no callback and drops records. */
-            if (mode == PINSIGHT_DOMAIN_TRACING) {
-                roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HIP_OPS, activity_pool);
-                hip_activity_emit = 1;
-            }
-            }
+            /* Activity pool + collection: the live gate opens/enables iff
+             * TRACING and this rank is the selected collector (device_activity
+             * node-policy). Host tracing stays on regardless. */
+            pinsight_control_hip_apply_collect_state();
+            HIP_DBG("init mode=%d should_collect=%d collect_state=%d",
+                    (int)mode, hip_should_collect_now(), hip_collect_state);
         }
         /* STANDBY: callback and pool stay unregistered until first active transition */
     }

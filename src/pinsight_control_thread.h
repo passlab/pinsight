@@ -97,6 +97,12 @@ void pinsight_control_set_pending_action(window_end_action_t *ma);
  * Called by the control thread; pinsight_hip_init() must have run first.
  */
 extern void pinsight_control_hip_apply_mode(void);
+/* Phase 2 (§6.9): re-evaluate the live device_activity collect decision and
+ * open/close the activity pool on change. Idempotent; control-thread-owned. */
+extern void pinsight_control_hip_apply_collect_state(void);
+/* >0 (period ms) iff live policy is rotate_per_node in TRACING with known
+ * node topology — tells the control loop to wake at rotation boundaries. */
+extern int pinsight_control_hip_rotate_period_ms(void);
 #endif
 
 #ifdef PINSIGHT_CUDA
@@ -106,6 +112,9 @@ extern void pinsight_control_hip_apply_mode(void);
  * Called by the control thread; pinsight_cuda_init() must have run first.
  */
 extern void pinsight_control_cuda_apply_mode(void);
+/* Phase 2 analogs (see HIP above). */
+extern void pinsight_control_cuda_apply_collect_state(void);
+extern int pinsight_control_cuda_rotate_period_ms(void);
 #endif
 
 #ifdef PINSIGHT_OPENMP

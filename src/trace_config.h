@@ -278,6 +278,12 @@ typedef struct window_end_action {
                                     // (default TRIGGER_FIRST = 0)
   int window_timeout_sec;           // >0: wall-clock deadline (sec) ending the
                                     // TRACING window; 0/absent = disabled (default)
+  // Phase 2 §6.9.6: per-domain device_activity target at window end
+  // ("HIP:device_activity=off"). np_set[d]=1 → write np_target[d] into the
+  // domain's device_activity nodepolicy value; trace_mode is left untouched
+  // (that is the point: host-on / activity-off per window).
+  pinsight_nodepolicy_val_t np_target[MAX_NUM_DOMAINS];
+  unsigned char np_set[MAX_NUM_DOMAINS];
 } window_end_action_t;
 
 /**
@@ -421,6 +427,13 @@ extern int pinsight_get_nodepolicy_index(int domain_index, const char *key);
 extern int pinsight_node_role(const char *lockname, pinsight_nodepolicy_t policy);
 // Local rank within node, published by the MPI wrapper (-1 until set / no MPI).
 extern int pinsight_mpi_local_rank;
+// Ranks per node (node-local comm size), published by the MPI wrapper (-1 unknown).
+extern int pinsight_mpi_ranks_per_node;
+// Local rank of THIS process within its node: launcher env chain
+// (FLUX_TASK_LOCAL_ID/SLURM_LOCALID/...) -> MPI-published value -> -1 unknown.
+extern int pinsight_local_rank(void);
+// Ranks per node: MPI-published -> env (SLURM_NTASKS_PER_NODE) -> -1 unknown.
+extern int pinsight_ranks_per_node(void);
 // Energy node-singleton policy (default ON). Set by env PINSIGHT_MEASURE_ENERGY
 // or [Energy] measure; read by energy.c. Defined here (not energy.c) so the
 // standalone config-parser test links without energy.c. See energy.h.

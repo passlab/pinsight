@@ -215,9 +215,14 @@ static void control_execute_introspect(window_end_action_t *ma) {
 static void control_apply_all_modes(void) {
 #ifdef PINSIGHT_CUDA
     pinsight_control_cuda_apply_mode();
+    /* Phase 2: a config reload may flip device_activity with NO mode change
+     * (apply_mode early-returns on mode==last) — re-check the live collect
+     * decision unconditionally. Idempotent, cheap. */
+    pinsight_control_cuda_apply_collect_state();
 #endif
 #ifdef PINSIGHT_HIP
     pinsight_control_hip_apply_mode();
+    pinsight_control_hip_apply_collect_state();
 #endif
     /* OMPT note: calling ompt_set_callback from the control thread to
      * register/deregister callbacks while OpenMP regions are active has
@@ -256,12 +261,69 @@ static void *pinsight_control_loop(void *arg) {
          * armed, block with a deadline instead so the window ends on time even
          * if no region caps. Restart on EINTR (defensive; SIGUSR1 is blocked). */
         int rc;
-        if (window_timer_armed)
+        /* Phase 2 (§6.9.5): if any GPU domain is live-rotating its activity
+         * collector, wake exactly at the next rotation boundary (no fine
+         * polling — one wake per period). Rotation boundaries are defined on
+         * CLOCK_MONOTONIC (node-wide); sem_timedwait needs an absolute
+         * CLOCK_REALTIME deadline, so convert the remaining time. When both a
+         * rotation boundary and the window deadline are pending, wait on the
+         * earlier one. rotate_ms == 0 for all non-rotate policies → this
+         * branch is never taken (pure event-driven wait, zero polling). */
+        int rotate_ms = 0;
+#ifdef PINSIGHT_HIP
+        {
+            int t = pinsight_control_hip_rotate_period_ms();
+            if (t > 0 && (rotate_ms == 0 || t < rotate_ms)) rotate_ms = t;
+        }
+#endif
+#ifdef PINSIGHT_CUDA
+        {
+            int t = pinsight_control_cuda_rotate_period_ms();
+            if (t > 0 && (rotate_ms == 0 || t < rotate_ms)) rotate_ms = t;
+        }
+#endif
+        int rotate_wake = 0; /* the armed deadline is a rotation boundary */
+        if (rotate_ms > 0) {
+            struct timespec mono, rt, rotate_deadline;
+            clock_gettime(CLOCK_MONOTONIC, &mono);
+            clock_gettime(CLOCK_REALTIME, &rt);
+            unsigned long long mono_ms =
+                (unsigned long long)mono.tv_sec * 1000ULL +
+                (unsigned long long)(mono.tv_nsec / 1000000L);
+            /* time to the next boundary, +2 ms so we land just after it */
+            long rem_ms = (long)(rotate_ms - (long)(mono_ms % rotate_ms)) + 2;
+            long ns = rt.tv_nsec + (rem_ms % 1000) * 1000000L;
+            rotate_deadline.tv_sec  = rt.tv_sec + rem_ms / 1000 + ns / 1000000000L;
+            rotate_deadline.tv_nsec = ns % 1000000000L;
+            if (!window_timer_armed ||
+                rotate_deadline.tv_sec < window_deadline.tv_sec ||
+                (rotate_deadline.tv_sec == window_deadline.tv_sec &&
+                 rotate_deadline.tv_nsec < window_deadline.tv_nsec)) {
+                rotate_wake = 1;
+                rc = sem_timedwait(&control_sem, &rotate_deadline);
+            } else {
+                rc = sem_timedwait(&control_sem, &window_deadline);
+            }
+        } else if (window_timer_armed) {
             rc = sem_timedwait(&control_sem, &window_deadline);
-        else
+        } else {
             rc = sem_wait(&control_sem);
+        }
         if (rc == -1 && errno == EINTR)
             continue;
+
+        if (rc == -1 && errno == ETIMEDOUT && rotate_wake) {
+            /* Rotation boundary: re-evaluate the live collect decision (the
+             * outgoing collector closes its pool, the incoming one opens).
+             * Loop back to recompute the next boundary. */
+#ifdef PINSIGHT_HIP
+            pinsight_control_hip_apply_collect_state();
+#endif
+#ifdef PINSIGHT_CUDA
+            pinsight_control_cuda_apply_collect_state();
+#endif
+            continue;
+        }
 
         int reason;
         if (rc == -1 && errno == ETIMEDOUT) {
@@ -341,6 +403,24 @@ static void *pinsight_control_loop(void *arg) {
                 }
                 if (new_mode == PINSIGHT_DOMAIN_TRACING)
                     cyclic_resume = 1;
+            }
+
+            /* Phase 2 §6.9.6: apply per-domain device_activity targets
+             * ("HIP:device_activity=off") — trace_mode untouched, so host
+             * tracing stays on. The control_apply_all_modes call below runs
+             * apply_collect_state, which toggles the pool accordingly. */
+            for (int d = 0; d < num_domain; d++) {
+                if (!ma->np_set[d])
+                    continue;
+                int npidx = pinsight_get_nodepolicy_index(d, "device_activity");
+                if (npidx < 0)
+                    continue;
+                domain_default_trace_config[d].nodepolicy[npidx] =
+                    ma->np_target[d];
+                fprintf(stderr,
+                        "PInsight: Auto-trigger: %s device_activity -> %s\n",
+                        domain_info_table[d].name,
+                        pinsight_nodepolicy_str(ma->np_target[d].policy));
             }
 
             /* Cyclic INTROSPECT: if any domain resumes to TRACING,

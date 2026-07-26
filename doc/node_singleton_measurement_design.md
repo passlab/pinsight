@@ -2,8 +2,13 @@
 
 **Date:** 2026-07-23
 **Author:** Yonghong Yan
-**Status:** Phase 1 IMPLEMENTED & hardware-validated (2026-07-23, build_eval on Tuolumne);
-Phases 2–3 designed, not yet implemented. See §6.0.
+**Status:** Phase 1 IMPLEMENTED & hardware-validated (2026-07-23). Phase 2 (runtime-live
+activity gate incl. rotate, §6.9) IMPLEMENTED 2026-07-24: functional tests 5/5 PASS
+(reload toggle, 4-rank rotate w/ MPI-publish poke fix, window_end_action activity target,
+close/open stress, method pin); 16×4 `winoff` scenario validated (+4.0% solve, activity
+through setup, auto-off before solve). ⚠ 16×4 overhead numbers for plain on/off arms hit
+an UNRESOLVED bimodal anomaly (see code-memory amg2023_eval_overhead "OPEN ANOMALY") —
+per-arm overhead conclusions deferred pending cross-day replication.
 **Related:** [energy_power_implementation_plan.md](energy_power_implementation_plan.md),
 code-memory `amg2023_eval_overhead`, `hip_activity_overhead_refs`, `energy_power_support`
 
@@ -132,7 +137,7 @@ values (incl. `rotate_per_node`); energy `measure` has the first four:
 | `on` | all ranks measure/collect | — |
 | `anyone_per_node` | exactly one **arbitrary** rank/node | atomic lock file |
 | `leader_per_node` | exactly one **deterministic leader** rank/node | env → local-rank → MPI → lock fallback |
-| `rotate_per_node:<ms>` | one collector/node, **rotating** every `<ms>` so all N GPUs are sampled over time (device_activity only) | time-derived from node clock (§6.10) |
+| `rotate_per_node:<ms>` | one collector/node, **rotating** every `<ms>` so all N GPUs are sampled over time (device_activity only) | time-derived from node clock (§6.9) |
 
 `rotate_per_node` takes an optional period suffix (`rotate_per_node:1000`); bare
 `rotate_per_node` uses a default period. It is valid **only** for `device_activity`
@@ -235,17 +240,16 @@ is actively tracing within a run, use `trace_mode` (HIP/CUDA) or `follow_mode` (
 power). Env and config are therefore identical in effect for the nodepolicy; env just
 overrides the startup value (§6.2).
 
-**Planned extensions (phased — see §6.0):** two additive capabilities build on this base
-without violating "election is per-run":
-- **Phase 2 — per-window activity toggle:** re-read the `device_activity` *policy value*
-  (not the election) at each mode transition / reload, so a collector can switch
-  host-on/activity-*off* per window (e.g. activity in setup, off in the comm-bound solve).
-  The `on↔off` toggle is live; the elected collector set stays fixed. Changing the
-  *selection method* (leader↔anyone) on reload is warned + ignored.
-- **Phase 3 — round-robin (`rotate_per_node`):** the collector *rotates* over time so all
-  N GPUs are sampled at 1-collector overhead — the only meaningful "vary who over time"
-  (re-electing anyone→anyone / leader→leader is a semantic no-op). Time-derived, no IPC
-  (§6.10).
+**Planned extension (Phase 2 — see §6.0/§6.9):** one additive capability builds on this
+base without violating "election is per-run": the **runtime-live activity gate**. The
+activity-collect decision becomes a live predicate re-evaluated on the control thread —
+`(trace_mode==TRACING) AND (device_activity selects this rank NOW)` — so it can change
+within a run, driven by config/`window_end_action` events (host-on / activity-*off* per
+window, e.g. activity in setup, off in the comm-bound solve) and/or by a time function
+(`rotate_per_node:<ms>`: the collector rotates so all N GPUs are sampled at 1-collector
+overhead — the only meaningful "vary who over time"; re-electing anyone→anyone /
+leader→leader is a semantic no-op). The *policy value* is live; the *election / selection
+method* stays pinned per-run (method changes on reload are warned + ignored).
 
 ---
 
@@ -330,20 +334,18 @@ boundaries match the sub-sections.
 > is untested (no NVIDIA hardware). Eval `run_rep.sh` migrated to config-based
 > `device_activity`.
 
-### 6.0 Implementation order (three phases, each a superset of the last)
+### 6.0 Implementation order (two phases)
 
-- **Phase 1 — base per-run nodepolicy (§6.1–6.8).** `off | on | anyone_per_node |
-  leader_per_node` for `device_activity` (HIP/CUDA) + energy `measure`. Resolved once at
-  startup; gate at pool-open / energy-init. **This is the validated fix** (16×4 +16.9%→
-  +3.8%) and delivers the immediate value. Ship first.
-- **Phase 2 — per-window activity toggle (§6.9).** Re-read the `device_activity` *policy
-  value* live at mode transitions / reload (election stays per-run) so a collector can be
-  host-on / activity-*off* per window — e.g. activity in setup, off in the comm-bound
-  solve. ~½–1 day; reuses `apply_mode` + the proven cyclic enable/disable path.
-- **Phase 3 — round-robin `rotate_per_node:<ms>` (§6.10).** Rotate the single collector
-  across ranks over time → all N GPUs sampled at 1-collector overhead, and the
-  persistent-straggler residual spread out. ~1–2 days; reuses Phase 2's toggle driven by a
-  control-thread timer. HIP/CUDA only.
+- **Phase 1 — base per-run nodepolicy (§6.1–6.8). DONE & validated.** `off | on |
+  anyone_per_node | leader_per_node` for `device_activity` (HIP/CUDA) + energy `measure`.
+  Resolved once at startup; gate at pool-open / energy-init. The validated fix (16×4 e2e:
+  on +18.3%, leader/anyone ~+3%).
+- **Phase 2 — runtime-live activity gate (§6.9).** One combined feature (formerly split as
+  "per-window toggle" + "round-robin"): make the activity-collect decision **live** and
+  re-evaluated on the control thread, so it can change *within a run* — driven by config/
+  `window_end_action` events (host-on / activity-*off* per window) **and/or** by a time
+  function (`rotate_per_node:<ms>` — rotate the single collector so all N GPUs are sampled).
+  Same open/close primitive, same "election pinned per-run" invariant. HIP/CUDA only.
 
 ### 6.1 Config representation — DSL-declared nodepolicy keys (no new file)
 
@@ -448,7 +450,7 @@ const char *pinsight_nodepolicy_str(pinsight_nodepolicy_t p);
 int pinsight_get_nodepolicy_index(int domain_index, const char *key); /* name->index, parser/init only */
 
 /* Does THIS process perform measurement <lockname> under <policy>? 1 = measure, 0 = skip.
- * Handles OFF/ON/ANYONE/LEADER; ROTATE is dispatched to the rotation subsystem (§6.10),
+ * Handles OFF/ON/ANYONE/LEADER; ROTATE is dispatched to the rotation subsystem (§6.9),
  * which reuses this per time-slice. Cached per <lockname> (incl. held flock fd). */
 int pinsight_node_role(const char *lockname, pinsight_nodepolicy_t policy);
 ```
@@ -560,9 +562,7 @@ Reads only the `pinsight_mpi_local_rank` global (set by the MPI wrapper) — no 
 **No new source files** — the enum, structs, and resolver all live in existing
 `trace_config.{h,c}`; the DSL keys in the existing domain headers.
 
-Phases 2–3 (later) touch: `src/roctracer_callback.c` (Phase 2 reload trigger; read policy
-live), `src/cupti_callback.c` (analog), `src/pinsight_control_thread.c` (Phase 3 rotation
-tick, reusing the power-polling timer), `src/trace_config.{h,c}` (rotation selector helper).
+Phase 2 (the runtime-live activity gate, later) has its own file-change summary in §6.9.9.
 Still no new files.
 
 ### 6.8 Test / validation plan
@@ -585,63 +585,205 @@ Still no new files.
 
 ---
 
-### 6.9 Phase 2 — per-window activity toggle (host-on / activity-off per window)
+### 6.9 Phase 2 — runtime-live activity gate (per-window toggle + round-robin, unified)
 
-Makes the `device_activity` *policy value* live (per-window) while keeping the *election*
-per-run. Only `on↔off` toggles; the elected collector set never changes.
+Phase 1 resolves `device_activity` **once at startup** and caches the collect decision.
+Phase 2 makes that decision **live** — a single function re-evaluated on the control thread,
+whose result drives one open/close primitive. The *value* changes over a run (via config /
+`window_end_action`, or a time function for `rotate`); the *election* (which specific rank is
+the singleton for `anyone`/`leader`) stays **pinned per-run**. This one mechanism subsumes
+what were previously two phases (per-window on/off + round-robin rotation).
 
-- **Election cached once (per-run); policy value read live.** Revises §6.3's "compute once,
-  cached" to: `eligible(this_rank)` (from the cached election) is fixed; the on/off is read
-  from `domain_default_trace_config[HIP].nodepolicy[idx].policy` at each transition.
-- **Effective gate:** `should_collect = eligible AND (policy != off) AND trace_mode==TRACING`.
-  Host callbacks stay ungated → host HIP tracing unaffected (this is the "host-on /
-  activity-off" state `trace_mode` alone cannot express).
-- **New reload trigger.** Today `apply_mode` fires on a *mode* change. A `device_activity`
-  flip with no mode change (still `TRACING`, activity `on→off`) must also act: on config
-  reload, if HIP is `TRACING` and the activity-enable state changed, call the existing
-  pool open (alloc+enable) or close (flush+free) path. ~a dozen lines; the open/close code
-  already exists in `apply_mode`.
-- **Selection method pinned.** A reload that changes `anyone_per_node`↔`leader_per_node`
-  (or `↔rotate`) is warned + ignored — no re-election, nothing hops (§4.5).
-- **Overhead:** zero steady-state (checked at transitions, not per HIP call); one pool
-  close/open per switch (≈ a mode transition); net *lower* than always-on since activity is
-  skipped in the costly windows. Built on the **verified cyclic enable/disable** path.
+#### 6.9.1 The unified gate
 
-### 6.10 Phase 3 — round-robin rotation (`rotate_per_node:<ms>`)
+Split Phase 1's cached `hip_activity_should_collect()` into a *live* predicate:
 
-Rotate the single collector across the node's ranks over time → all N GPUs sampled at
-1-collector overhead. Reuses Phase 2's toggle on a control-thread timer.
+```c
+/* Live per-rank decision, evaluated on the control thread. */
+static int hip_should_collect_now(void) {
+    if (domain_default_trace_config[HIP].mode != PINSIGHT_DOMAIN_TRACING)
+        return 0;                                   /* master gate: activity only in TRACING */
+    pinsight_nodepolicy_val_t v =
+        domain_default_trace_config[HIP].nodepolicy[HIP_NODEPOLICY_DEVICE_ACTIVITY]; /* read LIVE */
+    switch (v.policy) {
+      case OFF:            return 0;
+      case ON:             return 1;
+      case ANYONE_PER_NODE:
+      case LEADER_PER_NODE:return hip_elected_collector;      /* cached per-run (Phase-1 election) */
+      case ROTATE_PER_NODE:return (hip_local_rank ==
+                                   (mono_now_ms() / v.param) % hip_ranks_per_node);
+    }
+    return 0;
+}
+```
 
-- **Time-derived selection, zero IPC.** Each rank computes the collector independently from
-  the node-wide clock — no barrier, no shared memory, no per-rotation MPI:
-  ```
-  collector_local_rank(t) = floor(CLOCK_MONOTONIC(t) / T) mod N        /* T = period ms */
-  this_rank_collects(t)   = (my_local_rank == collector_local_rank(t))
-                            AND (trace_mode == TRACING)
-  ```
-  `CLOCK_MONOTONIC` is node-wide (one kernel/node), so all local ranks agree without
-  communicating. Rotation is per-node independent (cross-node skew irrelevant).
-- **Inputs:** `my_local_rank` (env / MPI split, §6.5); `N` = ranks/node from
-  `MPI_Comm_split_type` **size** (rotation runs mid-run, post-`MPI_Init`; env
-  `SLURM_NTASKS_PER_NODE` fallback); `T` from the `rotate_per_node:<ms>` param (default when
-  omitted).
-- **Control-thread rotation tick** (reuse the `sem_timedwait` timer shared with power
-  polling): each tick recompute `this_rank_collects`; on change, open/close the pool via the
-  Phase 2 path. The pool lifecycle is already control-thread-owned → no cross-thread races.
-- **Boundary overlap is harmless.** Tick skew can leave *two* ranks collecting for <1 tick
-  at a boundary — but overhead only appears at **≥3 collectors/node** (16×2 was +0.5%), so a
-  brief 2-collector handoff never reaches the threshold. No guard band needed; pick
-  `tick ≪ T`.
-- **Overhead & benefit:** steady-state = `leader_per_node` (~+3.8%), just a different rank
-  over time; one pool close+open per `T` (≈10 transitions over a 10 s solve at `T=1 s`);
-  and it **spreads the +0.9% persistent-straggler residual** across ranks (plausibly
-  *lower* than fixed `leader`).
-- **Analysis caveat:** coverage is **time-sliced per GPU** (each GPU has records only during
-  its 1/N slices). Fine for aggregate/statistical GPU behavior; a continuous per-GPU
-  timeline has gaps. Analysis should tag each record's slice and compute per-GPU stats over
-  covered intervals.
-- **Proven substrate:** this is cyclic enable/disable on a timer — the cyclic path is
-  already verified (no crash, `hipKernelActivity==hipKernelLaunch` per window).
+Cached-per-run state (resolved once, at first activation): `hip_elected_collector` (the
+Phase-1 `pinsight_node_role` result for `anyone`/`leader`), `hip_local_rank`,
+`hip_ranks_per_node`. The **policy value is read live**; the **election is not**.
+
+#### 6.9.2 The one driver (open/close on change)
+
+```c
+/* Control-thread only (pool is control-thread-owned). Idempotent. */
+static int hip_collect_state = 0;   /* last applied */
+static void hip_activity_apply_collect_state(void) {
+    int s = hip_should_collect_now();
+    if (s == hip_collect_state) return;
+    if (s) { open_pool(); enable_domain_activity(); hip_activity_emit = 1; }
+    else   { flush();                 /* emits the on-window tail while emit==1 */
+             hip_activity_emit = 0;
+             disable_domain_activity();/* stops the per-op HSA instrumentation  */
+             close_pool(); }           /* frees 2MB + DEREGISTERS buffer callback */
+    hip_collect_state = s;
+}
+```
+
+Both former phases are just *different triggers* of this one function.
+
+**Pool lifecycle on toggle — full teardown, no dormant pool.** Every off-transition does
+the complete sequence `flush → clear emit → disable_domain_activity → close_pool`; every
+on-transition does `open_pool → enable_domain_activity → set emit`. Two layers, distinct
+costs:
+- `enable/disable_domain_activity` controls the **per-op collection instrumentation** — the
+  actual overhead source (+18%). It toggles at every switch; this is the overhead-critical
+  deregistration.
+- `open/close_pool` controls the **buffer + buffer-callback registration**. An
+  open-but-disabled pool is near-zero *runtime* cost (the callback fires only when records
+  arrive; disabled collection produces none — verified: static MONITORING with pool open =
+  0 records, no flush churn), costing only the 2 MB buffer. We close it anyway: Phase-2
+  toggles are long-lived (windows) or paced (rotation T ≈ 1 s), so one close+open per
+  switch is trivial, and full teardown is the cleaner contract (no live pool when off).
+- **Validation caveat:** the verified cyclic test (2026-06-25) toggled *collection* with the
+  pool held open; **repeated full close→open cycling within one run** is exercised today
+  only at STANDBY transitions — §6.9.10 adds an explicit stress test for it.
+- **CUPTI asymmetry (CUDA):** CUPTI has **no unregister API** for activity buffer callbacks
+  (`cuptiActivityRegisterCallbacks` is one-way; registered once behind a flag). CUDA "off" =
+  `cuptiActivityDisable(all kinds)` + `cuptiActivityFlushAll` — record generation stops and
+  no buffers are requested, so the dormant registration is zero-cost, but the callback
+  pointers remain registered (API limitation, functionally equivalent).
+
+#### 6.9.3 Trigger points
+
+| trigger | who calls | catches |
+|---|---|---|
+| **Init / first activation** | `LTTNG_ROCTRACER_Init` (adapt Phase-1 site) | initial state |
+| **Mode transition** | `pinsight_control_hip_apply_mode` — *refactor* so its pool open/close **goes through** `hip_activity_apply_collect_state` instead of inline mode checks | TRACING↔MONITORING/STANDBY/OFF (re-evaluates activity given the new mode) |
+| **Config reload** | control-thread reload path, after re-parse | `device_activity` value flips (`on↔off`, or a `window_end_action` change) |
+| **Periodic tick** (`rotate` only) | control loop `sem_timedwait` branch | time-derived rotation boundaries |
+
+**Refactor note:** today `apply_mode` opens/closes the pool with inline `mode==TRACING`
+checks. Replace those with a single `hip_activity_apply_collect_state()` call at the end of
+`apply_mode` — the mode is already committed to `domain_default_trace_config` by then, so the
+gate sees it. This removes duplicated pool logic and makes mode- and policy-driven control
+share one path.
+
+#### 6.9.4 Selection-method pinned; live value only toggles within the pinned set
+
+A config reload (or `window_end_action`) may change the *value* among
+`off / on / <the run's elected method>`; a change of *method*
+(`anyone_per_node↔leader_per_node↔rotate_per_node`) mid-run is **warned + ignored**, so the
+elected singleton / rotation identity never hops (§4.5). Concretely: the election and
+`rotate` params (`T`, `N`) are captured at first activation; later reloads update only the
+`off`/`on`/`active` dimension.
+
+#### 6.9.5 `rotate_per_node` specifics
+
+- **Time-derived, zero IPC:** `collector_local_rank = (CLOCK_MONOTONIC_ms / T) mod N`.
+  `CLOCK_MONOTONIC` is node-wide (one kernel/node) so all local ranks agree without
+  communicating; rotation is per-node independent.
+- **`N` (ranks/node)** from `MPI_Comm_split_type(SHARED)` **size** (rotation is active
+  mid-run, post-`MPI_Init`; §6.5); env `SLURM_NTASKS_PER_NODE` fallback; if unknown, `rotate`
+  degrades to `leader` (no tick).
+- **Conditional tick:** the control loop enables its `sem_timedwait(tick)` branch **only when
+  the live policy is `rotate`** (pick `tick ≪ T`, e.g. 50 ms). For all other policies the
+  loop stays purely event-driven (`sem_wait`) — **zero polling overhead** for Phase-2 usage
+  that doesn't rotate.
+- **Boundary overlap is harmless:** tick skew can leave *two* ranks collecting for <1 tick at
+  a boundary, but overhead only appears at **≥3 collectors/node** (16×2 was +0.5%), so a
+  2-collector handoff never reaches the threshold. No guard band.
+
+#### 6.9.6 Automatic per-window hook — `window_end_action` extension (optional layer)
+
+The core above gives per-window toggling via **manual/scripted** config reload (`SIGUSR1`).
+To fire it **automatically** at a window boundary — the "activity in setup, off in solve"
+case — extend the existing `window_end_action` grammar (which already drives per-domain
+`trace_mode` at window end) to also accept an activity target:
+
+```ini
+[Lexgion.default]
+    window_timeout    = <setup_seconds>
+    window_end_action = HIP:device_activity=off      # activity off; trace_mode stays TRACING
+```
+
+- Parser: `parse_window_end_action` accepts `Domain:device_activity=<value>` alongside the
+  mode keywords; stores the target nodepolicy value in the end-action struct.
+- Apply: when the window ends, set `domain_default_trace_config[HIP].nodepolicy[...]` to the
+  target value (method-change still ignored) → the next `hip_activity_apply_collect_state`
+  toggles the pool. **Leaves `trace_mode` untouched** (so host tracing stays on — the whole
+  point; §"host-on/activity-off"). Using an activity target and a mode change in the same
+  action is contradictory (mode≠TRACING makes activity moot) — the parser warns.
+
+This layer is **separable**: ship 6.9.1–6.9.5 first (manual/reload + rotate), add 6.9.6 if
+automatic window-driven activity toggling is wanted.
+
+#### 6.9.7 CUDA
+
+Mirror in `cupti_callback.c`: a live `cuda_should_collect_now()` + apply function; refactor
+`pinsight_control_cuda_apply_mode` the same way; same conditional tick. (Untestable here — no
+NVIDIA hardware.)
+
+#### 6.9.8 Overhead, coverage, analysis
+
+- **Steady state:** unchanged from Phase 1 — the gate is checked at transitions/ticks, never
+  per HIP call. `rotate` steady state = `leader` (~+3%), just a different rank over time.
+- **Per switch:** one pool close+open (≈ a mode transition); `rotate` does ≈`run/T`
+  transitions. `rotate` also **spreads the +0.9% persistent-straggler residual** (plausibly
+  *lower* net than fixed `leader`).
+- **`rotate` coverage caveat:** per-GPU coverage is **time-sliced** (each GPU has records only
+  during its 1/N slices) — fine for aggregate/statistical GPU behavior; a continuous per-GPU
+  timeline has gaps. Analysis should compute per-GPU stats over each GPU's covered intervals.
+- **Proven substrate:** open/close-per-window is cyclic enable/disable, already verified
+  (no crash; `hipKernelActivity==hipKernelLaunch` per TRACING window).
+
+#### 6.9.9 File changes
+
+| Action | File |
+|---|---|
+| **Modified** | `src/roctracer_callback.c` — live `hip_should_collect_now` + `hip_activity_apply_collect_state`; refactor `apply_mode` to route pool open/close through it; init-site adapt |
+| **Modified** | `src/cupti_callback.c` — CUDA analog |
+| **Modified** | `src/pinsight_control_thread.c` — conditional `sem_timedwait` tick (rotate); call apply on reload; per-run capture of local_rank/N |
+| **Modified** | `src/pmpi_mpi.c` — publish `pinsight_mpi_local_rank` **and** ranks/node via `MPI_Comm_split_type` (§6.5; needed for rotate `N`) |
+| **Modified (6.9.6)** | `src/trace_config.{h,c}` + `trace_config_parse.c` — `window_end_action` accepts `Domain:device_activity=<value>`; end-action struct carries per-domain nodepolicy targets; apply path sets them |
+
+No new source files.
+
+#### 6.9.10 Test plan
+
+1. **Per-window toggle (reload):** 1 node, `device_activity=on`, run; mid-run rewrite to
+   `off` + `SIGUSR1` → activity records stop, host `hipKernelLaunch` continues; rewrite to
+   `on` → resume. Assert `hipKernelActivity` present only in the on-windows.
+2. **Method-pin:** reload `leader_per_node`→`anyone_per_node` → warn + ignored; collector
+   unchanged.
+3. **`rotate_per_node:1000` (multi-rank, 1 node ×4):** over a ≥8 s run, assert each of the 4
+   devIds carries activity for ≈¼ of the run and **never >1 devId active at once** beyond a
+   sub-tick handoff.
+4. **No-tick when not rotating:** confirm the control loop stays on `sem_wait` (no periodic
+   wake) for `off/on/leader/anyone`.
+5. **`window_end_action = HIP:device_activity=off` (6.9.6):** after `window_timeout`,
+   activity stops while `trace_mode` stays TRACING (host events continue).
+6. **Repeated pool close/open stress:** long-running HIP loop (looping_pinsight.hip) with
+   `rotate_per_node:500` for ≥60 s → hundreds of full close→open cycles: assert no crash,
+   no fd/memory growth (pool alloc/free balanced), and `hipKernelActivity ==` the launches
+   that fell inside collect slices. (The verified cyclic test only toggled collection with
+   the pool open; this covers full-teardown cycling.)
+7. **16×4 regression:** `rotate_per_node` overhead ≈ `leader` (~+3%); all 4 GPUs covered
+   across the run.
+
+#### 6.9.11 Effort
+
+~2–3 days: the live gate + apply-driver + `apply_mode` refactor (core), the conditional tick
++ MPI `N` plumbing (rotate), and the optional `window_end_action` extension (6.9.6). Reuses
+the verified cyclic enable/disable path and the existing control-thread/reload machinery.
 
 ---
 
