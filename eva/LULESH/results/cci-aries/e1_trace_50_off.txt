@@ -1,5 +1,0 @@
-[Lexgion.default]
-    trace_starts_at = 0
-    max_num_traces = 50
-    tracing_rate = 1
-    trace_mode_after = OFF

@@ -132,14 +132,6 @@ experiment/lttng_roctracer/vecadd_roctracer
 experiment/lttng_roctracer/vecadd_lttng_traces/
 
 # Local benchmark repo clones (not submodules — just local checkouts)
-eva/AMG/
-eva/AMG2023-tuolumne/
-eva/Castro/source/
-eva/Kripke/
-eva/LULESH/source/
-eva/Quicksilver/
-eva/cuda-samples/
-eva/mlperfhpc/
-eva/warpx/
+eva/
 test/LULESH/
 test/cuda-samples/
