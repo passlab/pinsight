@@ -202,6 +202,16 @@ _EXTERN_C_ int PMPI_Init_thread(int *argc, char ***argv, int required,
 extern void pinsight_control_thread_wakeup(int reason);
 
 static void pinsight_mpi_publish_node_info(void) {
+  /* Diagnostic gate (2026-07-26 ghost-mode discriminator): PINSIGHT_NO_MPI_NODE_INFO=1
+   * skips the split_type publish entirely — same binary, runtime-selected. The
+   * split's early comm alloc/free was the prime suspect for perturbing glibc
+   * adaptive malloc state and was EXONERATED by the discriminator (see
+   * code-memory amg2023_eval_overhead); the gate stays for future A/B use.
+   * Leader election still works via the launcher env chain; rotate degrades
+   * to leader. */
+  const char *skip = getenv("PINSIGHT_NO_MPI_NODE_INFO");
+  if (skip && *skip && *skip != '0')
+    return;
   MPI_Comm node_comm;
   if (PMPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
                            MPI_INFO_NULL, &node_comm) == MPI_SUCCESS) {

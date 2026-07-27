@@ -6,9 +6,14 @@
 activity gate incl. rotate, §6.9) IMPLEMENTED 2026-07-24: functional tests 5/5 PASS
 (reload toggle, 4-rank rotate w/ MPI-publish poke fix, window_end_action activity target,
 close/open stress, method pin); 16×4 `winoff` scenario validated (+4.0% solve, activity
-through setup, auto-off before solve). ⚠ 16×4 overhead numbers for plain on/off arms hit
-an UNRESOLVED bimodal anomaly (see code-memory amg2023_eval_overhead "OPEN ANOMALY") —
-per-arm overhead conclusions deferred pending cross-day replication.
+through setup, auto-off before solve). Note on 16×4 overhead numbers: a machine-level
+bistable slow state (+~15%, Allreduce-amplified jitter; see code-memory
+amg2023_eval_overhead) can afflict runs probabilistically — activity-ON attracts it under
+the Phase-1 code (~90%), no-pool arms under Phase-2 (~75%), and it is NOT caused by any
+PInsight mechanism (logic/layout/MPI-publish all individually exonerated; full collection
+verified to run at +3.9% when the state is absent). Guidance: prefer leader/anyone/rotate/
+winoff modes (never observed in the state) or a tcmalloc preload under glibc; validate any
+overhead measurement per-run with peam/src/mpi_jitter.py (--baseline + signature verdict).
 **Related:** [energy_power_implementation_plan.md](energy_power_implementation_plan.md),
 code-memory `amg2023_eval_overhead`, `hip_activity_overhead_refs`, `energy_power_support`
 
