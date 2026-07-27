@@ -1,0 +1,1783 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmfxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="xmldefinition.xsd">
+	<!-- XSD definition: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.analysis.xml.core/src/org/eclipse/tracecompass/tmf/analysis/xml/core/module -->
+
+	<!-- The state provider assigns states from events -->
+	<stateProvider id="xxx.pinsight.tracecompass.stateProvider" version="0">
+		<head>
+			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
+			<label value="PInsight OpenMP and CUDA Trace Analysis" />
+		</head>
+		
+		<!-- =============================================================================================== -->
+		<!-- == LTTng: states for lttng_ust_statedump:start|procname|bin_info|build_id, which are for   ==== -->
+		<!-- == starting LTTng UST and for loading shared library used by the application               ==== -->
+		<!-- =============================================================================================== -->
+		<definedValue name="LTTNG_UST_STATEDUMP_STARTED" value="10000" />
+		<definedValue name="LTTNG_UST_STATEDUMP_LIB_LOADED" value="10001" />
+		<definedValue name="LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" value="10002" />
+
+		<!-- =============================================================================================== -->
+		<!-- == PInsight: states for trace records of starting and stopping PInsight ==== -->
+		<!-- =============================================================================================== -->
+		<definedValue name="PINSIGHT_STATE_STARTED" value="10100" />
+		<definedValue name="PINSIGHT_STATE_TERMINATED" value="10101" />
+
+		<!-- =============================================================================================== -->
+		<!-- ============== OpenMP: states for processing OMP trace records ============= -->
+		<!-- =============================================================================================== -->
+		<!-- Convenience names for the thread state values -->
+		<definedValue name="OMP_STATE_THREAD_STARTED" value="10201" />
+		<definedValue name="OMP_STATE_THREAD_IDLE" value="10202" />
+		<definedValue name="OMP_STATE_TRANSITION" value="110209" /> <!-- changing state -->
+
+		<definedValue name="OMP_STATE_IN_SEQUENTIAL" value="10210" />
+
+		<!-- 220 - 249 are for those states in which threads are doing work -->
+		<definedValue name="OMP_STATE_IN_PARALLEL" value="10220" />
+		<definedValue name="OMP_STATE_IN_IMPLICIT_TASK" value="10221" />
+		<definedValue name="OMP_STATE_IN_WORK" value="10222" />
+		<definedValue name="OMP_STATE_IN_MASKED_MASTER" value="10227" />
+
+		<!-- 250 - 269 are for those states in which threads are synchronizing -->
+		<definedValue name="OMP_STATE_IN_SYNC" value="10251" />
+		<definedValue name="OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" value="10252" />
+		<definedValue name="OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" value="10253" />
+		<definedValue name="OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" value="10254" />
+
+		<definedValue name="OMP_STATE_THREAD_TERMINATED" value="10300" />
+		
+		<!-- Event handlers for Processor-state state system -->
+		<!-- Event handlers for OS thread state system -->
+		<!-- Event handlers for OMP thread state system -->
+		<!-- Event handlers for OMP thread-CPU state system -->
+		<!-- Event handlers for OMP parallel region state system -->
+		<!-- Event handlers for OMP instances of parallel regions state system -->
+
+		<!-- The following locations (attributes for the state systems) are used for  -->
+		<!-- showing the thread states of each category, mapping OMP threads to CPU, etc -->
+		<location id="Processor">
+			<stateAttribute type="constant" value="Processor" />
+			<stateAttribute type="eventField" value="cpu" />
+		</location>
+
+		<location id="OSThread">
+			<stateAttribute type="constant" value="OS Thread" />
+			<stateAttribute type="eventField" value="context._vtid" />
+		</location>
+	
+		<location id="OMPGlobalThread">
+			<stateAttribute type="constant" value="OMP Global Thread" />
+			<stateAttribute type="eventField" value="global_thread_num" />
+		</location>
+
+		<location id="OMPTeamThread">
+			<stateAttribute type="constant" value="OMP Team" />
+			<stateAttribute type="eventField" value="omp_team_num" />
+			<stateAttribute type="constant" value="OMP Thread" />
+			<stateAttribute type="eventField" value="omp_thread_num" />
+		</location>
+	
+		<!-- Attribute Keys -->	
+		<location id="ProcessorOSThread">
+			<stateAttribute type="location" value="Processor"/>
+			<stateAttribute type="location" value="OSThread" />
+		</location>
+
+		<location id="ProcessorOSThreadOMPGlobalThread">
+			<stateAttribute type="location" value="Processor"/>
+			<stateAttribute type="location" value="OSThread" />
+			<stateAttribute type="location" value="OMPGlobalThread" />
+		</location>
+
+		<location id="ProcessorOSThreadOMPGlobalThreadOMPTeamThread">
+			<stateAttribute type="location" value="Processor"/>
+			<stateAttribute type="location" value="OSThread" />
+			<stateAttribute type="location" value="OMPGlobalThread" />
+			<stateAttribute type="location" value="OMPTeamThread" />
+		</location>
+		
+		
+		<location id="OMPTeamThreadProcessor">
+			<stateAttribute type="location" value="OMPTeamThread" />
+			<stateAttribute type="constant" value="Processor" />
+		</location>
+
+		<location id="OMPParallelRegion">
+			<stateAttribute type="constant" value="OMP Parallel Region" />
+			<stateAttribute type="eventField" value="parallel_codeptr" />
+			<stateAttribute type="location" value="OMPTeamThread" />
+		</location>
+		
+		<location id="OMPParallelRegionInstance">
+			<stateAttribute type="constant" value="OMP Parallel Region Instance" />
+			<stateAttribute type="eventField" value="parallel_codeptr" />
+			<stateAttribute type="constant" value="Instance" />
+			<stateAttribute type="eventField" value="parallel_record_id" />
+			<stateAttribute type="location" value="OMPTeamThread" />
+		</location>
+
+		<eventHandler eventName="lttng_ust_statedump:start">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="lttng_ust_statedump:bin_info">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_LIB_LOADED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_LIB_LOADED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_LIB_LOADED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_LIB_LOADED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_LIB_LOADED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="lttng_ust_statedump:end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="pinsight_enter_exit_lttng_ust:enter_pinsight">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="pinsight_enter_exit_lttng_ust:exit_pinsight">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$PINSIGHT_STATE_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_STARTED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_THREAD_TERMINATED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_IMPLICIT_TASK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:implicit_task_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:work_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_WORK" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:work_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_MASKED_MASTER" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:masked_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_SYNC" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_wait_begin">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:parallel_join_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_explicit_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="ompt_pinsight_lttng_ust:barrier_implicit_sync_wait_end">
+			<stateChange>
+				<stateAttribute type="location" value="Processor"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="ProcessorOSThreadOMPGlobalThreadOMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThread"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegion"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPParallelRegionInstance"/>
+				<stateValue type="int" value="$OMP_STATE_TRANSITION" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="OMPTeamThreadProcessor"/>
+				<stateValue type="eventField" value="cpu" />
+			</stateChange>
+		</eventHandler>
+		<!-- =============================================================================================== -->
+		<!-- ============== CUDA: states and event handlers for processing CUDA trace records ============= -->
+		<!-- =============================================================================================== -->
+		
+		<!-- Convenience names for the CUDA device state values -->	
+		<definedValue name="CUDA_STATE_CUDA_NOT_USED" value="10700" />
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_H2H" value="10701" />
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_H2D" value="10702" />
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_D2H" value="10703" />
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_D2D" value="10704" />
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_UNKNOWN" value="10705" />
+		<definedValue name="CUDA_STATE_CUDA_KERNEL_EXE" value="10720" />
+		
+		<!-- Event handlers for CUDA device state system -->
+		<location id="CUDADevice">
+			<stateAttribute type="constant" value="CUDA Device" />
+			<stateAttribute type="eventField" value="devId" />
+		</location>
+		
+		<location id="CUDADeviceKernel">
+			<stateAttribute type="location" value="CUDADevice" />
+			<stateAttribute type="constant" value="CUDA Kernel" />
+			<stateAttribute type="eventField" value="kernel_func" />
+		</location>
+
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaMemcpy_begin">
+			<stateChange>
+				<if><condition operator="eq">
+						<stateValue type="eventField" value="cudaMemcpyKind" />
+						<stateValue type="string" value="cudaMemcpyHostToHost" /> <!--  Host to Host memcpy -->
+				</condition></if>
+				<then>
+					<stateAttribute type="location" value="CUDADevice" />
+					<stateValue type="int" value="$CUDA_STATE_CUDA_MEMCPY_H2H" />
+				</then>
+				<else>
+					<if><condition operator="eq">
+						<stateValue type="eventField" value="cudaMemcpyKind" />
+						<stateValue type="string" value="cudaMemcpyHostToDevice" /> <!--  Host to Device memcpy -->
+					</condition></if>
+					<then>
+						<stateAttribute type="location" value="CUDADevice" />
+						<stateValue type="int" value="$CUDA_STATE_CUDA_MEMCPY_H2D" />
+					</then>
+					<else>
+						<if><condition operator="eq">
+							<stateValue type="eventField" value="cudaMemcpyKind" />
+							<stateValue type="string" value="cudaMemcpyDeviceToHost" /> <!-- Device to Host memcpy -->
+						</condition></if>
+						<then>
+							<stateAttribute type="location" value="CUDADevice" />
+							<stateValue type="int" value="$CUDA_STATE_CUDA_MEMCPY_D2H" />
+						</then>
+						<else>
+							<if><condition operator="eq">
+								<stateValue type="eventField" value="cudaMemcpyKind" />
+								<stateValue type="string" value="cudaMemcpyDeviceToDevice" /> <!--  Device to CUDA Device memcpy -->
+							</condition></if>
+							<then>
+								<stateAttribute type="location" value="CUDADevice" />
+								<stateValue type="int" value="$CUDA_STATE_CUDA_MEMCPY_D2D" />
+							</then>
+							<else>
+								<stateAttribute type="location" value="CUDADevice" />
+								<stateValue type="int" value="$CUDA_STATE_CUDA_MEMCPY_UNKNOWN" /> <!--  Unknown direction -->
+							</else>	
+						</else>
+					</else>
+				</else>
+			</stateChange>	
+		</eventHandler>
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaMemcpy_end">
+			<stateChange>
+				<stateAttribute type="location" value="CUDADevice" />
+				<stateValue type="int" value="$CUDA_STATE_CUDA_NOT_USED" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaKernelLaunch_begin">
+			<stateChange>
+				<stateAttribute type="location" value="CUDADevice" />
+				<stateValue type="int" value="$CUDA_STATE_CUDA_KERNEL_EXE"/>
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="CUDADeviceKernel" />
+				<stateValue type="int" value="$CUDA_STATE_CUDA_KERNEL_EXE"/>
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="cupti_pinsight_lttng_ust:cudaKernelLaunch_end">
+			<stateChange>
+				<stateAttribute type="location" value="CUDADevice" />
+				<stateValue type="int" value="$CUDA_STATE_CUDA_NOT_USED"/>
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="CUDADeviceKernel" />
+				<stateValue type="int" value="$CUDA_STATE_CUDA_NOT_USED"/>
+			</stateChange>
+		</eventHandler>
+		
+		<!-- =============================================================================================== -->
+		<!-- ============== HIP: states and event handlers for processing HIP/ROCTracer records =========== -->
+		<!-- =============================================================================================== -->
+		<!-- Mirrors the CUDA block. devId encodes the APU and (on multi-APU runs)
+		     also separates MPI ranks (AMG: devId = rank + 4). Schema verified vs
+		     src/roctracer_lttng_ust_tracepoint.h. NOTE: GPU activity records
+		     (hipKernelActivity/hipMemcpyActivity) carry their own begin_ns/end_ns
+		     but arrive at flush time, so they cannot become intervals in a state
+		     provider (which keys on the event's own timestamp); the states below are
+		     the HOST-side API spans (correct begin/end pairs), as the CUDA block. -->
+		<definedValue name="HIP_STATE_NOT_USED"        value="10800" />
+		<definedValue name="HIP_STATE_MEMCPY_H2H"      value="10801" />
+		<definedValue name="HIP_STATE_MEMCPY_H2D"      value="10802" />
+		<definedValue name="HIP_STATE_MEMCPY_D2H"      value="10803" />
+		<definedValue name="HIP_STATE_MEMCPY_D2D"      value="10804" />
+		<definedValue name="HIP_STATE_MEMCPY_DEFAULT"  value="10805" />
+		<definedValue name="HIP_STATE_KERNEL_EXE"      value="10820" />
+		<definedValue name="HIP_STATE_MALLOC"          value="10830" />
+		<definedValue name="HIP_STATE_FREE"            value="10831" />
+		<definedValue name="HIP_STATE_DEVICE_SYNC"     value="10840" />
+		<definedValue name="HIP_STATE_STREAM_SYNC"     value="10841" />
+
+		<location id="HIPDevice">
+			<stateAttribute type="constant" value="HIP Device" />
+			<stateAttribute type="eventField" value="devId" />
+		</location>
+		<location id="HIPDeviceKernel">
+			<stateAttribute type="location" value="HIPDevice" />
+			<stateAttribute type="constant" value="HIP Kernel" />
+			<stateAttribute type="eventField" value="hip_func" />
+		</location>
+
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipKernelLaunch_begin">
+			<stateChange>
+				<stateAttribute type="location" value="HIPDevice" />
+				<stateValue type="int" value="$HIP_STATE_KERNEL_EXE" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="HIPDeviceKernel" />
+				<stateValue type="int" value="$HIP_STATE_KERNEL_EXE" />
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipKernelLaunch_end">
+			<stateChange>
+				<stateAttribute type="location" value="HIPDevice" />
+				<stateValue type="int" value="$HIP_STATE_NOT_USED" />
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="location" value="HIPDeviceKernel" />
+				<stateValue type="int" value="$HIP_STATE_NOT_USED" />
+			</stateChange>
+		</eventHandler>
+
+		<!-- hipMemcpy (sync): direction is the hipMemcpyKind enum field -->
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipMemcpy_begin">
+			<stateChange>
+				<if><condition operator="eq">
+					<stateValue type="eventField" value="hipMemcpyKind" />
+					<stateValue type="string" value="hipMemcpyHostToHost" />
+				</condition></if>
+				<then>
+					<stateAttribute type="location" value="HIPDevice" />
+					<stateValue type="int" value="$HIP_STATE_MEMCPY_H2H" />
+				</then>
+				<else>
+					<if><condition operator="eq">
+						<stateValue type="eventField" value="hipMemcpyKind" />
+						<stateValue type="string" value="hipMemcpyHostToDevice" />
+					</condition></if>
+					<then>
+						<stateAttribute type="location" value="HIPDevice" />
+						<stateValue type="int" value="$HIP_STATE_MEMCPY_H2D" />
+					</then>
+					<else>
+						<if><condition operator="eq">
+							<stateValue type="eventField" value="hipMemcpyKind" />
+							<stateValue type="string" value="hipMemcpyDeviceToHost" />
+						</condition></if>
+						<then>
+							<stateAttribute type="location" value="HIPDevice" />
+							<stateValue type="int" value="$HIP_STATE_MEMCPY_D2H" />
+						</then>
+						<else>
+							<if><condition operator="eq">
+								<stateValue type="eventField" value="hipMemcpyKind" />
+								<stateValue type="string" value="hipMemcpyDeviceToDevice" />
+							</condition></if>
+							<then>
+								<stateAttribute type="location" value="HIPDevice" />
+								<stateValue type="int" value="$HIP_STATE_MEMCPY_D2D" />
+							</then>
+							<else>
+								<stateAttribute type="location" value="HIPDevice" />
+								<stateValue type="int" value="$HIP_STATE_MEMCPY_DEFAULT" />
+							</else>
+						</else>
+					</else>
+				</else>
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipMemcpy_end">
+			<stateChange>
+				<stateAttribute type="location" value="HIPDevice" />
+				<stateValue type="int" value="$HIP_STATE_NOT_USED" />
+			</stateChange>
+		</eventHandler>
+
+		<!-- hipMemcpyAsync: same hipMemcpyKind field -->
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipMemcpyAsync_begin">
+			<stateChange>
+				<if><condition operator="eq">
+					<stateValue type="eventField" value="hipMemcpyKind" />
+					<stateValue type="string" value="hipMemcpyHostToDevice" />
+				</condition></if>
+				<then>
+					<stateAttribute type="location" value="HIPDevice" />
+					<stateValue type="int" value="$HIP_STATE_MEMCPY_H2D" />
+				</then>
+				<else>
+					<if><condition operator="eq">
+						<stateValue type="eventField" value="hipMemcpyKind" />
+						<stateValue type="string" value="hipMemcpyDeviceToHost" />
+					</condition></if>
+					<then>
+						<stateAttribute type="location" value="HIPDevice" />
+						<stateValue type="int" value="$HIP_STATE_MEMCPY_D2H" />
+					</then>
+					<else>
+						<stateAttribute type="location" value="HIPDevice" />
+						<stateValue type="int" value="$HIP_STATE_MEMCPY_DEFAULT" />
+					</else>
+				</else>
+			</stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipMemcpyAsync_end">
+			<stateChange>
+				<stateAttribute type="location" value="HIPDevice" />
+				<stateValue type="int" value="$HIP_STATE_NOT_USED" />
+			</stateChange>
+		</eventHandler>
+
+		<!-- hipMalloc / hipFree -->
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipMalloc_begin">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_MALLOC" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipMalloc_end">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_NOT_USED" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipFree_begin">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_FREE" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipFree_end">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_NOT_USED" /></stateChange>
+		</eventHandler>
+
+		<!-- hipDeviceSynchronize / hipStreamSynchronize -->
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipDeviceSync_begin">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_DEVICE_SYNC" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipDeviceSync_end">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_NOT_USED" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipStreamSync_begin">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_STREAM_SYNC" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="roctracer_pinsight_lttng_ust:hipStreamSync_end">
+			<stateChange><stateAttribute type="location" value="HIPDevice" /><stateValue type="int" value="$HIP_STATE_NOT_USED" /></stateChange>
+		</eventHandler>
+
+		<!-- =============================================================================================== -->
+		<!-- ============== MPI: states and event handlers for processing MPI trace records ============= -->
+		<!-- =============================================================================================== -->
+		<!-- Per-RANK -> per-THREAD timeline keyed on the "MPI Rank" top-level grouping
+		     so a multi-rank run shows one sub-tree per rank. Schema verified vs
+		     src/pmpi_lttng_ust_tracepoint.h (mpirank, global_thread_num).
+		     begin -> call category state ; end -> NOT_IN_MPI. -->
+		<definedValue name="MPI_STATE_NOT_IN_MPI"      value="10900" />
+		<definedValue name="MPI_STATE_IN_INIT"         value="10901" />
+		<definedValue name="MPI_STATE_IN_FINALIZE"     value="10902" />
+		<definedValue name="MPI_STATE_IN_P2P"          value="10910" />
+		<!-- one state per collective call (10920-10927); all share the
+		     collective color in the view so they read as one family -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Barrier"   value="10920" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Reduce"    value="10921" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Allreduce" value="10922" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Bcast"     value="10923" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Gather"    value="10924" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Allgather" value="10925" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Scatter"   value="10926" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Alltoall"  value="10927" />
+		<!-- second collective bank (10940+): 10930 is taken by WAIT -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Gatherv"              value="10940" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Scatterv"             value="10941" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Allgatherv"           value="10942" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Alltoallv"            value="10943" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Alltoallw"            value="10944" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Reduce_scatter"       value="10945" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Reduce_scatter_block" value="10946" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Scan"                 value="10947" />
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Exscan"               value="10948" />
+		<definedValue name="MPI_STATE_IN_WAIT"         value="10930" />
+
+		<location id="MPIRank">
+			<stateAttribute type="constant" value="MPI Rank" />
+			<stateAttribute type="eventField" value="mpirank" />
+		</location>
+		<location id="MPIRankThread">
+			<stateAttribute type="location" value="MPIRank" />
+			<stateAttribute type="constant" value="Thread" />
+			<stateAttribute type="eventField" value="global_thread_num" />
+		</location>
+
+		<!-- Init / Finalize -->
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Init_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_INIT" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Init_thread_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_INIT" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Finalize_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_FINALIZE" /></stateChange>
+		</eventHandler>
+		<!-- Point-to-point: Send, Recv, Isend, Irecv, Sendrecv -->
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Send_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_P2P" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Recv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_P2P" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Isend_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_P2P" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Irecv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_P2P" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Sendrecv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_P2P" /></stateChange>
+		</eventHandler>
+		<!-- Collectives -->
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Barrier_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Barrier" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Reduce_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Reduce" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allreduce_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Allreduce" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Bcast_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Bcast" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Gather_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Gather" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allgather_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Allgather" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Scatter_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Scatter" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Alltoall_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Alltoall" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Gatherv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Gatherv" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Scatterv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Scatterv" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allgatherv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Allgatherv" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Alltoallv_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Alltoallv" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Alltoallw_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Alltoallw" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Reduce_scatter_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Reduce_scatter" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Reduce_scatter_block_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Reduce_scatter_block" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Scan_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Scan" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Exscan_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_COLLECTIVE_Exscan" /></stateChange>
+		</eventHandler>
+		<!-- Completion: Wait, Waitall -->
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Wait_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_WAIT" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Waitall_begin">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_IN_WAIT" /></stateChange>
+		</eventHandler>
+		<!-- All MPI *_end events return the thread to NOT_IN_MPI -->
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Init_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Init_thread_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Finalize_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Send_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Recv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Isend_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Irecv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Sendrecv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Barrier_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Reduce_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allreduce_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Bcast_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Gather_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allgather_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Scatter_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Alltoall_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Wait_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Waitall_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Gatherv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Scatterv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Allgatherv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Alltoallv_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Alltoallw_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Reduce_scatter_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Reduce_scatter_block_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Scan_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+		<eventHandler eventName="pmpi_pinsight_lttng_ust:MPI_Exscan_end">
+			<stateChange><stateAttribute type="location" value="MPIRankThread" /><stateValue type="int" value="$MPI_STATE_NOT_IN_MPI" /></stateChange>
+		</eventHandler>
+	</stateProvider>
+
+	<!-- This is the definition of the time-graph view -->
+	<timeGraphView id="xxx.pinsight.tracecompass.timeGraphView">
+		<head>
+			<analysis id="xxx.pinsight.tracecompass.stateProvider" />
+			<label value="PInsight OpenMP and CUDA Trace View" />
+		</head>
+	
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for processors/cores ================================================= -->
+		<!-- =============================================================================================== -->
+		<!-- Colors assigned to the state values, see http://www.rapidtables.com/web/color/ -->
+		<!-- processor, so far, we use color to represent each processor 0 - 63, generated using processor_color.sh -->
+		<definedValue name="Processor 0" value="0" color="#FF0000" /> <!-- red, (255,0,0) -->
+		<definedValue name="Processor 1" value="1" color="#FF7F50" /> <!-- coral, (255,127,80) -->
+		<definedValue name="Processor 2" value="2" color="#FFFF00" /> <!-- yellow, (255,255,0) -->
+		<definedValue name="Processor 3" value="3" color="#00FF00" /> <!-- lime, (0.255.0) -->
+		<definedValue name="Processor 4" value="4" color="#00FFFF" /> <!-- aqua, (0,255,255) -->
+		<definedValue name="Processor 5" value="5" color="#0000FF" /> <!-- blue, (0,0,255) -->
+		<definedValue name="Processor 6" value="6" color="#FF00FF" /> <!-- magenta, (255,0,255) -->
+		<definedValue name="Processor 7" value="7" color="#2F4F4F" /> <!-- darkslategray, (47,79,79) -->
+		<definedValue name="Processor 8" value="8" color="#8B0000" /> <!-- darkred, (139,0,0) -->
+		<definedValue name="Processor 9" value="9" color="#FFD700" /> <!-- gold, (255,215,0) -->
+		<definedValue name="Processor 10" value="10" color="#BDB76B" /> <!-- darkkhaki, (189,183,107) -->
+		<definedValue name="Processor 11" value="11" color="#6B8E23" /> <!-- olivedrab, (107,142,35) -->
+		<definedValue name="Processor 12" value="12" color="#008080" /> <!-- teal, (0,128,128) -->
+		<definedValue name="Processor 13" value="13" color="#5F9EA0" /> <!-- cadetblue, (95,158,160) -->
+		<definedValue name="Processor 14" value="14" color="#00008B" /> <!-- darkblue, (0,0,139) -->
+		<definedValue name="Processor 15" value="15" color="#800080" /> <!-- purple, (128,0,128) -->
+		<definedValue name="Processor 16" value="16" color="#DB7093" /> <!-- palevioletred, (219,112,147) -->
+		<definedValue name="Processor 17" value="17" color="#8B4513" /> <!-- saddlebrown, (139,69,19) -->
+		<definedValue name="Processor 18" value="18" color="#FA8072" /> <!-- salmon, (250,128,114) -->
+		<definedValue name="Processor 19" value="19" color="#FF4500" /> <!-- orangered, (255,69,0) -->
+		<definedValue name="Processor 20" value="20" color="#FFFFE0" /> <!-- lightyellow, (255,255,224) -->
+		<definedValue name="Processor 21" value="21" color="#FFE4B5" /> <!-- moccasin, (255,228,181) -->
+		<definedValue name="Processor 22" value="22" color="#32CD32" /> <!-- limegreen, (50,205,50) -->
+		<definedValue name="Processor 23" value="23" color="#556B2F" /> <!-- darkolivegreen, (85,107,47) -->
+		<definedValue name="Processor 24" value="24" color="#E0FFFF" /> <!-- lightcyan, (224,255,255) -->
+		<definedValue name="Processor 25" value="25" color="#7B68EE" /> <!-- mediumslateblue, (123,104,238) -->
+		<definedValue name="Processor 26" value="26" color="#008000" /> <!-- green, (0,128,0) -->
+		<definedValue name="Processor 27" value="27" color="#FFC0CB" /> <!-- pink, (255,192,203) -->
+		<definedValue name="Processor 28" value="28" color="#ADFF2F" /> <!-- greenyellow, (173,255,47) -->
+		<definedValue name="Processor 29" value="29" color="#808080" /> <!-- gray, (128,128,128) -->
+		<definedValue name="Processor 30" value="30" color="#BC8F8F" /> <!-- rosybrown, (188,143,143) -->
+		<definedValue name="Processor 31" value="31" color="#00CED1" /> <!-- darkturquoise, (0,206,209) -->
+		<definedValue name="Processor 32" value="32" color="#1E90FF" /> <!-- dodgerblue, (30,144,255) -->
+		<definedValue name="Processor 33" value="33" color="#DDA0DD" /> <!-- plum, (221,160,221) -->
+		<definedValue name="Processor 34" value="34" color="#DEB887" /> <!-- burlywood, (222,184,135) -->
+		<definedValue name="Processor 35" value="35" color="#4B0082" /> <!-- indigo, (75,0,130) -->
+		<definedValue name="Processor 36" value="36" color="#00FA9A" /> <!-- mediumspringgreen, (0,250,154) -->
+		<definedValue name="Processor 37" value="37" color="#DCDCDC" /> <!-- gainsboro, (220,220,220) -->
+		<definedValue name="Processor 38" value="38" color="#A52A2A" /> <!-- brown, (165,42,42) -->
+		<definedValue name="Processor 39" value="39" color="#87CEEB" /> <!-- skyblue, (135,206,235) -->
+		<definedValue name="Processor 40" value="40" color="#7FFFD4" /> <!-- aquamarine, (127,255,212) -->
+		<definedValue name="Processor 41" value="41" color="#8A2BE2" /> <!-- blueviolet, (138,43,226) -->
+		<definedValue name="Processor 42" value="42" color="#4682B4" /> <!-- steelblue, (70,130,180) -->
+		<definedValue name="Processor 43" value="43" color="#808000" /> <!-- olive, (128,128,0) -->
+		<definedValue name="Processor 44" value="44" color="#2E8B57" /> <!-- seagreen, (46,139,87) -->
+		<definedValue name="Processor 45" value="45" color="#00BFFF" /> <!-- deepskyblue, (0,191,255) -->
+		<definedValue name="Processor 46" value="46" color="#FF1493" /> <!-- deeppink, (255,20,147) -->
+		<definedValue name="Processor 47" value="47" color="#D2691E" /> <!-- chocolate, (210,105,30) -->
+		<definedValue name="Processor 48" value="48" color="#98FB98" /> <!-- palegreen, (152,251,152) -->
+		<definedValue name="Processor 49" value="49" color="#FF8C00" /> <!-- darkorange, (255,140,0) -->
+		<definedValue name="Processor 50" value="50" color="#F0E68C" /> <!-- khaki, (240,230,140) -->
+		<definedValue name="Processor 51" value="51" color="#9ACD32" /> <!-- yellowgreen, (154,205,50) -->
+		<definedValue name="Processor 52" value="52" color="#8FBC8F" /> <!-- darkseagreen, (143,188,143) -->
+		<definedValue name="Processor 53" value="53" color="#3CB371" /> <!-- mediumseagreen, (60,179,113) -->
+		<definedValue name="Processor 54" value="54" color="#FF69B4" /> <!-- hotpink, (255,105,180) -->
+		<definedValue name="Processor 55" value="55" color="#F4A460" /> <!-- sandybrown, (244,164,96) -->
+		<definedValue name="Processor 56" value="56" color="#AFEEEE" /> <!-- paleturquoise, (175,238,238) -->
+		<definedValue name="Processor 57" value="57" color="#E6E6FA" /> <!-- lavender, (230,230,250) -->
+		<definedValue name="Processor 58" value="58" color="#9370DB" /> <!-- mediumpurple, (147,112,219) -->
+		<definedValue name="Processor 59" value="59" color="#FFE4E1" /> <!-- mistyrose, (255,228,225) -->
+		<definedValue name="Processor 60" value="60" color="#FFF0F5" /> <!-- lavenderblush, (255,240,245) -->
+		<definedValue name="Processor 61" value="61" color="#D8BFD8" /> <!-- thistle, (216,191,216) -->
+		<definedValue name="Processor 62" value="62" color="#BA55D3" /> <!-- mediumorchid, (186,85,211), -->
+		<definedValue name="Processor 63" value="63" color="#C71585" /> <!-- mediumvioletred, rgb(199,21,133) -->
+
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for lttng_ust_statedump:begin|bin_info|end|...  ====================== -->
+		<!-- =============================================================================================== -->
+		<!--  for right after the PInsight is constructed (lib loaded), which is mostly sequential computation, thus green color -->
+		<definedValue name="PINSIGHT_STATE_STARTED" value="10100" color="#2E8B57"/> <!-- seagreen -->
+		<definedValue name="PINSIGHT_STATE_TERMINATED" value="10101" color="#FFFFFF" /> <!-- white --> <!--  not traced after this -->
+		<definedValue name="OMP_STATE_TRANSITION" value="110209" color="#FFFFFF" /> <!-- white --> <!--  not traced after this -->
+		
+		<definedValue name="LTTNG_UST_STATEDUMP_STARTED" value="10000" color="#20b2aa" /> <!-- light seagreen -->
+		<definedValue name="LTTNG_UST_STATEDUMP_LIB_LOADED" value="10001" color="#696969" /> <!-- less saturated seagreen -->
+		<definedValue name="LTTNG_UST_STATEDUMP_END_ENTERING_PINSIGHT" value="10002" color="#08cac0" /> <!-- most saturated seagreen -->
+		
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for PInsight begin and end states ==================================== -->
+		<!-- =============================================================================================== -->
+		<!--  for right after the PInsight is constructed (lib loaded), which is mostly sequential computation, thus green color -->
+		<definedValue name="PINSIGHT_STATE_STARTED" value="10100" color="#2E8B57"/> <!-- seagreen -->
+		<definedValue name="PINSIGHT_STATE_TERMINATED" value="10101" color="#FFFFFF" /> <!-- white --> <!--  not traced after this -->
+		
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for OpenMP states ================================================= -->
+		<!-- =============================================================================================== -->
+		<definedValue name="OMP_STATE_THREAD_STARTED" value="10201" color="#FFFF00" /> <!-- yellow -->
+		<definedValue name="OMP_STATE_THREAD_IDLE" value="10202" color="#999900" /> <!-- dark yellow 2 -->
+		<definedValue name="OMP_STATE_TRANSITION" value="10209" color="#FFFF99" /> <!-- light yellow 2 -->
+
+		<definedValue name="OMP_STATE_IN_SEQUENTIAL" value="10210" color="#0000FF" /> <!-- 0000FF for blue -->
+
+		<!-- 220 - 249 are for those states in which threads are doing work -->
+		<definedValue name="OMP_STATE_IN_PARALLEL" value="10220" color="#00FF00" /> <!-- lime -->
+		<definedValue name="OMP_STATE_IN_IMPLICIT_TASK" value="10221" color="#00CC11" /> <!-- green -->
+		<definedValue name="OMP_STATE_IN_WORK" value="10222" color="#32CD32" /> <!-- limegreen -->
+		<definedValue name="OMP_STATE_IN_MASKED_MASTER" value="10227" color="#00FF7F"/> <!-- spring green -->
+		<!-- 250 - 269 are for those states in which threads are synchronizing -->
+		<definedValue name="OMP_STATE_IN_SYNC" value="10251" color="#FF0000" /> <!-- red -->
+		<definedValue name="OMP_STATE_IN_PARALLEL_JOIN_SYNC_WAIT" value="10252" color="#CD5C5C" /> <!-- indianred -->
+		<definedValue name="OMP_STATE_IN_BARRIER_EXPLICIT_SYNC_WAIT" value="10253" color="#F62817" /> <!-- fire engine red -->
+		<definedValue name="OMP_STATE_IN_BARRIER_IMPLICIT_SYNC_WAIT" value="10254" color="#8B0000"/> <!-- dark red -->
+
+		<definedValue name="OMP_STATE_THREAD_TERMINATED" value="10300" color="#FFFFFF" /> <!-- white -->
+		
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for CUDA states ================================================= -->
+		<!-- =============================================================================================== -->
+		<definedValue name="CUDA_STATE_CUDA_NOT_USED" value="10700" color="#FFFFFF" />       <!-- White -->
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_H2H" value="10701" color="#DA70D6" />     <!-- Orchid        rgb(218, 112, 214) -->
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_H2D" value="10702" color="#BF40BF" />     <!-- Bright Purple rgb(191, 64, 191) -->
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_D2H" value="10703" color="#800080" />     <!-- Purple        rgb(128, 0, 128) -->
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_D2D" value="10704" color="#7F00FF" />     <!-- Violet        rgb(127, 0, 255) -->
+		<definedValue name="CUDA_STATE_CUDA_MEMCPY_UNKNOWN" value="10705" color="#5D3FD3"/>  <!-- Iris          rgb(93, 63, 211) -->
+		<definedValue name="CUDA_STATE_CUDA_KERNEL_EXE" value="10720" color="#008000" />     <!-- Green         rgb(0, 128, 0) -->
+		
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for HIP states ================================================= -->
+		<!-- =============================================================================================== -->
+		<definedValue name="HIP_STATE_NOT_USED"       value="10800" color="#FFFFFF" /> <!-- white -->
+		<definedValue name="HIP_STATE_MEMCPY_H2H"     value="10801" color="#DA70D6" /> <!-- orchid -->
+		<definedValue name="HIP_STATE_MEMCPY_H2D"     value="10802" color="#BF40BF" /> <!-- bright purple -->
+		<definedValue name="HIP_STATE_MEMCPY_D2H"     value="10803" color="#800080" /> <!-- purple -->
+		<definedValue name="HIP_STATE_MEMCPY_D2D"     value="10804" color="#7F00FF" /> <!-- violet -->
+		<definedValue name="HIP_STATE_MEMCPY_DEFAULT" value="10805" color="#5D3FD3" /> <!-- iris -->
+		<definedValue name="HIP_STATE_KERNEL_EXE"     value="10820" color="#008000" /> <!-- green -->
+		<definedValue name="HIP_STATE_MALLOC"         value="10830" color="#FFA500" /> <!-- orange -->
+		<definedValue name="HIP_STATE_FREE"           value="10831" color="#FFD700" /> <!-- gold -->
+		<definedValue name="HIP_STATE_DEVICE_SYNC"    value="10840" color="#FF0000" /> <!-- red -->
+		<definedValue name="HIP_STATE_STREAM_SYNC"    value="10841" color="#CD5C5C" /> <!-- indianred -->
+
+		<!-- =============================================================================================== -->
+		<!-- ============== Color map for MPI states ================================================= -->
+		<!-- =============================================================================================== -->
+		<definedValue name="MPI_STATE_NOT_IN_MPI"     value="10900" color="#FFFFFF" /> <!-- white -->
+		<definedValue name="MPI_STATE_IN_INIT"        value="10901" color="#20B2AA" /> <!-- light seagreen -->
+		<definedValue name="MPI_STATE_IN_FINALIZE"    value="10902" color="#2E8B57" /> <!-- seagreen -->
+		<definedValue name="MPI_STATE_IN_P2P"         value="10910" color="#1E90FF" /> <!-- dodgerblue -->
+		<!-- per-collective states: same darkorange family color, distinct
+		     names so the tooltip/legend shows WHICH collective -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Barrier"   value="10920" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Reduce"    value="10921" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Allreduce" value="10922" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Bcast"     value="10923" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Gather"    value="10924" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Allgather" value="10925" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Scatter"   value="10926" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Alltoall"  value="10927" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Gatherv"              value="10940" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Scatterv"             value="10941" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Allgatherv"           value="10942" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Alltoallv"            value="10943" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Alltoallw"            value="10944" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Reduce_scatter"       value="10945" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Reduce_scatter_block" value="10946" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Scan"                 value="10947" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_COLLECTIVE_Exscan"               value="10948" color="#FF8C00" /> <!-- darkorange -->
+		<definedValue name="MPI_STATE_IN_WAIT"        value="10930" color="#8B0000" /> <!-- dark red -->
+
+		<!-- =============================================================================================== -->
+		<!-- ======================= OS Thread timeGraph view ================================================= -->
+		<!-- =============================================================================================== -->
+		
+		<entry path="Processor"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" /> <!-- cpu attribute -->
+ 				<entry path="*" displayText="true"><display type="self" /> <!-- processor(cpu) state value -->
+				</entry>
+				<entry path="*" displayText="true"><display type="self" /> <!--  OS Thread -->
+					<entry path="*" displayText="true"><display type="self" /> <!-- context._vtid  -->
+						<entry path="*" displayText="true"><display type="self" /> <!-- OSThread state value  -->
+						</entry>
+						<entry path="*" displayText="true"><display type="self" /> <!--  OMP Global Thread -->
+							<entry path="*" displayText="true"><display type="self" /> <!-- omp_get_global_thread_num attribute  -->
+								<entry path="*" displayText="true"><display type="self" /> <!-- OMPGlobalThread state value  -->
+								</entry>
+								<entry path="*" displayText="true"><display type="self" /> <!--  OMP Team -->
+									<entry path="*" displayText="true"><display type="self" /> <!-- omp_get_team_num attribute -->
+										<entry path="*" displayText="true"><display type="self" /> <!-- OMP Thread -->
+											<entry path="*" displayText="true"><display type="self" /> <!-- omp_get_thread_num attribute -->
+												<entry path="*" displayText="true"><display type="self" /> <!-- OMPTeamThread state value -->
+												</entry>
+											</entry>
+										</entry>
+									</entry>
+								</entry>
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+		<entry path="OMP Team"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" /> <!-- omp_get_team_num attribute -->
+				<entry path="*" displayText="true"><display type="self" /> <!-- OMP Thread -->
+					<entry path="*" displayText="true"><display type="self" /> <!-- omp_get_thread_num attribute -->
+						<entry path="*" displayText="true"><display type="self" /> <!-- thread state value -->
+						</entry>
+						<entry path="*" displayText="true"><display type="self" /> <!-- Processor -->
+							<entry path="*" displayText="true"><display type="self" />
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+		
+		<!-- =============================================================================================== -->
+		<!-- ======================= OpenMP timeGraph view ================================================= -->
+		<!-- =============================================================================================== -->
+
+		<entry path="OMP Parallel Region"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" />
+				<entry path="*" displayText="true"><display type="self" />
+					<entry path="*" displayText="true"><display type="self" />
+						<entry path="*" displayText="true"><display type="self" />
+							<entry path="*" displayText="true"><display type="self" />
+								<entry path="*" displayText="true"><display type="self" />
+								</entry>
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+<!-- 
+		<entry path="OMP Parallel Region Instance"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" />
+				<entry path="*" displayText="true"><display type="self" />
+					<entry path="*" displayText="true"><display type="self" />
+						<entry path="*" displayText="true"><display type="self" />
+							<entry path="*" displayText="true"><display type="self" />
+								<entry path="*" displayText="true"><display type="self" />
+									<entry path="*" displayText="true"><display type="self" />
+										<entry path="*" displayText="true"><display type="self" />
+										</entry>
+									</entry>
+								</entry>
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+ -->
+
+		<!-- =============================================================================================== -->
+		<!-- ======================= CUDA timeGraph view ================================================= -->
+		<!-- =============================================================================================== -->
+		<entry path="CUDA Device"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" /> <!-- devId -->
+				<entry path="*" displayText="true"><display type="self" /> <!-- state -->
+				</entry>
+				<entry path="*" displayText="true"><display type="self" /> <!-- CUDA Kernel -->
+					<entry path="*" displayText="true"><display type="self" /> <!-- kernel_func -->
+						<entry path="*" displayText="true"><display type="self" /> <!-- state -->
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+		<!-- =============================================================================================== -->
+		<!-- ======================= HIP timeGraph view ================================================= -->
+		<!-- =============================================================================================== -->
+		<entry path="HIP Device"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" /> <!-- devId -->
+				<entry path="*" displayText="true"><display type="self" /> <!-- device state -->
+				</entry>
+				<entry path="*" displayText="true"><display type="self" /> <!-- HIP Kernel -->
+					<entry path="*" displayText="true"><display type="self" /> <!-- hip_func -->
+						<entry path="*" displayText="true"><display type="self" /> <!-- kernel state -->
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+		<!-- =============================================================================================== -->
+		<!-- ======================= MPI Rank timeGraph view ================================================= -->
+		<!-- =============================================================================================== -->
+		<entry path="MPI Rank"><display type="self" />
+			<entry path="*" displayText="true"><display type="self" /> <!-- mpirank -->
+				<entry path="*" displayText="true"><display type="self" /> <!-- "Thread" constant -->
+					<entry path="*" displayText="true"><display type="self" /> <!-- global_thread_num -->
+						<entry path="*" displayText="true"><display type="self" /> <!-- thread MPI state -->
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+	</timeGraphView>
+</tmfxml>

@@ -1,0 +1,43 @@
+# tc-local.conf — machine-local configuration for the TraceCompass wrapper
+# scripts (sourced by tc-common.sh; plain shell syntax).
+#
+# Usage:
+#   cp tc-local.conf.example tc-local.conf     # then edit tc-local.conf
+#
+# tc-local.conf is GITIGNORED: your machine's paths never dirty the repo and
+# survive `git pull`. Values set here override both tc-common.sh's CONFIG
+# block and its auto-detection. All three variables are optional — set only
+# what auto-detection gets wrong on your machine.
+#
+# Background: TraceCompass (a GUI app) launches the wrappers with a minimal
+# PATH — typically without homebrew/custom install locations — so python3
+# and babeltrace2 may not resolve even though they work in your terminal.
+
+# ---------------------------------------------------------------------------
+# PYTHON3 — the python3 executable used to run the analysis scripts.
+# Default if unset: the first `python3` found on the (augmented) PATH.
+# Needs a Python recent enough for the scripts (3.8+).
+#
+#   PYTHON3="/opt/homebrew/bin/python3"           # mac, standard homebrew
+#   PYTHON3="$HOME/homebrew/bin/python3"          # mac, homebrew in $HOME
+#   PYTHON3="/usr/bin/python3"                    # linux system python
+
+# ---------------------------------------------------------------------------
+# BABELTRACE2_DIR — the DIRECTORY containing the babeltrace2 executable
+# (the trace reader that pinsight_reader.py shells out to). It is prepended
+# to PATH. Default if unset: common homebrew locations are probed
+# (/opt/homebrew/bin, /usr/local/bin, ~/homebrew/bin).
+#
+#   BABELTRACE2_DIR="/opt/homebrew/bin"           # mac, standard homebrew
+#   BABELTRACE2_DIR="$HOME/homebrew/bin"          # mac, homebrew in $HOME
+#   BABELTRACE2_DIR="$HOME/local/bin"             # built from source in ~/local
+
+# ---------------------------------------------------------------------------
+# TC_WORKSPACE — the Eclipse/TraceCompass WORKSPACE folder (the path shown
+# in TraceCompass's title bar). Only used to resolve an EXPERIMENT name to
+# its member trace folders (by reading the tracing projects' .project
+# files) when an external analysis is run on an experiment.
+# Default if unset: ~/eclipse-workspace
+#
+#   TC_WORKSPACE="$HOME/eclipse-workspace"
+#   TC_WORKSPACE="$HOME/work/tc-workspace"

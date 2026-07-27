@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmfxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="xmldefinition.xsd">
+
+	<!-- XSD definition: https://github.com/tracecompass/tracecompass/tree/master/tmf/org.eclipse.tracecompass.tmf.analysis.xml.core/src/org/eclipse/tracecompass/tmf/analysis/xml/core/module -->
+
+	<!-- The pattern provider -->
+	<pattern id="xxx.pinsight.omp.parallelPatternProvider" version="0">
+		<head>
+			<traceType id="org.eclipse.linuxtools.lttng2.ust.tracetype" />
+			<label value="PInsight OpenMP Parallel Statistics" />
+			<viewLabelPrefix value="Parallel Region" />
+		</head>
+
+		<storedField id="team_size" alias="num_threads"/>
+		<storedField id="parallel_record_id" alias="nums of execution"/>
+
+		<patternHandler initial="FSM_parallel_master">
+			<test id="parallel_codeptr_cond">
+				<if>
+					<condition>
+						<stateValue type="eventField" value="parallel_codeptr" forcedType="int" />
+						<stateValue type="query">
+							<stateAttribute type="constant" value="#CurrentScenario" />
+							<stateAttribute type="constant" value="parallel_region" />
+						</stateValue>
+					</condition>
+				</if>
+			</test>
+
+			<action id="on_parallel_begin">
+				<stateChange>
+					<stateAttribute type="constant" value="#CurrentScenario" />
+					<stateAttribute type="constant" value="Thread" />
+					<!--stateValue type="eventField" value="global_thread_num"/-->
+					<stateValue type="eventField" value="omp_thread_num"/>
+				</stateChange>
+				<stateChange>
+					<stateAttribute type="constant" value="#CurrentScenario" />
+					<stateAttribute type="constant" value="parallel_region" />
+					<stateValue type="eventField" value="parallel_codeptr" forcedType="int"/>
+				</stateChange>
+			</action>
+
+			<action id="on_parallel_end">
+				<segment>
+					<segType>
+						<segName>
+							<stateValue type="query">
+								<stateAttribute type="constant" value="#CurrentScenario" />
+								<stateAttribute type="constant" value="parallel_region" />
+							</stateValue>
+						</segName>
+					</segType>
+				</segment>
+			</action>
+
+			<fsm id="FSM_parallel_master" initial="master_in_sequential"><!-- consuming="false" -->
+				<state id="master_in_sequential">
+					<transition event="ompt_pinsight_lttng_ust:parallel_begin"
+								target="master_in_parallel" action="on_parallel_begin" saveStoredFields="true" />
+				</state>
+				<state id="master_in_parallel">
+					<transition event="ompt_pinsight_lttng_ust:parallel_end" cond="parallel_codeptr_cond" target="parallel_end"
+								action="on_parallel_end" saveStoredFields="true" clearStoredFields="true" />
+				</state>
+				<final id="parallel_end" />
+			</fsm>
+		</patternHandler>
+	</pattern>
+</tmfxml>
