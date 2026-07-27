@@ -151,7 +151,7 @@ OMP_NUM_THREADS=4 bash scripts/trace.sh \
 bash scripts/trace.sh \
     ./traces/castro Castro \
     ./build/libpinsight.so : \
-    mpirun -np 4 ./eva/Castro/Exec/hydro_tests/Sedov/Castro3d.gnu.MPI.CUDA.ex inputs.3d.e2eval
+    mpirun -np 4 /path/to/Castro/Exec/hydro_tests/Sedov/Castro3d.gnu.MPI.CUDA.ex inputs.3d.e2eval
 ```
 
 ### Manual LTTng Session
@@ -258,7 +258,7 @@ The file is searched in this order:
     window_end_action = MONITORING
 ```
 
-See [`doc/PINSIGHT_TRACE_CONFIG_FORMAT.md`](doc/PINSIGHT_TRACE_CONFIG_FORMAT.md) for the full config format specification.
+See [`doc/user/trace_config_format.md`](doc/user/trace_config_format.md) for the full config format specification.
 
 ### Runtime Reconfiguration via SIGUSR1
 
@@ -359,28 +359,41 @@ Cycle 3: ...
 
 ## Analysis and Visualization
 
+Trace-analysis artifacts live in the [`analysis/`](analysis/) folder — a Python toolkit for
+PInsight CTF traces built on a common reader (`analysis/pinsight_reader.py`, requires
+`babeltrace2`). It includes app-agnostic analysis scripts (load imbalance, MPI latency,
+GPU data movement, halo exchange, MPI/GPU/energy reports) and all TraceCompass GUI
+integration under [`analysis/tc/`](analysis/tc/) (LAMI external analyses + XML data-driven
+analyses, with a one-shot `tc-setup.sh` installer). See [`analysis/README.md`](analysis/README.md)
+for the full script list and usage.
+
 | Tool | Purpose |
 |------|---------|
+| **[`analysis/`](analysis/)** | Python analysis scripts for PInsight traces (load imbalance, MPI latency, GPU data movement, halo exchange, energy) |
+| **[`analysis/tc/`](analysis/tc/)** | TraceCompass integration: LAMI external analyses and XML analyses |
 | **babeltrace2** | CLI text dump and filtering of CTF traces |
 | **[Trace Compass](https://eclipse.dev/tracecompass/)** | Eclipse-based GUI for trace analysis — timeline, statistics, call graph |
-| **[PEAM](https://github.com/passlab/peam)** | Python-based analysis scripts for PInsight traces |
 | **trace.sh** | Helper script for automated LTTng session management |
 
 ---
 
 ## Documentation
 
+Documentation is organized by audience: [`doc/user/`](doc/user/) for users,
+[`doc/design/`](doc/design/) for design and implementation notes. See
+[`doc/README.md`](doc/README.md) for the full index.
+
 | Document | Description |
 |----------|-------------|
-| [`doc/PINSIGHT_TRACE_CONFIG_FORMAT.md`](doc/PINSIGHT_TRACE_CONFIG_FORMAT.md) | Config file format specification |
-| [`doc/four_mode_trace_design.md`](doc/four_mode_trace_design.md) | 4-mode trace hierarchy design |
-| [`doc/control_thread_design.md`](doc/control_thread_design.md) | Control thread and INTROSPECT architecture |
-| [`doc/domain_trace_modes.md`](doc/domain_trace_modes.md) | Domain mode benchmark results |
-| [`doc/rate-limit-tracing.md`](doc/rate-limit-tracing.md) | Rate-based sampling design |
-| [`doc/cuda_support_design.md`](doc/cuda_support_design.md) | CUDA/CUPTI tracing design |
-| [`doc/python_tracing_design.md`](doc/python_tracing_design.md) | Python domain support design |
-| [`doc/python_tracing_implementation.md`](doc/python_tracing_implementation.md) | Python domain implementation notes |
-| [`doc/python_trace_config.md`](doc/python_trace_config.md) | Python tracing configuration reference |
+| [`doc/user/trace_config_format.md`](doc/user/trace_config_format.md) | Config file format specification |
+| [`doc/user/domain_trace_modes.md`](doc/user/domain_trace_modes.md) | Domain mode benchmark results |
+| [`doc/user/rate-limit-tracing.md`](doc/user/rate-limit-tracing.md) | Rate-based sampling design |
+| [`doc/user/python_trace_config.md`](doc/user/python_trace_config.md) | Python tracing configuration reference |
+| [`doc/design/four_mode_trace_design.md`](doc/design/four_mode_trace_design.md) | 4-mode trace hierarchy design |
+| [`doc/design/control_thread_design.md`](doc/design/control_thread_design.md) | Control thread and INTROSPECT architecture |
+| [`doc/design/cuda_support_design.md`](doc/design/cuda_support_design.md) | CUDA/CUPTI tracing design |
+| [`doc/design/python_tracing_design.md`](doc/design/python_tracing_design.md) | Python domain support design |
+| [`doc/design/python_tracing_implementation.md`](doc/design/python_tracing_implementation.md) | Python domain implementation notes |
 
 ---
 

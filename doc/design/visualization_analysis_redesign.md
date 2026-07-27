@@ -19,8 +19,12 @@ brought to the same level, not just the AMG/MI300A path.
 Path note: peam was restructured 2026-07-20 (commit `cfcbfa5`) —
 `src/python/` flattened to `src/`, and the XML analyses folded into
 `src/tc/` so ALL TraceCompass material (LAMI bridge + wrappers +
-`tc-setup.sh` + XMLs) lives in one place. Older path mentions below are
-kept as-written where they name a commit-time layout.
+`tc-setup.sh` + XMLs) lives in one place. On 2026-07-27 the toolkit moved
+into the pinsight repo as `analysis/` (three-repo split; `peam/src` →
+`pinsight/analysis`, `peam/src/tc` → `pinsight/analysis/tc`). Older path
+mentions below are kept as-written where they name a commit-time layout.
+User-facing usage documentation lives in `analysis/README.md`; this doc
+holds the design and implementation record.
 
 Plus TC built-ins (event table, count-based statistics pie, histogram) and the
 validated capture workflows (batch fetch, snapshot import, live; see
@@ -266,6 +270,44 @@ analyses → results render as an Eclipse view. Two mechanisms, in order:
 This bridge also softens WS3's scope: "select range → run Python analysis →
 table in GUI" overlaps with what per-domain pattern XMLs would provide, using
 logic we have already validated.
+
+## 4b. Implementation conventions (`analysis/` folder)
+
+Layout rules (referenced from `analysis/README.md` §Extending):
+
+- **Top level = app-agnostic, tool-agnostic** analysis scripts: they consume
+  only PInsight's tracepoint schemas (pmpi / roctracer / energy / enter_exit
+  domains), make no assumptions about which application produced the trace,
+  and know nothing about any GUI/visualization tool.
+- **`tc/` = all TraceCompass integration**; nothing outside `tc/` references
+  TraceCompass. Contents per WS9 above (protocol, generic adapter, launcher
+  logic, per-analysis wrappers, XMLs, setup script).
+- **App-specific scripts** go in one subfolder per application (e.g. parsers
+  of an app's own stdout); app-specific eval harnesses live in the separate
+  pinsight-eval repo.
+
+Neutral table contract (the one contract every frontend converts from): each
+script declares `TITLE` / `DESCRIPTION` / `TABLE_SPECS` (typed columns) /
+`build_tables()`, driving three outputs — text (default), `--json` (one
+document: `{"analysis", "span_ns", "tables": [{name, title,
+columns:[{name,type}], rows}]}`), `--csv` (one CSV per table, separated by
+`# table: <name>` lines). Values are plain natural units (seconds, bytes,
+0-1 ratios); column types: `int | string | number | duration_s | ratio |
+bytes`. Tool adapters (TC/LAMI today; WS5 report generator and WS7 Perfetto
+summaries later) convert from this contract, so a new analysis gets every
+frontend for free by declaring it.
+
+Conventions for new scripts:
+
+- Build on `pinsight_reader.py` (runs `babeltrace2` over one or more trace
+  dirs, merges them time-ordered, yields parsed events, provides begin/end
+  duration matching; parallel decode by default, `PEAM_PAR=1` forces
+  sequential) rather than re-parsing babeltrace2 text.
+- Accept N trace paths; each may be an exact CTF dir or any parent folder
+  (everything beneath is included); dedupe overlapping arguments.
+- Multi-node runs: learn rank→host from the events themselves.
+- Energy `gpu_uj` is node-wide (same values on every rank of a node) — dedupe
+  by hostname, never sum across a node's ranks.
 
 ## 5. Metrics dictionary (seed — to grow into its own doc)
 - **Categories (per rank):** `work` (app compute; not directly traced —
