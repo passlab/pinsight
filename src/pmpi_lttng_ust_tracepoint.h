@@ -502,6 +502,192 @@ LTTNG_UST_TRACEPOINT_EVENT(
 LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
     pmpi_pinsight_lttng_ust, MPI_Alltoall_end, LTTNG_UST_TP_ARGS(int, return_value))
 
+/* int MPI_Gatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts[], displs[], recvtype, root, comm)
+ * recvcounts is only significant at root; record the always-valid per-rank sendcount. */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Gatherv_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            void *,       recvbuf,
+            unsigned int, root
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, root, root)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Gatherv_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Scatterv(sendbuf, sendcounts[], displs[], sendtype, recvbuf, recvcount, recvtype, root, comm)
+ * sendcounts is only significant at root; record the always-valid per-rank recvcount. */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Scatterv_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            void *,       recvbuf,
+            unsigned int, recvcount,
+            unsigned int, root
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+            lttng_ust_field_integer(unsigned int, root, root)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Scatterv_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Allgatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts[], displs[], recvtype, comm)
+ * recvcounts is significant on every rank: total_recvcount = sum(recvcounts). */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Allgatherv_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, sendcount,
+            void *,       recvbuf,
+            unsigned int, total_recvcount
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, sendcount, sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, total_recvcount, total_recvcount)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Allgatherv_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Alltoallv(sendbuf, sendcounts[], sdispls[], sendtype, recvbuf, recvcounts[], rdispls[], recvtype, comm)
+ * per-peer counts are arrays; record their sums (0 for sendcounts under MPI_IN_PLACE). */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Alltoallv_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, total_sendcount,
+            void *,       recvbuf,
+            unsigned int, total_recvcount
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, total_sendcount, total_sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, total_recvcount, total_recvcount)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Alltoallv_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Alltoallw(sendbuf, sendcounts[], sdispls[], sendtypes[], recvbuf, recvcounts[], rdispls[], recvtypes[], comm)
+ * counts are per-peer element counts of per-peer datatypes; sums are indicative only. */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Alltoallw_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            unsigned int, total_sendcount,
+            void *,       recvbuf,
+            unsigned int, total_recvcount
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer(unsigned int, total_sendcount, total_sendcount)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, total_recvcount, total_recvcount)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Alltoallw_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Reduce_scatter(sendbuf, recvbuf, recvcounts[], datatype, op, comm)
+ * recvcounts is significant on every rank; total_count = sum(recvcounts) = reduced vector length. */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Reduce_scatter_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            const void *, recvbuf,
+            unsigned int, total_count,
+            void *,       mpi_op
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, total_count, total_count)
+            lttng_ust_field_integer_hex(unsigned int, mpi_op, mpi_op)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Reduce_scatter_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Reduce_scatter_block(sendbuf, recvbuf, recvcount, datatype, op, comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Reduce_scatter_block_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            const void *, recvbuf,
+            unsigned int, recvcount,
+            void *,       mpi_op
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, recvcount, recvcount)
+            lttng_ust_field_integer_hex(unsigned int, mpi_op, mpi_op)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Reduce_scatter_block_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Scan(sendbuf, recvbuf, count, datatype, op, comm) — same shape as Allreduce */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Scan_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            const void *, recvbuf,
+            unsigned int, count,
+            void *,       mpi_op
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_integer_hex(unsigned int, mpi_op, mpi_op)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Scan_end, LTTNG_UST_TP_ARGS(int, return_value))
+
+/* int MPI_Exscan(sendbuf, recvbuf, count, datatype, op, comm) */
+LTTNG_UST_TRACEPOINT_EVENT(
+        pmpi_pinsight_lttng_ust, MPI_Exscan_begin,
+        LTTNG_UST_TP_ARGS(
+            const void *, sendbuf,
+            const void *, recvbuf,
+            unsigned int, count,
+            void *,       mpi_op
+        ),
+        LTTNG_UST_TP_FIELDS(
+            COMMON_LTTNG_UST_TP_FIELDS_PMPI
+            lttng_ust_field_integer_hex(unsigned long int, sendbuf, sendbuf)
+            lttng_ust_field_integer_hex(unsigned long int, recvbuf, recvbuf)
+            lttng_ust_field_integer(unsigned int, count, count)
+            lttng_ust_field_integer_hex(unsigned int, mpi_op, mpi_op)
+        )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(pmpi_pinsight_lttng_ust, MPI_Func_end_class,
+    pmpi_pinsight_lttng_ust, MPI_Exscan_end, LTTNG_UST_TP_ARGS(int, return_value))
+
 #ifdef __cplusplus
 }
 #endif

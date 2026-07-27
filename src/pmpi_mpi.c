@@ -94,26 +94,44 @@ domain_trace_config_t *MPI_trace_config;
 /**
  * enum to define code for each MPI methods, used as one of the key of lexgion
  * directory maintained by the runtime.
+ *
+ * Values MUST equal the native_id of the same event in trace_domain_MPI.h:
+ * the MPI domain registers with TRACE_EVENT_ID_NATIVE, so this value is used
+ * directly as the event_table index (name resolution) and as the bit index in
+ * per-event enable masks (lexgion_set_top_trace_bit_domain_event). Events
+ * declared in the DSL without a wrapper (e.g. MPI_Test, native_id 10) still
+ * occupy their id — hence the explicit values.
  */
 typedef enum MPI_LEXGION_type {
   MPI_Init_LEXGION = 0,
-  MPI_Init_thread_LEXGION,
-  MPI_Finalize_LEXGION,
-  MPI_Send_LEXGION,
-  MPI_Recv_LEXGION,
-  MPI_Sendrecv_LEXGION,
-  MPI_Isend_LEXGION,
-  MPI_Irecv_LEXGION,
-  MPI_Wait_LEXGION,
-  MPI_Waitall_LEXGION,
-  MPI_Bcast_LEXGION,
-  MPI_Barrier_LEXGION,
-  MPI_Reduce_LEXGION,
-  MPI_Allreduce_LEXGION,
-  MPI_Scatter_LEXGION,
-  MPI_Gather_LEXGION,
-  MPI_Allgather_LEXGION,
-  MPI_Alltoall_LEXGION,
+  MPI_Init_thread_LEXGION = 1,
+  MPI_Finalize_LEXGION = 2,
+  MPI_Send_LEXGION = 3,
+  MPI_Recv_LEXGION = 4,
+  MPI_Sendrecv_LEXGION = 5,
+  MPI_Isend_LEXGION = 6,
+  MPI_Irecv_LEXGION = 7,
+  MPI_Wait_LEXGION = 8,
+  MPI_Waitall_LEXGION = 9,
+  /* 10 = MPI_Test, declared in the DSL but no wrapper yet */
+  MPI_Bcast_LEXGION = 11,
+  MPI_Barrier_LEXGION = 12,
+  MPI_Reduce_LEXGION = 13,
+  MPI_Allreduce_LEXGION = 14,
+  MPI_Scatter_LEXGION = 15,
+  MPI_Gather_LEXGION = 16,
+  MPI_Allgather_LEXGION = 17,
+  MPI_Alltoall_LEXGION = 18,
+  /* 19-37 = others/oneside/io events, no wrappers yet */
+  MPI_Gatherv_LEXGION = 38,
+  MPI_Scatterv_LEXGION = 39,
+  MPI_Allgatherv_LEXGION = 40,
+  MPI_Alltoallv_LEXGION = 41,
+  MPI_Alltoallw_LEXGION = 42,
+  MPI_Reduce_scatter_LEXGION = 43,
+  MPI_Reduce_scatter_block_LEXGION = 44,
+  MPI_Scan_LEXGION = 45,
+  MPI_Exscan_LEXGION = 46,
 } MPI_LEXGION_type_t;
 
 int MPI_get_rank(void) {
@@ -204,11 +222,9 @@ extern void pinsight_control_thread_wakeup(int reason);
 static void pinsight_mpi_publish_node_info(void) {
   /* Diagnostic gate (2026-07-26 ghost-mode discriminator): PINSIGHT_NO_MPI_NODE_INFO=1
    * skips the split_type publish entirely — same binary, runtime-selected. The
-   * split's early comm alloc/free was the prime suspect for perturbing glibc
-   * adaptive malloc state and was EXONERATED by the discriminator (see
-   * code-memory amg2023_eval_overhead); the gate stays for future A/B use.
-   * Leader election still works via the launcher env chain; rotate degrades
-   * to leader. */
+   * split's early comm alloc/free is the prime suspect for perturbing glibc
+   * adaptive malloc state (see code-memory OPEN ANOMALY). Leader election still
+   * works via the launcher env chain; rotate degrades to leader. */
   const char *skip = getenv("PINSIGHT_NO_MPI_NODE_INFO");
   if (skip && *skip && *skip != '0')
     return;
@@ -455,5 +471,163 @@ _EXTERN_C_ int MPI_Alltoall(const void *sendbuf, int sendcount,
   int return_val = PMPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf,
                                  recvcount, recvtype, comm);
   PMPI_CALL_EPILOGUE(MPI_Alltoall, return_val);
+  return return_val;
+}
+
+/* Sum a per-peer counts array (v-variant collectives) over the communicator
+ * size. Passed as a tracepoint argument, so it is only evaluated when the
+ * tracepoint actually fires (trace_bit set and LTTng event enabled). */
+static unsigned int pinsight_sum_counts(const int *counts, MPI_Comm comm) {
+  int size;
+  if (counts == NULL || PMPI_Comm_size(comm, &size) != MPI_SUCCESS)
+    return 0;
+  unsigned long total = 0;
+  for (int i = 0; i < size; i++)
+    total += (unsigned int)counts[i];
+  return (unsigned int)total;
+}
+
+/* ================== C Wrappers for MPI_Gatherv ================== */
+_EXTERN_C_ int PMPI_Gatherv(const void *sendbuf, int sendcount,
+                            MPI_Datatype sendtype, void *recvbuf,
+                            const int *recvcounts, const int *displs,
+                            MPI_Datatype recvtype, int root, MPI_Comm comm);
+_EXTERN_C_ int MPI_Gatherv(const void *sendbuf, int sendcount,
+                           MPI_Datatype sendtype, void *recvbuf,
+                           const int *recvcounts, const int *displs,
+                           MPI_Datatype recvtype, int root, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Gatherv, sendbuf, sendcount, recvbuf, root);
+  int return_val = PMPI_Gatherv(sendbuf, sendcount, sendtype, recvbuf,
+                                recvcounts, displs, recvtype, root, comm);
+  PMPI_CALL_EPILOGUE(MPI_Gatherv, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Scatterv ================== */
+_EXTERN_C_ int PMPI_Scatterv(const void *sendbuf, const int *sendcounts,
+                             const int *displs, MPI_Datatype sendtype,
+                             void *recvbuf, int recvcount,
+                             MPI_Datatype recvtype, int root, MPI_Comm comm);
+_EXTERN_C_ int MPI_Scatterv(const void *sendbuf, const int *sendcounts,
+                            const int *displs, MPI_Datatype sendtype,
+                            void *recvbuf, int recvcount, MPI_Datatype recvtype,
+                            int root, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Scatterv, sendbuf, recvbuf, recvcount, root);
+  int return_val = PMPI_Scatterv(sendbuf, sendcounts, displs, sendtype, recvbuf,
+                                 recvcount, recvtype, root, comm);
+  PMPI_CALL_EPILOGUE(MPI_Scatterv, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Allgatherv ================== */
+_EXTERN_C_ int PMPI_Allgatherv(const void *sendbuf, int sendcount,
+                               MPI_Datatype sendtype, void *recvbuf,
+                               const int *recvcounts, const int *displs,
+                               MPI_Datatype recvtype, MPI_Comm comm);
+_EXTERN_C_ int MPI_Allgatherv(const void *sendbuf, int sendcount,
+                              MPI_Datatype sendtype, void *recvbuf,
+                              const int *recvcounts, const int *displs,
+                              MPI_Datatype recvtype, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Allgatherv, sendbuf, sendcount, recvbuf,
+                     pinsight_sum_counts(recvcounts, comm));
+  int return_val = PMPI_Allgatherv(sendbuf, sendcount, sendtype, recvbuf,
+                                   recvcounts, displs, recvtype, comm);
+  PMPI_CALL_EPILOGUE(MPI_Allgatherv, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Alltoallv ================== */
+_EXTERN_C_ int PMPI_Alltoallv(const void *sendbuf, const int *sendcounts,
+                              const int *sdispls, MPI_Datatype sendtype,
+                              void *recvbuf, const int *recvcounts,
+                              const int *rdispls, MPI_Datatype recvtype,
+                              MPI_Comm comm);
+_EXTERN_C_ int MPI_Alltoallv(const void *sendbuf, const int *sendcounts,
+                             const int *sdispls, MPI_Datatype sendtype,
+                             void *recvbuf, const int *recvcounts,
+                             const int *rdispls, MPI_Datatype recvtype,
+                             MPI_Comm comm) {
+  /* sendcounts is ignored (and may be invalid) under MPI_IN_PLACE */
+  PMPI_CALL_PROLOGUE(
+      MPI_Alltoallv, sendbuf,
+      (sendbuf == MPI_IN_PLACE) ? 0 : pinsight_sum_counts(sendcounts, comm),
+      recvbuf, pinsight_sum_counts(recvcounts, comm));
+  int return_val = PMPI_Alltoallv(sendbuf, sendcounts, sdispls, sendtype,
+                                  recvbuf, recvcounts, rdispls, recvtype, comm);
+  PMPI_CALL_EPILOGUE(MPI_Alltoallv, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Alltoallw ================== */
+_EXTERN_C_ int PMPI_Alltoallw(const void *sendbuf, const int *sendcounts,
+                              const int *sdispls, const MPI_Datatype *sendtypes,
+                              void *recvbuf, const int *recvcounts,
+                              const int *rdispls, const MPI_Datatype *recvtypes,
+                              MPI_Comm comm);
+_EXTERN_C_ int MPI_Alltoallw(const void *sendbuf, const int *sendcounts,
+                             const int *sdispls, const MPI_Datatype *sendtypes,
+                             void *recvbuf, const int *recvcounts,
+                             const int *rdispls, const MPI_Datatype *recvtypes,
+                             MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(
+      MPI_Alltoallw, sendbuf,
+      (sendbuf == MPI_IN_PLACE) ? 0 : pinsight_sum_counts(sendcounts, comm),
+      recvbuf, pinsight_sum_counts(recvcounts, comm));
+  int return_val = PMPI_Alltoallw(sendbuf, sendcounts, sdispls, sendtypes,
+                                  recvbuf, recvcounts, rdispls, recvtypes,
+                                  comm);
+  PMPI_CALL_EPILOGUE(MPI_Alltoallw, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Reduce_scatter ================== */
+_EXTERN_C_ int PMPI_Reduce_scatter(const void *sendbuf, void *recvbuf,
+                                   const int *recvcounts, MPI_Datatype datatype,
+                                   MPI_Op op, MPI_Comm comm);
+_EXTERN_C_ int MPI_Reduce_scatter(const void *sendbuf, void *recvbuf,
+                                  const int *recvcounts, MPI_Datatype datatype,
+                                  MPI_Op op, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Reduce_scatter, sendbuf, recvbuf,
+                     pinsight_sum_counts(recvcounts, comm), (void *)op);
+  int return_val =
+      PMPI_Reduce_scatter(sendbuf, recvbuf, recvcounts, datatype, op, comm);
+  PMPI_CALL_EPILOGUE(MPI_Reduce_scatter, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Reduce_scatter_block ================== */
+_EXTERN_C_ int PMPI_Reduce_scatter_block(const void *sendbuf, void *recvbuf,
+                                         int recvcount, MPI_Datatype datatype,
+                                         MPI_Op op, MPI_Comm comm);
+_EXTERN_C_ int MPI_Reduce_scatter_block(const void *sendbuf, void *recvbuf,
+                                        int recvcount, MPI_Datatype datatype,
+                                        MPI_Op op, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Reduce_scatter_block, sendbuf, recvbuf, recvcount,
+                     (void *)op);
+  int return_val = PMPI_Reduce_scatter_block(sendbuf, recvbuf, recvcount,
+                                             datatype, op, comm);
+  PMPI_CALL_EPILOGUE(MPI_Reduce_scatter_block, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Scan ================== */
+_EXTERN_C_ int PMPI_Scan(const void *sendbuf, void *recvbuf, int count,
+                         MPI_Datatype datatype, MPI_Op op, MPI_Comm comm);
+_EXTERN_C_ int MPI_Scan(const void *sendbuf, void *recvbuf, int count,
+                        MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Scan, sendbuf, recvbuf, count, (void *)op);
+  int return_val = PMPI_Scan(sendbuf, recvbuf, count, datatype, op, comm);
+  PMPI_CALL_EPILOGUE(MPI_Scan, return_val);
+  return return_val;
+}
+
+/* ================== C Wrappers for MPI_Exscan ================== */
+_EXTERN_C_ int PMPI_Exscan(const void *sendbuf, void *recvbuf, int count,
+                           MPI_Datatype datatype, MPI_Op op, MPI_Comm comm);
+_EXTERN_C_ int MPI_Exscan(const void *sendbuf, void *recvbuf, int count,
+                          MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
+  PMPI_CALL_PROLOGUE(MPI_Exscan, sendbuf, recvbuf, count, (void *)op);
+  int return_val = PMPI_Exscan(sendbuf, recvbuf, count, datatype, op, comm);
+  PMPI_CALL_EPILOGUE(MPI_Exscan, return_val);
   return return_val;
 }

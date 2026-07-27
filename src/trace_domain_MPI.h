@@ -64,6 +64,17 @@ extern domain_trace_config_t *MPI_trace_config;
   TRACE_EVENT("MPI_Gather",    1, 16, NULL)  /* ✓ implemented */              \
   TRACE_EVENT("MPI_Allgather", 1, 17, NULL)  /* ✓ implemented */              \
   TRACE_EVENT("MPI_Alltoall",  1, 18, NULL)  /* ✓ implemented */              \
+  /* v-variants and remaining blocking collectives; native ids continue      \
+   * after the io subdomain (38+) so existing ids stay stable */              \
+  TRACE_EVENT("MPI_Gatherv",              1, 38, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Scatterv",             1, 39, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Allgatherv",           1, 40, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Alltoallv",            1, 41, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Alltoallw",            1, 42, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Reduce_scatter",       1, 43, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Reduce_scatter_block", 1, 44, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Scan",                 1, 45, NULL) /* ✓ implemented */    \
+  TRACE_EVENT("MPI_Exscan",               1, 46, NULL) /* ✓ implemented */    \
   TRACE_SUBDOMAIN_END()                                                        \
                                                                                \
   /* [MPI(others)] — communicator/type utilities; off by default */            \
