@@ -1,4 +1,4 @@
-[CUDA.global]
+[CUDA.default]
     trace_mode = TRACING
     CUDA.device = (0, 16)
 

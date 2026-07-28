@@ -722,8 +722,8 @@ void test_reload() {
   FILE *fp = fopen("reload_config_1.txt", "w");
   fprintf(fp, "[RESET OpenMP.default]\n");
   // RESET has no body — it reverts to install defaults.
-  // Punit range is set via Domain.global:
-  fprintf(fp, "[OpenMP.global]\n");
+  // Punit range is set via Domain.default:
+  fprintf(fp, "[OpenMP.default]\n");
   fprintf(fp, "    OpenMP.team = (0-4)\n");
   fclose(fp);
 
@@ -1353,8 +1353,8 @@ void test_actions_and_features() {
     unlink("test_snapshot.txt");
   }
 }
-void test_domain_global() {
-  printf("\n===== Domain.global Tests =====\n");
+void test_domain_mode_punit() {
+  printf("\n===== Domain.default mode/punit Tests =====\n");
 
   int omp_idx = -1;
   for (int i = 0; i < num_domain; i++) {
@@ -1369,13 +1369,13 @@ void test_domain_global() {
   }
 
   // --- TG1: trace_mode = OFF ---
-  printf("\n  -- TG1: [OpenMP.global] trace_mode = OFF --\n");
+  printf("\n  -- TG1: [OpenMP.default] trace_mode = OFF --\n");
   {
     // Reset to TRACING first
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
 
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[OpenMP.global]\n");
+    fprintf(fp, "[OpenMP.default]\n");
     fprintf(fp, "    trace_mode = OFF\n");
     fclose(fp);
     parse_trace_config_file("test_global.txt");
@@ -1392,10 +1392,10 @@ void test_domain_global() {
   }
 
   // --- TG2: trace_mode = MONITORING ---
-  printf("\n  -- TG2: [OpenMP.global] trace_mode = MONITORING --\n");
+  printf("\n  -- TG2: [OpenMP.default] trace_mode = MONITORING --\n");
   {
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[OpenMP.global]\n");
+    fprintf(fp, "[OpenMP.default]\n");
     fprintf(fp, "    trace_mode = MONITORING\n");
     fclose(fp);
     parse_trace_config_file("test_global.txt");
@@ -1413,11 +1413,11 @@ void test_domain_global() {
     unlink("test_global.txt");
   }
 
-  // --- TG3: punit range in .global ---
-  printf("\n  -- TG3: [OpenMP.global] punit range --\n");
+  // --- TG3: punit range in .default ---
+  printf("\n  -- TG3: [OpenMP.default] punit range --\n");
   {
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[OpenMP.global]\n");
+    fprintf(fp, "[OpenMP.default]\n");
     fprintf(fp, "    trace_mode = TRACING\n");
     fprintf(fp, "    OpenMP.thread = (0-7)\n");
     fclose(fp);
@@ -1433,7 +1433,7 @@ void test_domain_global() {
     if (thread_idx >= 0 &&
         domain_info_table[omp_idx].punits[thread_idx].low == 0 &&
         domain_info_table[omp_idx].punits[thread_idx].high == 7) {
-      printf("[PASS] TG3: OpenMP.thread range = (0-7) in .global section\n");
+      printf("[PASS] TG3: OpenMP.thread range = (0-7) in .default section\n");
     } else if (thread_idx >= 0) {
       printf("[FAIL] TG3: OpenMP.thread = (%d-%d), expected (0-7)\n",
              domain_info_table[omp_idx].punits[thread_idx].low,
@@ -1452,14 +1452,14 @@ void test_domain_global() {
     unlink("test_global.txt");
   }
 
-  // --- TG4: RESET Domain.global ---
-  printf("\n  -- TG4: [RESET OpenMP.global] --\n");
+  // --- TG4: RESET Domain.default ---
+  printf("\n  -- TG4: [RESET OpenMP.default] --\n");
   {
     // First set mode to OFF
     domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_OFF;
 
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[RESET OpenMP.global]\n");
+    fprintf(fp, "[RESET OpenMP.default]\n");
     fclose(fp);
     parse_trace_config_file("test_global.txt");
 
@@ -2197,17 +2197,17 @@ void test_python_config() {
   }
 
   /* ------------------------------------------------------------------ */
-  /* PY2: [Python.global] trace_mode                                    */
+  /* PY2: [Python.default] trace_mode                                   */
   /* ------------------------------------------------------------------ */
-  printf("\n  -- PY2: [Python.global] trace_mode = MONITORING --\n");
+  printf("\n  -- PY2: [Python.default] trace_mode = MONITORING --\n");
   {
     pinsight_domain_mode_t saved = domain_default_trace_config[py_idx].mode;
     FILE *fp = fopen("test_py.txt", "w");
-    fprintf(fp, "[Python.global]\n    trace_mode = MONITORING\n");
+    fprintf(fp, "[Python.default]\n    trace_mode = MONITORING\n");
     fclose(fp);
     parse_trace_config_file("test_py.txt");
     if (domain_default_trace_config[py_idx].mode == PINSIGHT_DOMAIN_MONITORING)
-      printf("[PASS] PY2: Python.global trace_mode=MONITORING\n");
+      printf("[PASS] PY2: Python.default trace_mode=MONITORING\n");
     else
       printf("[FAIL] PY2: mode=%d (expected MONITORING=%d)\n",
              domain_default_trace_config[py_idx].mode, PINSIGHT_DOMAIN_MONITORING);
@@ -2819,7 +2819,7 @@ int main() {
   test_reload();
   test_implicit_add();
   test_actions_and_features();
-  test_domain_global();
+  test_domain_mode_punit();
   test_window_end_action();
   test_window_end_action_runtime();
   test_window_end_action_env();

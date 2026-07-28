@@ -185,7 +185,7 @@ echo ""
 # After the trigger, hot_loop (run second) should get 0 traces.
 # Use a dedicated script that runs once_then_stop first, then hot_loop.
 cat > /tmp/pinsight_trace_config.txt <<'EOF'
-[Python.global]
+[Python.default]
     trace_mode = TRACING
 
 [Lexgion(Python:once_then_stop)]
@@ -228,7 +228,7 @@ check "3.3b hot_loop emits 0 traces (domain already MONITORING by the time it ru
 # ── 3.3c: window_end_action = Python:STANDBY ──
 # Verify that after the trigger, the domain is in STANDBY (still counting but not tracing)
 cat > /tmp/pinsight_trace_config.txt <<'EOF'
-[Python.global]
+[Python.default]
     trace_mode = TRACING
 
 [Lexgion(Python:once_then_stop)]
@@ -277,7 +277,7 @@ EOF
 chmod +x /tmp/introspect_script.sh
 
 cat > /tmp/pinsight_trace_config.txt <<EOF
-[Python.global]
+[Python.default]
     trace_mode = TRACING
 
 [Lexgion(Python:hot_loop)]

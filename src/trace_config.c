@@ -436,9 +436,9 @@ void dsl_print_domain_info(struct domain_info *d) {
     return;
   }
 
-  /* [Domain.global] section: trace_mode and punit ranges */
+  /* [Domain.default] section: trace_mode and punit ranges */
   const char *mode_str = pinsight_mode_str(d->starting_mode);
-  fprintf(fp, "[%s.global]\n", d->name);
+  fprintf(fp, "[%s.default]\n", d->name);
   fprintf(fp, "    trace_mode = %s\n", mode_str);
   for (int i = 0; i < d->num_punits; ++i) {
     struct punit *p = &d->punits[i];
@@ -520,7 +520,13 @@ void print_domain_trace_config(FILE *out) {
   for (int i = 0; i < num_domain; i++) {
     struct domain_info *d = &domain_info_table[i];
     const char *mode_str = pinsight_mode_str(domain_default_trace_config[i].mode);
-    fprintf(out, "[%s.default]  # mode: %s\n", d->name, mode_str);
+    fprintf(out, "[%s.default]\n", d->name);
+    fprintf(out, "    trace_mode = %s\n", mode_str);
+    for (int p = 0; p < d->num_punits; p++) {
+      struct punit *pu = &d->punits[p];
+      fprintf(out, "    %s.%s = (%u, %u)\n", d->name, pu->name, pu->low,
+              pu->high);
+    }
     unsigned long current_events = domain_default_trace_config[i].events;
     for (int k = 0; k < d->num_events; k++) {
       if (strlen(d->event_table[k].name) == 0)

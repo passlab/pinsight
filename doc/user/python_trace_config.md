@@ -47,20 +47,20 @@ export PINSIGHT_TRACE_RATE=0:100:1:Python:MONITORING
 Control the Python domain globally and restrict which Python threads are traced:
 
 ```ini
-[Python.global]
+[Python.default]
     trace_mode = TRACING
     Python.thread = (0-3)     # only trace Python threads 0, 1, 2, 3
 ```
 
 ```ini
 # Disable all Python tracing at runtime (send kill -USR1 <pid> after writing this)
-[Python.global]
+[Python.default]
     trace_mode = OFF
 ```
 
 ```ini
 # Near-zero overhead — callbacks fire but return immediately; recoverable via SIGUSR1
-[Python.global]
+[Python.default]
     trace_mode = STANDBY
 ```
 
@@ -182,7 +182,7 @@ All of the above can be changed while the application is running:
 
 # 1. Edit the config file
 cat > pinsight_trace_config.txt << 'EOF'
-[Python.global]
+[Python.default]
     trace_mode = STANDBY
 
 [Lexgion(Python).default]
@@ -203,11 +203,11 @@ Mixed Python + OpenMP application. Trace Python main thread only, with rate
 limiting; keep OpenMP at full tracing:
 
 ```ini
-[Python.global]
+[Python.default]
     trace_mode    = TRACING
     Python.thread = (0)         # main thread only
 
-[OpenMP.global]
+[OpenMP.default]
     trace_mode       = TRACING
     OpenMP.thread    = (0-15)
 

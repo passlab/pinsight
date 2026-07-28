@@ -188,7 +188,7 @@ The plan references them but does not reproduce their content.
 ### 1. `src/trace_config_parse.c` — understand the config parser pattern
 
 The `[Energy]` and `[Power]` sections follow the same INI-style parser already used
-for `[OpenMP.global]`, `[Lexgion]`, etc. Read `trace_config_parse.c` to understand:
+for `[OpenMP.default]`, `[Lexgion]`, etc. Read `trace_config_parse.c` to understand:
 - How section headers (`[SectionName]`) are detected and dispatched
 - How key=value pairs are parsed within a section
 - How `on`/`off` boolean values are read

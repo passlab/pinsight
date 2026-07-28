@@ -519,7 +519,7 @@ Expected output: `function_begin`/`function_end` pairs for `main`, `do_work`, an
 
 Create `pinsight_trace_config.txt`:
 ```
-[Python.global]
+[Python.default]
 trace_mode = STANDBY
 ```
 
@@ -554,7 +554,7 @@ LD_PRELOAD=build/libpinsight.so PYTHONPATH=build python3 -m pinsight long_runnin
 PID=$!
 
 # In another terminal, change mode:
-echo "[Python.global]\ntrace_mode = STANDBY" > pinsight_trace_config.txt
+echo "[Python.default]\ntrace_mode = STANDBY" > pinsight_trace_config.txt
 kill -USR1 $PID
 
 # Verify no new trace events are emitted after SIGUSR1

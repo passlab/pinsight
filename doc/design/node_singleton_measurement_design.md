@@ -267,27 +267,20 @@ measure = off | on | anyone_per_node | leader_per_node     # default: on (preser
 amd_gpu         = on            # per-platform source selection still applies underneath
 amd_gpu_devices = 0-3           # the measuring rank reads all 4 APUs
 
-[HIP.global]
-# [global] declares AVAILABLE options. The value-SETS below are hardcoded in the enum/code,
-# so these lines are IGNORED today (informational only), exactly like trace_mode's:
-#   trace_mode      = OFF, MONITOR, STANDBY, TRACING
-#   device_activity = off, on, anyone_per_node, leader_per_node, rotate_per_node
-HIP.device = (0, 16)          # punit RANGE (this one is used)
 [HIP.default]
-trace_mode      = TRACING     # actual SETTINGS live in [default]
+trace_mode      = TRACING
+HIP.device      = (0, 16)     # punit RANGE
 device_activity = off | on | anyone_per_node | leader_per_node | rotate_per_node:<ms>   # default: off
 
 [CUDA.default]
 device_activity = off | on | anyone_per_node | leader_per_node | rotate_per_node:<ms>   # default: off
 ```
 
-> **Config-section convention:** `[Domain.global]` declares **available options** — the
-> value-*sets* of `trace_mode` and nodepolicy keys, and the *ranges* of punits (e.g.
-> `OpenMP.thread = 0:16`). The value-sets for `trace_mode`/nodepolicy are hardcoded in the
-> enum, so those `[global]` lines are **ignored today** (informational). The **actual
-> settings** — `trace_mode`, `device_activity`, per-event on/off — go in `[Domain.default]`
-> and are stored in `domain_default_trace_config[]`. So for this feature the parser reads
-> `device_activity` from `[Domain.default]`; no `[global]` parsing is added.
+> **Config-section convention:** all per-domain settings — `trace_mode`, punit ranges
+> (e.g. `HIP.device = (0, 16)`), `device_activity`, per-event on/off — live in
+> `[Domain.default]` and are stored in `domain_default_trace_config[]` /
+> `domain_info_table[].punits[]`. So for this feature the parser reads `device_activity`
+> from `[Domain.default]`, alongside the other domain keys.
 
 **Defaults & behavior changes:**
 - `device_activity` default **off** — activity is opt-in (it is the expensive path; this
@@ -422,13 +415,12 @@ value in `energy_power_config.measure` — consistent with "Energy/Power is NOT 
 ### 6.2 Parser + runtime resolver (both in `trace_config.{h,c}` — no new file)
 
 **Parser (generic, no per-key special-casing)** — in `trace_config_parse.c`, the
-`device_activity` *setting* is read from **`[DOMAIN.default]`** (where `trace_mode` and the
-per-event on/off also live), not `[DOMAIN.global]`. When a `[DOMAIN.default]` key is not
-`trace_mode` / an event, scan the domain's `nodepolicy_keys[]` by name; on match,
-`pinsight_parse_nodepolicy(val)` → store into `domain_default_trace_config[d].nodepolicy[idx]`.
-Adding a nodepolicy key is then *one DSL line* in a domain header — the parser needs no
-change. (`[DOMAIN.global]` availability listings for `trace_mode`/nodepolicy are hardcoded
-in the enum → ignored; no `[global]` parsing is added.) A `device_activity`/`measure` key in
+`device_activity` *setting* is read from **`[DOMAIN.default]`** (where `trace_mode`, punit
+ranges, and the per-event on/off also live). When a `[DOMAIN.default]` key is not
+`trace_mode` / a punit range / an event, scan the domain's `nodepolicy_keys[]` by name; on
+match, `pinsight_parse_nodepolicy(val)` → store into
+`domain_default_trace_config[d].nodepolicy[idx]`. Adding a nodepolicy key is then *one DSL
+line* in a domain header — the parser needs no change. A `device_activity`/`measure` key in
 a non-permitted section → warn + ignore (§3 scope enforced in one place).
 
 **Energy `measure`** — the `[Energy]`/`[Power]` config struct (`energy_power_config_t`) is

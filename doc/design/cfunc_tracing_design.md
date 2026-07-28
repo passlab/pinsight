@@ -352,7 +352,7 @@ PINSIGHT_TRACE_C=OFF|STANDBY|MONITORING|TRACING
 [C]
 trace_mode = TRACING
 
-[C.global]
+[C.default]
 func_begin = on
 func_end   = on
 
@@ -394,7 +394,7 @@ GCC/Clang outline `#pragma omp parallel` bodies into functions named `._omp_fn.N
 appear as separate lexgions with addresses but potentially no human-readable name from
 `dladdr()` (implementation-defined naming). These can be filtered via:
 ```ini
-[C.global]
+[C.default]
 exclude_pattern = ._omp_fn    # future: pattern-based exclusion
 ```
 Or simply accepted — they provide useful information about the parallel region body

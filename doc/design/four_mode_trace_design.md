@@ -258,13 +258,13 @@ PINSIGHT_TRACE_<DOMAIN>=<MODE>
 ### Config file
 
 ```ini
-[OpenMP.global]
+[OpenMP.default]
     trace_mode = STANDBY
 
-[CUDA.global]
+[CUDA.default]
     trace_mode = TRACE
 
-[MPI.global]
+[MPI.default]
     trace_mode = OFF
 ```
 

@@ -27,7 +27,7 @@ export LD_LIBRARY_PATH=$LTTNG_HOME/lib:$ROCM_PATH/lib:${LD_LIBRARY_PATH:-}
 
 [ -x "$BIN" ] || { echo "build first:  make looping_pinsight"; exit 1; }
 [ -e "$PINSIGHT_LIB" ] || { echo "missing $PINSIGHT_LIB (build with PINSIGHT_HIP=TRUE)"; exit 1; }
-mkcfg() { printf '[HIP.global]\n    trace_mode = %s\n' "$1" > "$CFG"; }
+mkcfg() { printf '[HIP.default]\n    trace_mode = %s\n' "$1" > "$CFG"; }
 
 mkcfg TRACING
 lttng destroy -a >/dev/null 2>&1

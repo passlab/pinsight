@@ -37,7 +37,7 @@ WINDOW=${WINDOW:-3}        # end the TRACING window after 3 wall seconds
 
 # TRACING now, but bounded: end the window after $WINDOW s, then HIP -> MONITORING.
 cat > "$CFG" <<EOF
-[HIP.global]
+[HIP.default]
     trace_mode = TRACING
 [Lexgion.default]
     window_timeout = $WINDOW

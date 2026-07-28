@@ -393,7 +393,7 @@ lttng enable-event -u 'ompt_pinsight_lttng_ust:*'            # NOTE: one -u per 
 lttng enable-event -u 'pinsight_enter_exit_lttng_ust:*'
 lttng start
 LD_PRELOAD=/lib64/libomp.so:$PWD/build_omp/libpinsight.so \
-  PINSIGHT_TRACE_CONFIG_FILE=<cfg with [OpenMP.global] trace_mode = TRACING> \
+  PINSIGHT_TRACE_CONFIG_FILE=<cfg with [OpenMP.default] trace_mode = TRACING> \
   OMP_NUM_THREADS=4 ./mode_test 1000 50 10            # keep producing
 ```
 **Client (tux439 or laptop) — live via SSH tunnel:**

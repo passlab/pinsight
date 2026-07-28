@@ -51,7 +51,7 @@ Based on the design in [four_mode_trace_design.md](four_mode_trace_design.md).
        return PINSIGHT_DOMAIN_STANDBY;
    ```
 
-2. **Config file parsing** — `trace_mode` key in `[Domain.global]` sections already accepts mode strings. Add `"STANDBY"` to the parser.
+2. **Config file parsing** — `trace_mode` key in `[Domain.default]` sections already accepts mode strings. Add `"STANDBY"` to the parser.
 
 3. **`trace_mode_after` parsing** — `parse_trace_mode_after()` already parses mode strings for the resume mode field. Add `"STANDBY"` as a valid resume mode.
 
@@ -147,7 +147,7 @@ config reload, ensuring cyclic INTROSPECT works correctly: each cycle starts wit
 
 1. **Parsing tests**: Add test cases for `STANDBY` in:
    - Environment variable: `PINSIGHT_TRACE_OPENMP=STANDBY`
-   - Config file: `[OpenMP.global] trace_mode = STANDBY`
+   - Config file: `[OpenMP.default] trace_mode = STANDBY`
    - `trace_mode_after = STANDBY`
    - `trace_mode_after = INTROSPECT:60:script.sh:STANDBY`
 

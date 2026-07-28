@@ -21,22 +21,20 @@ Specifies how the new configuration interacts with the existing configuration. T
 
 #### 2. Target
 Specifies what is being configured. There are five types of targets:
-- **`Domain.global`**: Domain-wide structural settings — trace mode and punit scope (e.g., `OpenMP.global`). It is also, by convention, where a domain's *available option-sets* would be declared; but the `trace_mode` and node-policy value-sets are hard-coded in PInsight, so any such listing here is **informational and ignored** — only the punit `(Range)` is functional.
-- **`Domain.default`**: Default **settings** for a domain — per-event on/off, plus node-policy keys such as `device_activity` (HIP/CUDA). E.g., `OpenMP.default`, `HIP.default`.
+- **`Domain.default`**: Domain-wide settings and defaults — trace mode (`trace_mode`), punit scope (`Domain.PunitKind = (Range)`), per-event on/off, plus node-policy keys such as `device_activity` (HIP/CUDA). E.g., `OpenMP.default`, `HIP.default`.
 - **`Domain.PunitKind(PunitSet)`**: Configuration for a subset of parallel units (e.g., `OpenMP.team(0-3, 7, 12-20)`, `MPI.rank(0-4)`).
 - **`Lexgion.default`**: Default configuration for all code regions across all domains.
 - **`Lexgion(Domain).default`**: Default lexgion configuration for a specific domain (e.g., `Lexgion(OpenMP).default`). Eagerly initialized as `Lexgion.default ⊕ Domain.default` (rate triple from global default, events from domain default).
 - **`Lexgion(Address)` or `Lexgion(Addr1, Addr2, ...)`**: Configuration for one or more specific code regions by address (e.g., `Lexgion(0x400500)` or `Lexgion(0x400500, 0x400600)`). When multiple addresses are listed, each gets its own config but shares the same section body settings.
 
 > [!IMPORTANT]
-> Sections should appear in the config file in the order listed above: `Domain.global` → `Domain.default` → `Domain.PunitKind(Set)` → `Lexgion.default` → `Lexgion(Domain).default` → `Lexgion(Address)`. This is required because all inheritance is resolved at parse time as a snapshot copy of the referenced target's current state. A section that inherits from or depends on a target defined later in the file will see stale or uninitialized defaults.
+> Sections should appear in the config file in the order listed above: `Domain.default` → `Domain.PunitKind(Set)` → `Lexgion.default` → `Lexgion(Domain).default` → `Lexgion(Address)`. This is required because all inheritance is resolved at parse time as a snapshot copy of the referenced target's current state. A section that inherits from or depends on a target defined later in the file will see stale or uninitialized defaults.
 
 
 ##### Action-Target Validity
 
 | Target Type | SET | RESET | REMOVE |
 |---|---|---|---|
-| `Domain.global` | ✅ Merge settings | ✅ Revert mode to install default | ❌ Invalid (use RESET) |
 | `Domain.default` | ✅ Merge settings | ✅ Revert to system install defaults | ❌ Invalid (use RESET) |
 | `Lexgion.default` | ✅ Merge settings | ✅ Revert to system defaults | ❌ Invalid (use RESET) |
 | `Lexgion(Domain).default` | ✅ Merge settings | ✅ Revert to `Lexgion.default ⊕ Domain.default` | ❌ Invalid (use RESET) |
@@ -48,8 +46,7 @@ Specifies what is being configured. There are five types of targets:
 
 | Target | RESET reverts to... |
 |---|---|
-| `Domain.global` | Install defaults: mode = TRACING if domain has registered events, OFF otherwise |
-| `Domain.default` | System install defaults (events as registered by the domain) |
+| `Domain.default` | System install defaults: mode = TRACING if domain has registered events (OFF otherwise), events as registered by the domain. Punit ranges are not reverted. |
 | `Lexgion.default` | System install defaults: `tracing_rate=1`, `trace_starts_at=0`, `max_num_traces=-1`, all event overrides cleared |
 | `Lexgion(Domain).default` | Computed default: rate triple from `Lexgion.default` + events from `Domain.default` |
 
@@ -66,22 +63,9 @@ Additional punit constraints from other domains, separated by commas. **Only app
 
 ### Section Body (Key-Value Pairs)
 
-#### Domain Global Configuration (`Domain.global`)
-- **Trace Mode**: `trace_mode = OFF|STANDBY|MONITORING|TRACING`
-- **Punit Scope**: `Domain.PunitKind = (Range)` (e.g., `OpenMP.thread = (0-15)`)
-
-> **Convention — settings vs. available options.** `Domain.global` holds *structural*
-> domain-wide keys. The *value-sets* of `trace_mode` and node-policy keys are hard-coded in
-> PInsight, so listing them here (e.g. `trace_mode = OFF, MONITORING, STANDBY, TRACING`) is
-> informational and **ignored** — only the punit `(Range)` is parsed from `[Domain.global]`.
-> Per-domain *settings* (events, `device_activity`) belong in `[Domain.default]`.
->
-> **Implementation status:** `trace_mode` is currently parsed from `[Domain.global]`. A
-> planned convention change moves the trace-mode *setting* to `[Domain.default]` (keeping
-> `[global]` for range/option declarations); until then, **keep `trace_mode` in
-> `[Domain.global]`**.
-
 #### Domain Default Configuration (`Domain.default`)
+- **Trace Mode**: `trace_mode = OFF|STANDBY|MONITORING|TRACING` — the domain-wide operating mode. Domain-wide only: not valid in `Domain.PunitKind(Set)` sections (a punit subset cannot have its own mode).
+- **Punit Scope**: `Domain.PunitKind = (Range)` (e.g., `OpenMP.thread = (0-15)`) — which parallel units are traced. Domain-wide only. (Event names never contain a dot, so a dotted key is always a punit-scope key.)
 - **Event Control**: `EventName = on|off`
 - **GPU activity node-policy** (HIP/CUDA only): `device_activity = off | on | anyone_per_node | leader_per_node | rotate_per_node:<ms>` — controls *which ranks* open the GPU activity pool (ROCTracer/CUPTI). Default **`off`**. See **Node-Policy Keys** below.
 
@@ -166,7 +150,7 @@ so it uses a plain `[Energy]` section. The only runtime key today is `measure`:
 ### 1. Setting Domain-Wide Configuration
 Set trace mode and punit scope for the OpenMP domain.
 ```ini
-[OpenMP.global]
+[OpenMP.default]
     trace_mode = TRACING
     OpenMP.team = (0-4)
     OpenMP.thread = (0, 15)
@@ -175,44 +159,38 @@ Set trace mode and punit scope for the OpenMP domain.
 ### 2. Disabling a Domain at Runtime
 Send `kill -USR1 <pid>` after editing the config file to disable OpenMP tracing with zero overhead.
 ```ini
-[OpenMP.global]
+[OpenMP.default]
     trace_mode = OFF
 ```
 
 ### 2b. STANDBY Mode (Recoverable Low-Overhead)
 Callbacks remain registered but return immediately. Unlike OFF (permanent), STANDBY can be switched back to TRACING via `kill -USR1`.
 ```ini
-[OpenMP.global]
+[OpenMP.default]
     trace_mode = STANDBY
 ```
 
-### 3. Resetting Domain Mode to Install Default
-Revert mode to TRACING (if events are registered).
-```ini
-[RESET OpenMP.global]
-```
-
-### 4. Setting Domain Event Configuration
+### 3. Setting Domain Event Configuration
 Merge new event settings with existing OpenMP configuration.
 ```ini
 [OpenMP.default]
     omp_task_create = on
 ```
 
-### 5. Resetting Domain Events to Install Defaults
-Revert OpenMP event configuration back to system install defaults.
+### 4. Resetting a Domain to Install Defaults
+Revert OpenMP mode and event configuration back to system install defaults (mode = TRACING if events are registered).
 ```ini
 [RESET OpenMP.default]
 ```
 
-### 6. Adding Specific Thread Tracing
+### 5. Adding Specific Thread Tracing
 Set tracing config for threads 0-3 without affecting other threads.
 ```ini
 [OpenMP.thread(0-3)] : OpenMP.default
     omp_task_schedule = on
 ```
 
-### 7. Setting Domain-Specific Lexgion Defaults
+### 6. Setting Domain-Specific Lexgion Defaults
 Set default tracing behavior for all OpenMP lexgions.
 ```ini
 [Lexgion(OpenMP).default]
@@ -225,19 +203,19 @@ Set default tracing behavior for all OpenMP lexgions.
     tracing_rate = 1
 ```
 
-### 8. Resetting a Domain-Specific Lexgion Default
+### 7. Resetting a Domain-Specific Lexgion Default
 Revert to computed default (`Lexgion.default ⊕ OpenMP.default`).
 ```ini
 [RESET Lexgion(OpenMP).default]
 ```
 
-### 9. Removing a Lexgion Trace
+### 8. Removing a Lexgion Trace
 Stop tracing a specific code region.
 ```ini
 [REMOVE Lexgion(0x4010bd)]
 ```
 
-### 10. Configuring Multiple Lexgions at Once
+### 9. Configuring Multiple Lexgions at Once
 Apply the same settings to multiple code regions.
 ```ini
 [Lexgion(0x400500, 0x400600, 0x400700)]
@@ -245,24 +223,24 @@ Apply the same settings to multiple code regions.
     tracing_rate = 5
 ```
 
-### 11. Removing Multiple Lexgions at Once
+### 10. Removing Multiple Lexgions at Once
 ```ini
 [REMOVE Lexgion(0x400500, 0x400600)]
 ```
 
-### 12. Removing a Punit-Specific Config
+### 11. Removing a Punit-Specific Config
 Remove the thread-specific config; those threads fall back to domain default.
 ```ini
 [REMOVE OpenMP.thread(0-3)]
 ```
 
-### 13. Removing All Thread Configs (Wildcard)
+### 12. Removing All Thread Configs (Wildcard)
 Remove all `OpenMP.thread(*)` configs without knowing individual sets.
 ```ini
 [REMOVE OpenMP.thread(*)]
 ```
 
-### 14. Automatic Mode Switching After Tracing
+### 13. Automatic Mode Switching After Tracing
 Trace 100 executions of each lexgion, then switch all domains to MONITORING.
 ```ini
 [Lexgion.default]
@@ -271,7 +249,7 @@ Trace 100 executions of each lexgion, then switch all domains to MONITORING.
     window_end_action = MONITORING
 ```
 
-### 15. Per-Domain Auto Mode Switch
+### 14. Per-Domain Auto Mode Switch
 Trace 50 executions of a specific region, then set OpenMP to MONITORING and MPI to OFF.
 ```ini
 [Lexgion(0x400500)]
@@ -279,7 +257,7 @@ Trace 50 executions of a specific region, then set OpenMP to MONITORING and MPI 
     window_end_action = OpenMP:MONITORING, MPI:OFF
 ```
 
-### 16. Introspect-Analyze-Resume Workflow
+### 15. Introspect-Analyze-Resume Workflow
 Trace 100 executions, then introspect for 60 seconds while running an analysis script. The app resumes in TRACING mode after the script sends SIGUSR1 or the timeout expires. PInsight automatically runs `lttng rotate` before launching the script.
 ```ini
 [Lexgion.default]
@@ -288,7 +266,7 @@ Trace 100 executions, then introspect for 60 seconds while running an analysis s
     window_end_action = INTROSPECT:60:analyze_traces.sh:TRACING
 ```
 
-### 17. INTROSPECT via Environment Variable
+### 16. INTROSPECT via Environment Variable
 Same as above, configured entirely via env var. The `PINSIGHT_TRACE_WINDOW`
 variable mirrors `[Lexgion.default]`; its grammar is
 `start:max:rate:window_timeout[:window_end_action_string]` (see "Environment Variables"
@@ -297,7 +275,7 @@ below). Here `window_timeout` is `0` (disabled):
 PINSIGHT_TRACE_WINDOW=0:100:10:0:INTROSPECT:60:analyze_traces.sh:TRACING
 ```
 
-### 18. Indefinite INTROSPECT (Interactive Debugging)
+### 17. Indefinite INTROSPECT (Interactive Debugging)
 Introspect indefinitely with no script — only SIGUSR1 resumes the app.
 ```ini
 [Lexgion.default]
@@ -305,7 +283,7 @@ Introspect indefinitely with no script — only SIGUSR1 resumes the app.
     window_end_action = INTROSPECT:-1:-
 ```
 
-### 19. Fire-and-Forget INTROSPECT (No Pause)
+### 18. Fire-and-Forget INTROSPECT (No Pause)
 Run the analysis script immediately without pausing the application. Useful for background analysis that doesn't need the app to stop.
 ```ini
 [Lexgion.default]
@@ -313,7 +291,7 @@ Run the analysis script immediately without pausing the application. Useful for 
     window_end_action = INTROSPECT:0:analyze_traces.sh:TRACING
 ```
 
-### 20. INTROSPECT with STANDBY Resume
+### 19. INTROSPECT with STANDBY Resume
 After introspection, resume in STANDBY mode (near-zero overhead, recoverable).
 ```ini
 [Lexgion.default]
@@ -321,19 +299,19 @@ After introspection, resume in STANDBY mode (near-zero overhead, recoverable).
     window_end_action = INTROSPECT:60:analyze.sh:STANDBY
 ```
 
-### 21. Time-Windowed Capture (`window_timeout`, standalone)
+### 20. Time-Windowed Capture (`window_timeout`, standalone)
 Trace for the first 30 wall-clock seconds, then drop to MONITORING — no count cap
 needed. Useful to bound trace volume/overhead deterministically (e.g. on GPU runs
 where activity records are not rate-limited).
 ```ini
-[HIP.global]
+[HIP.default]
     trace_mode = TRACING
 [Lexgion.default]
     window_timeout = 30
     window_end_action = HIP:MONITORING
 ```
 
-### 22. Count OR Timeout, with the `all` Policy
+### 21. Count OR Timeout, with the `all` Policy
 End the window when **all** regions this thread has seen have hit 50 traces — but
 guarantee the window closes by 60 s regardless (backstop for the `all` never-fires
 case). Whichever fires first wins.
@@ -345,7 +323,7 @@ case). Whichever fires first wins.
     window_end_action = MONITORING
 ```
 
-### 23. Cyclic INTROSPECT Bounded by `window_timeout`
+### 22. Cyclic INTROSPECT Bounded by `window_timeout`
 Each TRACING window ends by 45 s (or earlier if 100 traces are reached), runs the
 analysis script, and resumes to TRACING for the next window. The timeout re-arms
 every cycle, so each window is bounded.
@@ -356,19 +334,18 @@ every cycle, so each window is bounded.
     window_end_action = INTROSPECT:30:analyze.sh:TRACING
 ```
 
-### 24. GPU Activity on One Rank/Node (`device_activity`)
+### 23. GPU Activity on One Rank/Node (`device_activity`)
 Trace host-side HIP on every rank, but collect the GPU activity pool on only the node
 leader — cutting the multi-rank activity-collection overhead while keeping GPU-exec data
 for one GPU/node. (Set `on` for all GPUs, `off` for host-only.)
 ```ini
-[HIP.global]
-    trace_mode = TRACING
 [HIP.default]
+    trace_mode = TRACING
     HIP_kernel_launch = on
     device_activity   = leader_per_node
 ```
 
-### 25. One-Rank-Per-Node Energy (`[Energy] measure`)
+### 24. One-Rank-Per-Node Energy (`[Energy] measure`)
 Measure node energy on exactly one rank/node (avoids multiple-counting the shared node
 counters). Equivalent env: `PINSIGHT_MEASURE_ENERGY=LEADER_PER_NODE` (overrides the file).
 ```ini

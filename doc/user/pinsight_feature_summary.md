@@ -79,8 +79,7 @@ Configuration is organized from coarsest to finest:
 
 | Scope | Controls | Example |
 |-------|----------|---------|
-| **Domain (global)** | Mode (OFF/MONITORING/TRACING), punit range | `[OpenMP.global]` |
-| **Domain (default)** | Event enable/disable defaults | `[OpenMP.default]` |
+| **Domain (default)** | Mode (OFF/MONITORING/TRACING), punit range, event enable/disable defaults | `[OpenMP.default]` |
 | **Domain (punit)** | Per-punit-set event overrides | `[OpenMP.thread(0-3)]` |
 | **Lexgion (default)** | Global rate defaults | `[Lexgion.default]` |
 | **Lexgion (domain-default)** | Per-domain lexgion defaults | `[Lexgion(OpenMP).default]` |

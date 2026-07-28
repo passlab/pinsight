@@ -80,8 +80,7 @@ The config file uses an enhanced INI-style format with three types of domain sec
 
 | Section | Purpose | Key-Value Pairs |
 |---------|---------|-----------------|
-| `[Domain.global]` | Domain-wide structural settings | `trace_mode = OFF\|MONITORING\|TRACING`, `Domain.PunitKind = (Range)` |
-| `[Domain.default]` | Default event configuration | `EventName = on\|off` |
+| `[Domain.default]` | Domain-wide settings and event defaults | `trace_mode = OFF\|MONITORING\|TRACING`, `Domain.PunitKind = (Range)`, `EventName = on\|off` |
 | `[Domain.PunitKind(Set)]` | Punit-specific event overrides | `EventName = on\|off` |
 
 #### Lexgion Sections
@@ -95,7 +94,7 @@ The config file uses an enhanced INI-style format with three types of domain sec
 Example config file:
 ```ini
 # Domain-wide: set mode and punit scope
-[OpenMP.global]
+[OpenMP.default]
     trace_mode = TRACING
     OpenMP.thread = (0-7)
 
@@ -146,9 +145,9 @@ Runtime reconfiguration is user-initiated via the SIGUSR1 signal. This is an exp
 
 | Setting | Reconfigurable? | Notes |
 |---------|----------------|-------|
-| Domain `trace_mode` | ✅ | Via `[Domain.global]` trace_mode key |
+| Domain `trace_mode` | ✅ | Via `[Domain.default]` trace_mode key |
 | Domain event enable/disable | ✅ | Via `[Domain.default]` event keys |
-| Punit ranges | ✅ | Via `[Domain.global]` or `[Domain.PunitKind(Set)]` |
+| Punit ranges | ✅ | Via `[Domain.default]` or `[Domain.PunitKind(Set)]` |
 | Lexgion rate triple | ✅ | Via `[Lexgion(Address)]` section |
 | Lexgion event overrides | ✅ | Via `[Lexgion(Address)]` event keys |
 | `trace_mode_after` triggers | ✅ | Via `[Lexgion(*)]` sections; `auto_triggered` flags reset on reload |
@@ -163,7 +162,7 @@ OMP_TOOL_LIBRARIES=libpinsight.so ./myapp &
 APP_PID=$!
 
 # After warm-up, enable tracing
-echo '[OpenMP.global]
+echo '[OpenMP.default]
     trace_mode = TRACING' > pinsight_trace_config.txt
 kill -USR1 $APP_PID
 ```
@@ -173,16 +172,16 @@ kill -USR1 $APP_PID
 # Application running with full tracing...
 
 # Switch to monitoring-only (bookkeeping, no LTTng output)
-echo '[OpenMP.global]
+echo '[OpenMP.default]
     trace_mode = MONITORING' > pinsight_trace_config.txt
 kill -USR1 $APP_PID
 ```
 
 **Disable all tracing (zero overhead):**
 ```bash
-echo '[OpenMP.global]
+echo '[OpenMP.default]
     trace_mode = OFF
-[MPI.global]
+[MPI.default]
     trace_mode = OFF' > pinsight_trace_config.txt
 kill -USR1 $APP_PID
 ```

@@ -30,7 +30,6 @@ get_or_create_punit_config(int domain_idx, BitSet *punit_mask, int punit_kind,
 typedef enum {
   SECTION_NONE,
   SECTION_DOMAIN_DEFAULT,
-  SECTION_DOMAIN_GLOBAL,
   SECTION_DOMAIN_PUNIT,
   SECTION_LEXGION_ADDRESS_NAME,
   SECTION_LEXGION_DEFAULT,
@@ -522,42 +521,6 @@ static int parse_section_header(char *line) {
   else if (strcmp(target, "Energy") == 0) {
     current_section_type = SECTION_ENERGY;
   }
-  // Case 2b: Domain.global (must match before .default)
-  else if (strstr(target, ".global")) {
-    current_section_type = SECTION_DOMAIN_GLOBAL;
-    is_default_section = 1; // RESET allowed, REMOVE not
-    char *dot = strchr(target, '.');
-    if (dot) {
-      *dot = '\0';
-      int idx = find_domain_index(target);
-      if (idx >= 0) {
-        current_domain_idx = idx;
-
-        // Validate action
-        if (action == ACTION_REMOVE) {
-          fprintf(stderr, "PInsight Warning: REMOVE is not valid for "
-                          "Domain.global. Use RESET instead. Ignoring.\n");
-          current_section_type = SECTION_NONE;
-          return 0;
-        }
-
-        // RESET: revert mode to install default (no body)
-        if (action == ACTION_RESET) {
-          domain_default_trace_config[idx].last_mode =
-              domain_default_trace_config[idx].mode;
-          domain_default_trace_config[idx].mode =
-              domain_info_table[idx].starting_mode;
-          domain_default_trace_config[idx].mode_change_fired = 0;
-          domain_default_trace_config[idx].events =
-              domain_info_table[idx].eventInstallStatus;
-          current_section_type = SECTION_NONE;
-          return 0;
-        }
-
-        // SET: proceed to parse body
-      }
-    }
-  }
   // Case 2b: Domain.default
   else if (strstr(target, ".default")) {
     current_section_type = SECTION_DOMAIN_DEFAULT;
@@ -875,57 +838,6 @@ static void parse_key_value(char *line) {
         *dot = '.'; // restore
       }
     }
-  } else if (current_section_type == SECTION_DOMAIN_GLOBAL &&
-             current_domain_idx >= 0) {
-    // --- Domain.global key-value parsing ---
-    // Accepts: trace_mode, Domain.PunitKind = (Range)
-    if (strcmp(key, "trace_mode") == 0) {
-      pinsight_domain_mode_t old_mode =
-          domain_default_trace_config[current_domain_idx].mode;
-      pinsight_domain_mode_t new_mode = parse_mode_value(val);
-      domain_default_trace_config[current_domain_idx].last_mode = old_mode;
-      domain_default_trace_config[current_domain_idx].mode = new_mode;
-      /* Re-arm auto-trigger only when mode actually changed and
-       * old mode is not OFF (OFF is permanent, irreversible). */
-      if (new_mode != old_mode && old_mode != PINSIGHT_DOMAIN_OFF)
-        domain_default_trace_config[current_domain_idx].mode_change_fired = 0;
-    } else {
-      // Check for Domain.PunitKind = (Range)
-      // e.g. OpenMP.thread = (0-64)
-      char *dot = strchr(key, '.');
-      if (dot) {
-        *dot = '\0';
-        char *domain_name = key;
-        char *punit_name = dot + 1;
-
-        if (strcmp(domain_info_table[current_domain_idx].name, domain_name) ==
-            0) {
-          int p_idx = find_punit_kind_index(current_domain_idx, punit_name);
-          if (p_idx >= 0) {
-            // Parse value: (0, 128) or (0-128)
-            char *p = val;
-            while (*p && (*p == '(' || isspace((unsigned char)*p)))
-              p++;
-
-            char *end_ptr;
-            long low = strtol(p, &end_ptr, 0);
-            long high = low;
-
-            // Check separator
-            while (isspace((unsigned char)*end_ptr))
-              end_ptr++;
-            if (*end_ptr == ',' || *end_ptr == '-') {
-              high = strtol(end_ptr + 1, NULL, 0);
-            }
-
-            domain_info_table[current_domain_idx].punits[p_idx].low = (int)low;
-            domain_info_table[current_domain_idx].punits[p_idx].high =
-                (int)high;
-          }
-        }
-        *dot = '.'; // restore
-      }
-    }
   } else if (((current_section_type == SECTION_DOMAIN_DEFAULT &&
                current_domain_idx >= 0) ||
               (current_section_type == SECTION_DOMAIN_PUNIT &&
@@ -935,10 +847,69 @@ static void parse_key_value(char *line) {
     // Both accept: EventName = on/off
     struct domain_info *d = &domain_info_table[current_domain_idx];
 
+    // trace_mode: domain-wide operating mode — [Domain.default] only
+    // (a punit subset cannot have its own mode).
+    if (strcmp(key, "trace_mode") == 0) {
+      if (current_section_type != SECTION_DOMAIN_DEFAULT) {
+        fprintf(stderr,
+                "PInsight Warning: trace_mode is domain-wide and only valid "
+                "in [%s.default]. Ignoring.\n",
+                d->name);
+      } else {
+        pinsight_domain_mode_t old_mode =
+            domain_default_trace_config[current_domain_idx].mode;
+        pinsight_domain_mode_t new_mode = parse_mode_value(val);
+        domain_default_trace_config[current_domain_idx].last_mode = old_mode;
+        domain_default_trace_config[current_domain_idx].mode = new_mode;
+        /* Re-arm auto-trigger only when mode actually changed and
+         * old mode is not OFF (OFF is permanent, irreversible). */
+        if (new_mode != old_mode && old_mode != PINSIGHT_DOMAIN_OFF)
+          domain_default_trace_config[current_domain_idx].mode_change_fired = 0;
+      }
+      d = NULL; // handled; skip event lookup below
+    }
+
+    // Domain.PunitKind = (Range) punit scope, e.g. OpenMP.thread = (0-64) —
+    // [Domain.default] only. Event names contain no dots, so a dotted key
+    // here is unambiguously a punit-range key.
+    if (d && current_section_type == SECTION_DOMAIN_DEFAULT &&
+        strchr(key, '.')) {
+      char *dot = strchr(key, '.');
+      *dot = '\0';
+      char *domain_name = key;
+      char *punit_name = dot + 1;
+
+      if (strcmp(d->name, domain_name) == 0) {
+        int p_idx = find_punit_kind_index(current_domain_idx, punit_name);
+        if (p_idx >= 0) {
+          // Parse value: (0, 128) or (0-128)
+          char *p = val;
+          while (*p && (*p == '(' || isspace((unsigned char)*p)))
+            p++;
+
+          char *end_ptr;
+          long low = strtol(p, &end_ptr, 0);
+          long high = low;
+
+          // Check separator
+          while (isspace((unsigned char)*end_ptr))
+            end_ptr++;
+          if (*end_ptr == ',' || *end_ptr == '-') {
+            high = strtol(end_ptr + 1, NULL, 0);
+          }
+
+          d->punits[p_idx].low = (int)low;
+          d->punits[p_idx].high = (int)high;
+        }
+      }
+      *dot = '.'; // restore
+      d = NULL;   // handled (or unknown dotted key); skip event lookup below
+    }
+
     // Node-policy key (e.g. HIP/CUDA "device_activity") — [Domain.default] only.
     // Only HIP/CUDA declare such keys via TRACE_NODEPOLICY, so this is a no-op
     // (npidx<0) for other domains, enforcing the "HIP/CUDA + energy only" scope.
-    if (current_section_type == SECTION_DOMAIN_DEFAULT) {
+    if (d && current_section_type == SECTION_DOMAIN_DEFAULT) {
       int npidx = pinsight_get_nodepolicy_index(current_domain_idx, key);
       if (npidx >= 0) {
         pinsight_nodepolicy_val_t nv = pinsight_parse_nodepolicy(

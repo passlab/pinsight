@@ -171,9 +171,9 @@ Domain mode is the **coarsest** control level. Within MONITORING/TRACING modes, 
 
 Modes can be changed at runtime via the config file and SIGUSR1 signal:
 
-1. Edit the config file to set `trace_mode` in a `[Domain.global]` section:
+1. Edit the config file to set `trace_mode` in a `[Domain.default]` section:
    ```ini
-   [OpenMP.global]
+   [OpenMP.default]
        trace_mode = STANDBY
    ```
 2. Send `kill -USR1 <pid>`
@@ -249,7 +249,7 @@ typedef struct domain_trace_config {
 |------|------|
 | `src/trace_config.h` | Mode enum, macros, `domain_trace_config_t` with volatile `mode` field |
 | `src/trace_config.c` | Env parsing (4 modes), init, print |
-| `src/trace_config_parse.c` | `SECTION_DOMAIN_GLOBAL`, `trace_mode` key, `[Domain.global]` section |
+| `src/trace_config_parse.c` | `SECTION_DOMAIN_DEFAULT`, `trace_mode` key, `[Domain.default]` section |
 | `src/pinsight_control_thread.h` | Control thread API: start/stop/wakeup, `pinsight_check_pause()`, domain apply declarations |
 | `src/pinsight_control_thread.c` | Control thread loop, SIGUSR1 handler, config reload, introspection, `control_apply_all_modes()` |
 | `src/pinsight.c` | `pinsight_fire_mode_triggers()` — delegates to control thread, kill-switch: `.mode == PINSIGHT_DOMAIN_OFF` |
@@ -505,7 +505,7 @@ the rotated traces contain real event data. Test script at
 
 Mode switching is triggered by modifying the config file and sending `SIGUSR1`:
 
-1. Edit config file: set `trace_mode` in `[OpenMP.global]` (or other domain)
+1. Edit config file: set `trace_mode` in `[OpenMP.default]` (or other domain)
 2. Send `kill -USR1 <pid>`
 3. The SIGUSR1 handler (trivial, async-signal-safe) does `sem_post(&control_sem)` to wake the control thread
 4. The **control thread** wakes and:

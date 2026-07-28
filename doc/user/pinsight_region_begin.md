@@ -208,7 +208,7 @@ sections in addition to address-based sections:
 
 ```ini
 # Domain-level: control all user regions
-[User.global]
+[User.default]
     trace_mode = TRACING
 
 # Default for all user regions
@@ -259,7 +259,7 @@ config that matches `lgp->name`, and if so, override the default config.
 | **Mode switching** (`trace_mode_after`) | Works — triggers when user region hits `max_num_traces` |
 | **INTROSPECT action** | Works — introspects, rotates, runs script when user region limit reached |
 | **Event filtering** | Not applicable (User domain has only begin/end events) |
-| **SIGUSR1 reload** | Works — `[User.global]` trace_mode changes take effect on reload |
+| **SIGUSR1 reload** | Works — `[User.default]` trace_mode changes take effect on reload |
 | **Domain OFF** | `PINSIGHT_TRACE_USER=OFF` → `pinsight_region_begin()` returns early |
 
 ---
