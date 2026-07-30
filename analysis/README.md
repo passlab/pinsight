@@ -67,6 +67,7 @@ make no assumptions about which application produced the trace.
 | `mpi_jitter.py` | Blocking-wait jitter per MPI call type: cross-rank spread (straggler signal) and p99/p50 tail ratio (jitter signal); compare against a baseline run with `--baseline DIR` for the amplified-jitter verdict |
 | `gpu_datamovement.py` | Host↔device copy analysis: direction/bytes/host time from `hipMemcpy` host events; actual GPU copy time and bandwidth from activity records |
 | `halo_exchange.py` | Point-to-point (halo) vs collective cost split, neighbor topology (who talks to whom, same-node vs cross-node), and message-size profile (latency-bound vs bandwidth-bound) |
+| `phase_detect.py` | Splits the run into execution phases (change-point detection over binned event-rate features), characterizes each phase (MPI-dense, collective-heavy, p2p-heavy, kernel-dense), and detects the iteration period and cycle count per phase |
 | `mpi_gpu_energy_report.py` | Combined per-rank report (MPI/GPU/energy + figures + kernel hotspots) |
 | `parse_energy.py` | Minimal per-device energy/power summary (one line per trace dir) |
 
