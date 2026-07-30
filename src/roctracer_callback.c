@@ -109,8 +109,10 @@ static inline int hip_memcpy_event_id(int kind) {
 }
 
 /* Thread IDs for pure HIP host threads start at 4000 to avoid collisions:
- *   OpenMP: 0+, CUDA: 2000+, Python: 3000+, HIP: 4000+ */
-static _Atomic int hip_thread_id_counter = 4000;
+ *   OpenMP: 0+, CUDA: 2000+, Python: 3000+, HIP: 4000+
+ * Plain int + __atomic builtins: clang rejects __atomic_* on _Atomic-qualified
+ * objects (GCC accepts both). */
+static int hip_thread_id_counter = 4000;
 
 static inline void hip_ensure_thread_init(void) {
     if (!pinsight_thread_data.initialized) {
@@ -418,7 +420,13 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         /* Use the host-side kernel function pointer as lexgion codeptr.
          * Unique per kernel definition, stable for the process lifetime. */
         const void *codeptr = (const void *)api_data->args.hipLaunchKernel.function_address;
-        const char *kernelName = hipKernelNameRefByPtr(
+        /* Debug knob: PINSIGHT_HIP_NO_KERNELNAME=1 skips the roctracer name
+         * lookup (suspected abort source inside the ROCm>=7 deprecated-
+         * roctracer shim for some apps). */
+        static int no_name_lookup = -1;
+        if (no_name_lookup < 0)
+            no_name_lookup = getenv("PINSIGHT_HIP_NO_KERNELNAME") != NULL;
+        const char *kernelName = no_name_lookup ? NULL : hipKernelNameRefByPtr(
             api_data->args.hipLaunchKernel.function_address,
             api_data->args.hipLaunchKernel.stream);
 

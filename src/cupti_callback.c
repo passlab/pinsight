@@ -483,7 +483,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
   /* ========== Kernel Launch ========== */
   if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020 ||
-      cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
+      cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000
+#if CUDART_VERSION >= 11060
+      || cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_v11060 ||
+      cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_ptsz_v11060
+#endif
+  ) {
 
     /* Skip internal CUDA module registration callbacks that CUPTI
      * may fire with a kernel-launch cbid during CUDA init.
@@ -525,17 +530,31 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
-        cudaLaunchKernel_v7000_params *p =
-            (cudaLaunchKernel_v7000_params *)cbInfo->functionParams;
-        cudaStream_t stream = p->stream;
+        cudaStream_t stream;
+        dim3 grid, block;
+#if CUDART_VERSION >= 11060
+        if (cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_v11060 ||
+            cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_ptsz_v11060) {
+          cudaLaunchKernelExC_v11060_params *p =
+              (cudaLaunchKernelExC_v11060_params *)cbInfo->functionParams;
+          stream = p->config->stream;
+          grid = p->config->gridDim;
+          block = p->config->blockDim;
+        } else
+#endif
+        {
+          cudaLaunchKernel_v7000_params *p =
+              (cudaLaunchKernel_v7000_params *)cbInfo->functionParams;
+          stream = p->stream;
+          grid = p->gridDim;
+          block = p->blockDim;
+        }
         unsigned int streamId;
         cuptiGetStreamIdEx(context, stream, 0, &streamId);
         struct contextStreamId_t ctxStreamId;
         ctxStreamId.contextId = cxtId;
         ctxStreamId.streamId = streamId;
         uint64_t timeStamp = cuda_fast_timestamp();
-        dim3 grid = p->gridDim;
-        dim3 block = p->blockDim;
         struct dimension_t dim;
         dim.gridx = grid.x;
         dim.gridy = grid.y;
@@ -990,6 +1009,15 @@ static void cupti_set_all_callbacks(int enable) {
                       CUPTI_RUNTIME_TRACE_CBID_cudaLaunch_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000);
+#if CUDART_VERSION >= 11060
+  /* AMReX/Castro on Hopper+ launches many kernels via cudaLaunchKernelExC
+   * (launch attributes); without these cbids those launches are invisible
+   * host-side while their GPU activity records still appear. */
+  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                      CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_v11060);
+  cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
+                      CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_ptsz_v11060);
+#endif
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
                       CUPTI_RUNTIME_TRACE_CBID_cudaStreamSynchronize_v3020);
   cuptiEnableCallback(enable, subscriber, CUPTI_CB_DOMAIN_RUNTIME_API,
