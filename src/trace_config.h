@@ -180,9 +180,9 @@ typedef enum {
   PINSIGHT_DOMAIN_TRACING = 4,    /* Full tracing (default) */
 } pinsight_domain_mode_t;
 
-/* Node-policy — WHICH ranks perform a per-process capability measurement
- * (HIP/CUDA GPU-activity pool, energy). Resolved once at startup (per-run).
- * See doc/node_singleton_measurement_design.md. */
+/* Node-policy — WHICH ranks perform a per-node capability measurement of the node
+ * (HIP/CUDA GPU-activity pool, energy). Resolved once per run (at startup;
+ * energy: at first arm). See doc/node_singleton_measurement_design.md. */
 typedef enum {
   PINSIGHT_NODEPOLICY_OFF = 0,         /* skip everywhere                          */
   PINSIGHT_NODEPOLICY_ON,              /* every rank measures/collects             */
@@ -434,9 +434,10 @@ extern int pinsight_mpi_ranks_per_node;
 extern int pinsight_local_rank(void);
 // Ranks per node: MPI-published -> env (SLURM_NTASKS_PER_NODE) -> -1 unknown.
 extern int pinsight_ranks_per_node(void);
-// Energy node-singleton policy (default ON). Set by env PINSIGHT_MEASURE_ENERGY
-// or [Energy] measure; read by energy.c. Defined here (not energy.c) so the
-// standalone config-parser test links without energy.c. See energy.h.
+// Energy node-singleton policy (default OFF — energy is opt-in, 2026-07-31).
+// Set by env PINSIGHT_MEASURE_ENERGY or [Energy] measure; read by energy.c
+// (off<->armed reloadable; variant latched at first arm). Defined here (not
+// energy.c) so the standalone config-parser test links without energy.c.
 extern pinsight_nodepolicy_t energy_measure_policy;
 
 // --------------------------------------------------------

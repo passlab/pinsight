@@ -368,6 +368,12 @@ static void *pinsight_control_loop(void *arg) {
             /* Re-arm the window timer: a reload may add, extend, or clear
              * window_timeout. Restarts the deadline from now. */
             window_timer_arm_from_default();
+#ifdef PINSIGHT_ENERGY
+            /* Apply [Energy] measure off<->armed transitions (variant is
+             * latched per run). Safe on this thread: the AMD-SMI constraint
+             * only forbids main-thread reads during DSO teardown. */
+            pinsight_energy_apply_config();
+#endif
             /* Note: we intentionally do NOT reset mode_change_fired here.
              * Config reload updates configuration (modes, rates, events)
              * but does not touch runtime state (counters, trigger guards).
@@ -457,13 +463,14 @@ static void *pinsight_control_loop(void *arg) {
     }
 
 #ifdef PINSIGHT_ENERGY
-    /* Emit the closing energy_exit from this (live) control thread just before
-     * it dies, NOT from the library destructor: AMD-SMI corrupts the heap if its
-     * gpu_metrics path is read on the main thread during DSO teardown after the
-     * constructor's read. Reading from a separate live thread is safe. Runs after
-     * the exit_pinsight marker (pinsight_control_thread_stop is called right
-     * after it), preserving the app-end-precedes-final-snapshot order. */
-    pinsight_energy_snapshot_exit();
+    /* Close any open energy span (disarm = final read + energy_exit) from this
+     * (live) control thread just before it dies, NOT from the library
+     * destructor: AMD-SMI corrupts the heap if its gpu_metrics path is read on
+     * the main thread during DSO teardown after the constructor's read. Reading
+     * from a separate live thread is safe. Runs after the exit_pinsight marker
+     * (pinsight_control_thread_stop is called right after it), preserving the
+     * app-end-precedes-final-snapshot order. */
+    pinsight_energy_disarm();
     pinsight_energy_fini();
 #endif
 

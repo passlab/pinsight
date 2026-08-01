@@ -1,20 +1,31 @@
 # PInsight visualization & analysis redesign
 
-**Status:** high-level design · 2026-07-17 · **progress update 2026-07-24**
-(WS9 done incl. experiments; peam restructured — snapshot at end of §6)
-**Decisions (fixed):** TraceCompass **XML-first** as the primary interactive
-platform (no Java plugin, no trace-server for now) · PInsight source changes
-limited to **one new manifest event** (everything else post-processing; no
-energy_sample yet) · **all domains** (OpenMP, MPI, HIP, CUDA, Python, energy)
-brought to the same level, not just the AMG/MI300A path.
+**Status:** high-level design · 2026-07-17 · progress updates 2026-07-24 and
+**2026-07-29** (WS9 done; toolkit now lives in `pinsight/analysis/`; WS10–WS12
+added from the flow-graph / efficiency-graph / source-exploration
+consolidation; prior 3D + source-lookup experiments recorded in §7 — snapshot
+at end of §6)
+**Decisions (fixed 2026-07-17, amended 2026-07-29):** TraceCompass
+**XML-first** stands for everything XML can express (timeline, segments, XY
+views). Two amendments: (1) a **Java plugin is conditionally in scope** for
+the two things XML structurally cannot express — time-graph **arrows** (WS10)
+and codeptr **source lookup** (WS12) — gated on the Perfetto validation in
+WS10; `pinsight-tracecompass` (repurposed 2026-07-27, `2c48725`) is its home,
+and the prebuilt trace-compass-server in this repo checkout is the headless
+deployment target. (2) The PInsight source-change budget widens from "one
+manifest event" to three small, independently phased items: manifest (WS1),
+MPI `bytes` + communicator fields (WS10), periodic counter/energy sample
+(WS11b). **All domains** (OpenMP, MPI, HIP, CUDA, Python, energy) brought to
+the same level, not just the AMG/MI300A path — unchanged.
 
 ## 1. Current assets (three disconnected layers)
 
 | Layer | What exists | State |
 |---|---|---|
 | Trace data | 7 tracepoint domains; PMPI carries `count/dest/source/tag`; HIP host callbacks **and** GPU activity records (`correlation_id`, GPU-side `begin/end_ns`); energy enter/exit brackets (node-wide counters); multi-node = per-node CTF dirs | Richer than any view exploits |
-| TraceCompass XML (`peam/src/tc/`) | `pinsight_analysis.xml`: ONE combined state provider + time-graph view (per the 2026-06-29 decision: cross-domain correlation on a shared time axis requires a single provider/view). Location trees: Processor, OS/OMP Thread, OMP Team/Region, MPI Rank, HIP Device/Kernel, CUDA Device/Kernel. `pinsight_omp_pattern_analysis.xml`: FSM segment analysis, **OpenMP-only, stale** | Working but shallow; activity records excluded |
-| Python (`peam/src/`) | `pinsight_reader.py` + load_imbalance / mpi_latency / gpu_datamovement / halo_exchange / mpi_gpu_energy_report / parse_energy | Validated on the 4-node run; since 2026-07-20 each script declares the neutral table contract (text/`--json`/`--csv`) and runs from the TC GUI (WS9) |
+| TraceCompass integration (`analysis/tc/`) | Two XMLs — `pinsight_analysis.xml`: ONE combined state provider + time-graph view (per the 2026-06-29 decision: cross-domain correlation on a shared time axis requires a single provider/view; location trees: Processor, OS/OMP Thread, OMP Team/Region, MPI Rank, HIP Device/Kernel, CUDA Device/Kernel) and `pinsight_omp_pattern_analysis.xml` (FSM segment analysis, **OpenMP-only, stale**) — plus the WS9 LAMI bridge: `lami.py`, generic `lami_adapter.py`, `resolve_experiment.py`, `tc-common.sh`, `tc-setup.sh`, `tc-local.conf(.example)`, and four committed wrappers (`lami_{load_imbalance,mpi_latency,halo_exchange,gpu_datamovement}.sh`) | XML working but shallow; activity records excluded; no `<xyView>`, no energy/pysysmon handlers |
+| Python (`analysis/`, formerly `peam/src/`) | `pinsight_reader.py` (shared reader) + load_imbalance / mpi_latency / mpi_jitter / gpu_datamovement / halo_exchange / mpi_gpu_energy_report / parse_energy / phase_detect (2026-07-27: change-point phase segmentation + iteration periodicity from 10 ms binned rates) | Validated on the 4-node run; since 2026-07-20 each script declares the neutral table contract (text/`--json`/`--csv`); `analysis/README.md` is the user guide. `phase_detect` committed with wrapper + README row 2026-07-29 (`f6e9c92`). Gaps: `mpi_jitter` documented but has no `tc/lami_*.sh` wrapper; `mpi_gpu_energy_report` still reads babeltrace2 on stdin and bypasses `pinsight_reader` |
+| trace-compass-server (repo checkout, untracked) | Prebuilt TC 10.2 + incubator 0.18 trace server (headless: no UI/EASE plugins; incubator rocm.core/gpu.core present but PInsight-irrelevant) | Started 2026-07-07/08 but never fed a trace or our XML — WS8 pilot not exercised in substance |
 
 Path note: peam was restructured 2026-07-20 (commit `cfcbfa5`) —
 `src/python/` flattened to `src/`, and the XML analyses folded into
@@ -54,6 +65,14 @@ trace_streaming_design.md §13).
    silently under-count every analysis.
 8. Energy invisible interactively (bracket-only; deferred: no time series until
    an `energy_sample` is implemented — out of scope this round).
+9. *(added 2026-07-29)* **No causality/flow view.** Nothing draws MPI
+   send→recv, kernel launch→execution, or OMP fork/join relationships; the
+   timeline shows rows in isolation → WS10.
+10. *(added 2026-07-29)* **No resource-efficiency view — and no data for
+    one.** No CPU/memory/network hardware counters are traced at all → WS11.
+11. *(added 2026-07-29)* **codeptr fields are opaque.** `parallel_codeptr` /
+    `mpi_codeptr` / `cuda_codeptr` identify lexgions everywhere (XML rows,
+    scripts, reports) but nothing resolves them to `file:line` → WS12.
 
 ## 3. Target architecture
 
@@ -85,6 +104,12 @@ dictionary** = the contract that keeps them saying the same thing.
 ## 4. Workstreams
 
 ### WS1 — Manifest event (the one PInsight source change)
+**Detailed design: `ws1_manifest_design.md` (2026-07-30)** — resolves the
+event-vs-external-file question as *both* (dedicated
+`pinsight_manifest_lttng_ust` provider emitting `manifest_process` +
+`manifest_kv` bursts, plus a launcher-written `run_manifest.json` sidecar
+joined by `run_id`). The sketch below is the original outline.
+
 One tracepoint, e.g. `pinsight_enter_exit_lttng_ust:manifest`, carrying:
 - identity: `mpirank` (early-env best-effort at startup, authoritative after
   MPI_Init), `pid`, `hostname`, launcher vars (`FLUX_TASK_RANK`/`PMI_RANK`)
@@ -170,6 +195,8 @@ Statistics / Density / Scatter / Table views automatically.
   per rank over time; kernels in flight per device) to replace event-count
   pies as the first-look statistics.
 - Segment-store statistics from WS3 cover duration distributions.
+- *(2026-07-29)* Expanded into WS11a — same mechanism, with the metric set
+  seeded from `phase_detect.py`'s per-bin features so XML and Python agree.
 
 ### WS5 — Python side: conform + report
 - Align state/category names and colors to the metrics dictionary (small
@@ -191,6 +218,9 @@ tracks, manifest → track names/metadata. Adds a polished, shareable,
 SQL-queryable web viewer (ui.perfetto.dev or self-hosted) alongside TC —
 replaces nothing, no live mode (snapshot/batch feed it). This is the
 highest-UX-per-effort item in the whole plan.
+*(2026-07-29)* Elevated to a near-term action: it now also serves as the
+**validation gate for WS10** — arrows are cheap here, so we learn whether a
+flow view is readable at AMG scale before committing to any Java.
 
 ### WS8 — Trace-server + VS Code frontend pilot (web-UI hedge #2, timeboxed)
 The TC **trace server is the same Java core** — our XML analyses load
@@ -271,6 +301,136 @@ This bridge also softens WS3's scope: "select range → run Python analysis →
 table in GUI" overlaps with what per-domain pattern XMLs would provide, using
 logic we have already validated.
 
+### WS10 — Flow graph: arrows for MPI messages, GPU launches, OMP fork/join *(added 2026-07-29)*
+
+Goal: overlay causality on the timeline — MPI p2p send→recv between rank
+rows, kernel launch→execution from rank row to device row, fork/join from a
+master thread to its workers.
+
+**Data readiness (assessed against current tracepoints):**
+- **OMP fork/join — derivable today, no source change.** The key
+  `(mpirank, parallel_codeptr, parallel_record_id)` is shared by
+  `parallel_begin` (master, `omp_thread_num==0`) and every worker's
+  `implicit_task_begin` (`ompt_callback.c` re-reads it from
+  `parallel_data->ptr`); joins via `implicit_task_end` /
+  `parallel_join_sync_*` → `parallel_end`; `team_size` on both ends.
+  Caution: `omp_team_num` is declared on every event but never assigned
+  (always 0) — never build hierarchy on it.
+- **GPU launch→exec — feasible via the correlation id.**
+  `correlationId` (CUPTI, u32) / `correlation_id` (roctracer, u64) is shared
+  between host callback and activity record. Two caveats: activity records
+  carry **no hostname/pid/mpirank** (match per trace dir, not payload), and
+  their LTTng timestamp is buffer-flush time — the true interval is payload
+  `start_gpu`/`end_gpu` (CUDA) / `begin_ns`/`end_ns` (HIP), which an XML
+  state provider structurally cannot use (intervals key on the event's own
+  timestamp; this is why activity records are excluded from the XML today).
+  Clock offset comes from the one-shot `*_clock_calibration` events.
+- **MPI messages — partially blocked by missing fields.** `source`/`dest`/
+  `tag` are traced, so rank-pair arrows are drawable; but the
+  **communicator is not traced** (matching is wrong for sub-communicator
+  traffic — AMG's coarse levels), **bytes are not traced** (element `count`
+  only; the datatype is dropped at the wrapper), and no request handle links
+  Isend/Irecv to its Wait. Prerequisite source fix (small, localized in
+  `pmpi_mpi.c`): call `PMPI_Type_size()` and emit `bytes`; emit a comm id
+  (`PMPI_Comm_c2f` or a hash). Mind the ~10-field LTTng ceiling already hit
+  twice in the CUPTI/roctracer headers.
+
+**Platform: XML cannot draw arrows — verified.** `xmlView.xsd` in the
+shipped `tmf.analysis.xml.core 4.3.2` allows a `timeGraphView` only
+`head|definedValue|entry`; there is no link/arrow element. Arrows require a
+Java `ITimeGraphDataProvider` implementing `fetchArrows()`. The building
+blocks ship in the trace server jars: `tmf.core` event matching
+(`ITmfEventMatching`; `TcpEventKey` is the reference pattern for a
+send/recv key), `analysis.graph.core` (critical path), and trace
+synchronization (`SyncAlgorithmFullyIncremental`) for cross-node clock skew.
+
+**Plan — cheap validation before any Java:**
+1. **Perfetto first (WS7, days):** `to_perfetto.py` emits the same pairings
+   as flow arrows. Validates whether the view is readable at AMG scale
+   (16 ranks × ~10⁵ p2p messages may render as noise) and which filters
+   (selected rank, time window, min-bytes) it needs.
+2. **Java plugin only if validated (2–4 weeks first time):** a headless
+   bundle (`tmf.core` + `IDataProviderFactory` extension) dropped into
+   `trace-compass-server/plugins/`, viewed via the VS Code trace extension —
+   less code than an Eclipse RCP `tmf.ui` view, which can follow. No
+   tycho/target-platform exists anywhere yet; standing up the TC dev
+   environment dominates the estimate, not the matching logic. §7's
+   `lbanalysis` plugin is a usable skeleton after renaming its bundle id and
+   bumping deps from tmf 9.0 to the shipped 10.2. WS2's
+   Host → Rank → {MPI, GPU, OMP} restructure is a readability prerequisite —
+   in the current layout rank rows and device rows are not even adjacent.
+
+### WS11 — Resource-efficiency / utilization XY views *(added 2026-07-29)*
+
+Goal: XY charts of how efficiently hardware is used — CPU vs peak, memory
+bandwidth, network bandwidth.
+
+**Hard constraint: the trace contains none of this today.** No
+PAPI/perf_event anywhere in the codebase; no uncore/HBM or NIC counters; the
+only derivable bandwidth is explicit-GPU-copy GB/s (degenerate on MI300A
+unified memory); energy is two events per process, no time series. Hence two
+stages:
+
+- **WS11a — time-in-state utilization now (extends WS4, zero source
+  change).** XML `<xyView>` is supported by the shipped schema: the state
+  provider writes numeric attributes, `tc-setup.sh` re-registers, no build
+  step. Series: fraction of time in MPI-wait per rank, kernels-in-flight per
+  device, MPI call rate, memcpy rate. `phase_detect.py`'s `collect()`
+  already computes exactly these per 10 ms bin (`mpi_rate, mpi_frac,
+  coll_share, kern_rate, act_frac, memcpy_rate, par_rate, omp_sync_frac`) —
+  use that feature set as the metric seed so XML and Python stay
+  dictionary-consistent (§5). This is
+  "efficiency relative to the trace" (where time goes), not hardware
+  efficiency.
+- **WS11b — sampled hardware counters later (the third source change).**
+  The long-planned periodic `energy_sample`-style event from the existing
+  control thread, generalized to a counter sample. Backends in priority
+  order: **amd-smi** (GPU activity %, VRAM, power — backend infrastructure
+  already exists), **PAPI/perf_event** (CPU FLOPs, DRAM bandwidth),
+  **Slingshot NIC counters via sysfs** (network). Emit scalar fields per
+  device, not LTTng sequences (sequences are not addressable in TC XML state
+  changes); node-wide values dedupe by hostname exactly as energy does. MPI
+  byte volume as a network proxy additionally needs WS10's `bytes` fix.
+  Rough effort: 1–2 weeks for the sample event + first backend; the TC side
+  then reuses WS11a's xyView mechanics unchanged.
+
+### WS12 — Source exploration: codeptr → file:line → open editor *(revived 2026-07-29)*
+
+Goal (unchanged since the 2021 `SourceCodeLookup` note in
+`pinsight-tracecompass`): from any event or region — in TC or in a report —
+jump to the application source line that produced it.
+
+**What was proven (2021, see §7):** stock TC "Open Source Code" works
+end-to-end on a toy app (`lttng-tracecompass-srcwindow` demo: build with
+`-g`, enable `lttng_ust_dl:*`, `add-context -t vpid -t ip` → Binary/
+Function/Source Location columns → editor opens at the exact tracepoint
+line). And it was proven **insufficient** for PInsight: the `ip` context
+points inside the OMPT/PMPI/CUPTI callback, so on LULESH it opens
+`ompt_callback.c`, not the application.
+
+**The fix, designed then and still right:** resolve the **codeptr** fields
+(`parallel_codeptr`, `mpi_codeptr`, `cuda_codeptr` — by definition the
+return address into the *application*) instead of `ip`. Runtime prototypes
+exist: the unmerged `origin/load_baseaddr` branch (2023; dladdr/`dli_fbase`
+base-address subtraction so codeptrs are addr2line-able) and the cmake-gated
+backtrace support (app-level IP discovery, `80ddc43`). Per
+`callpath_profiling_design.md`, symbolization belongs **offline, never at
+runtime** — and the runtime branch becomes unnecessary if
+`lttng_ust_statedump:bin_info` (`baddr`, path, build-id) is captured:
+offline `codeptr − baddr` → addr2line/DWARF.
+
+Deliverables:
+- **WS12a — Python symbolizer (days, anytime):** a `pinsight_reader` helper
+  resolving codeptrs to `file:line (function)` given the binary (statedump
+  `baddr` + addr2line). Every table/report that today prints hex lexgion ids
+  gains readable names; feeds WS5 reports and WS7 Perfetto track names.
+- **WS12b — TC integration (rides the WS10 Java decision):** replicate the
+  debug-info "Open Source Code" action for codeptr fields — either the 2021
+  PoC idea (an aspect substituting codeptr for `ip` so TC's own lookup
+  machinery resolves it) or event-table aspects in the same plugin as WS10.
+  Requires the binary reachable from the viewer machine (or a source-path
+  mapping) — the srcwindow demo used a shared VM for exactly this reason.
+
 ## 4b. Implementation conventions (`analysis/` folder)
 
 Layout rules (referenced from `analysis/README.md` §Extending):
@@ -333,7 +493,14 @@ Acceptance: single command yields an HTML report; CUDA/Python demo traces
 render equivalently to HIP/MPI.
 **P-web (parallel, decoupled from P1-P3):** WS7 Perfetto exporter (anytime —
 depends only on the Python reader); WS8 trace-server pilot (after WS2, so the
-pilot exercises the restructured XML). Frontend-strategy note: "XML-first"
+pilot exercises the restructured XML).
+**P4 (added 2026-07-29):** near-term additions — WS7 Perfetto (now doubling
+as the WS10 arrow-validation gate), WS11a time-in-state xyViews, WS12a Python
+symbolizer, and the WS10 MPI field fix (`bytes` + comm id; benefits every
+downstream analysis, not just arrows). Gated/later: WS10 Java arrows (after
+WS7 verdict + WS2), WS11b sampled counters (after WS1 — both touch the
+control thread), WS12b TC source-lookup (rides the WS10 Java decision).
+Frontend-strategy note: "XML-first"
 means TC-**core**-first — the XML runs identically under Eclipse and the
 trace server, so a later shift to a web/VS Code frontend forfeits none of
 WS2-WS4. AI-assisted development makes the *glue* (converter, pilot,
@@ -355,7 +522,33 @@ cheaper to own — hence hedges + evidence rather than an upfront platform bet.
   (`pinsight_control_thread.c/.h`, `trace_config*`) — land or stash that
   first to avoid entangling the two changes.
 
+**Progress snapshot (2026-07-29)**
+- Toolkit relocated: `peam/src` → `pinsight/analysis` (three-repo split,
+  2026-07-27); this doc now lives in `doc/design/`.
+- New analyses since the last snapshot: `mpi_jitter.py` (committed,
+  documented in `analysis/README.md`, but no `tc/lami_*.sh` wrapper) and
+  `phase_detect.py` (change-point phases + iteration periodicity —
+  committed 2026-07-29 with wrapper + README row, `f6e9c92`).
+- trace-compass-server binary unpacked in the repo checkout (untracked);
+  started 2026-07-07/08 but never fed a trace or our XML — WS8 remains
+  not-started in substance.
+- `pinsight-tracecompass` repurposed as the TC plugin repo (`2c48725`);
+  its 2020-25 experiments inventoried in §7.
+- WS10–WS12 added (this update). WS1–WS8 still not started.
+
 **Risks / open questions**
+- *(2026-07-29)* Arrow density: 16 ranks × ~10⁵ p2p messages may render as
+  noise — hence the Perfetto-first gate on WS10; expect to need filtering
+  (selected rank / time window / min-bytes).
+- *(2026-07-29)* MPI matching correctness: without the communicator field,
+  (src,dst,tag) matching is wrong for sub-communicator traffic; the WS10
+  field fix must land before arrows are trusted on AMG.
+- *(2026-07-29)* WS11b sampling overhead/perturbation from the control
+  thread is unmeasured (that thread now also carries energy + node-singleton
+  duties).
+- *(2026-07-29)* Java plugin cost is front-loaded: no tycho/target-platform
+  exists anywhere; the 2–4-week estimate is mostly TC dev-environment
+  standup, not analysis logic.
 - XML FSM correlation-id matching for launch→exec segments is unproven
   (fallback: that metric stays Python-only).
 - One combined state provider at 16+ ranks × all domains: state-system size/
@@ -365,3 +558,69 @@ cheaper to own — hence hedges + evidence rather than an upfront platform bet.
 - Timeline entry trees keyed on manifest fields: XML entry `path` matching is
   static — hierarchy may need the state provider to *write* the tree in
   Host/Rank order rather than the view re-sorting it (design detail for WS2).
+
+## 7. Prior experimental strands (`pinsight-tracecompass/experiment/`) — record + disposition *(added 2026-07-29)*
+
+2020–2025 exploration, originally in this repo, moved out 2024-01-19
+(`a377e1b`); the repo was repurposed for TC plugin development 2026-07-27
+(`2c48725`). What exists, what it taught, and what carries forward:
+
+- **3D trace visualization (2020–21, JavaFX-in-SWT).** Two artifacts:
+  `JavaFX3DView/` (`Pinsight3DFXView`, TC 5.1/Java 8 plugin scaffold — the
+  TMF event-request plumbing over `implicit_task_begin/end` is correct, but
+  it still renders the stock random-box demo and the committed file has
+  syntax errors), and the substantive one,
+  `DebuggerIntegrationExperiment/pinsight3d.java` (764 lines): **thread ×
+  parallel region (`parallel_codeptr`) × time**, one extruded box per
+  implicit-task instance with depth = duration, data-sized axis walls,
+  region-indexed colors. Loose file, no plugin manifest; box-click handlers
+  exist but stop at `println` — the intended *click a box → open its source
+  line* join was never made. That join is now WS12. The 2021 design note
+  (`experiment/tracecompass/README.md`) preferred SWT/SWTChart+OpenGL for TC
+  integration, yet everything built used JavaFX/FXCanvas — the
+  integration-friction it predicted is real.
+- **hwloc3d (2024, jzy3d/JOGL + Swing, standalone Maven — not a TC
+  plugin).** Renders an lstopo XML export (JAXB from the hwloc DTD) as a 3D
+  floorplan: Machine → Package → NUMA → cache → core nested boxes plus a PCI
+  bridge tree. Works on the four committed machines; **topology-only, zero
+  trace coupling**; per-machine hand-tuned scale constant; SWT binding
+  explicitly parked ("SWT support is shaky" in the pom). The differentiated
+  idea worth keeping: **paint trace-derived per-core/per-device metrics onto
+  the hardware topology** — becomes interesting once WS11b provides sampled
+  counters to paint.
+- **Debugger integration (2021).** `debugging4performanc.md` vision:
+  breakpoint-bounded tracing (`lttng rotate` at entry/exit breakpoints) with
+  TC view + debugger + code editor in one Eclipse perspective.
+  `DebuggerIntegrationExperiment/SampleView.java` demonstrated the enabling
+  mechanism — rubber-band time selection on a chart broadcast via
+  `TmfSelectionRangeUpdatedSignal`/`TmfWindowRangeUpdatedSignal` to all
+  other views. Parked; the signal-broadcast pattern is reusable in any
+  future RCP view.
+- **Source-code lookup (2021 + 2023, feeds WS12).**
+  `lttng-tracecompass-srcwindow/` proved stock TC "Open Source Code"
+  end-to-end on a toy app (screenshots in-repo: `hello.c` opened at the
+  tracepoint line from Binary/Function/Source Location columns).
+  `SourceCodeLookup/README.md` recorded the PInsight-specific insight — the
+  `ip` context resolves into PInsight's own callback code (LULESH screenshot
+  opens `ompt_callback.c`), so app-level lookup must go through the codeptr
+  fields — and proposed the codeptr-for-ip substitution PoC. The runtime
+  half (base-address subtraction via dladdr/`dli_fbase`) sits on the
+  unmerged `origin/load_baseaddr` branch (2023); the surviving merged pieces
+  are the cmake-gated backtrace support and the backtrace-derived app-level
+  `cuda_codeptr` (`80ddc43`). WS12 supersedes all of this with offline
+  symbolization (statedump `baddr` + addr2line), per
+  `callpath_profiling_design.md`.
+- **lbanalysis (2025, SWTChart plugin).** Per-thread execution time bucketed
+  by `parallel_codeptr`, with zoom and CSV export — a hand-rolled chart via
+  `TmfEventRequest`, not a data provider. Usable as the WS10/WS12b plugin
+  skeleton after renaming its bundle id (still
+  `org.eclipse.tracecompass.tmf.sample.ui`) and bumping deps from tmf 9.0 to
+  the shipped 10.2.
+
+**Disposition:** the thread×region×time 3D content is now adequately served
+by the 2D unified timeline + WS3 segments + WS7 Perfetto; 3D stays parked
+unless the hwloc-metric-mapping idea is picked up post-WS11b. Any revival
+should target the data-provider architecture (headless/TSP-friendly, so it
+works under the trace server and web frontends), not FXCanvas-in-RCP. Source
+exploration graduates from experiment to workstream as WS12; the debugger
+perspective stays a long-horizon idea pending a concrete use case.

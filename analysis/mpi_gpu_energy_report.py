@@ -29,9 +29,12 @@
 # are always reported regardless, since those do not need the mapping.
 #
 # Energy note: gpu_uj is a NODE-WIDE counter -- every rank on a node reports
-# the same values (see energy_lttng_ust_tracepoint.h). This script uses the
-# earliest energy_enter and latest energy_exit across all ranks in the trace
-# as the measurement window; it does not need the rank<->device mapping.
+# the same values (see energy_lttng_ust_tracepoint.h). Energy runs in ARMED
+# SPANS (2026-07-31): the enter/exit pair of span i shares seq = i per
+# process, so this script pairs by (hostname, pid, seq), sums complete spans,
+# skips incomplete ones, and reports per host via one representative pid;
+# it does not need the rank<->device mapping. Watts are averaged over the
+# measured (armed) time, not the wall window.
 import sys, re, json, argparse
 from collections import defaultdict
 
@@ -41,9 +44,11 @@ rank_re = re.compile(r'mpirank = (\d+)')
 act_re  = re.compile(r'devId = (\d+), correlation_id = \d+, begin_ns = (\d+), end_ns = (\d+)')
 bytes_re= re.compile(r'bytes = (\d+)')
 kname_re= re.compile(r'kernel_name = "([^"]*)"')
-# gpu_uj prints as: gpu_uj = [ [0] = N, [1] = N, ... ], seq = 0  (nested brackets)
+# gpu_uj prints as: gpu_uj = [ [0] = N, [1] = N, ... ], seq = S  (nested brackets)
 gpuj_re = re.compile(r'gpu_uj = \[(.*?)\], seq')
 gpuj_val= re.compile(r'\[\d+\] = (\d+)')
+hp_re   = re.compile(r'hostname = "([^"]*)", pid = (\d+)')
+seq_re  = re.compile(r'seq = (\d+)')
 
 MPI_WAIT = {"MPI_Waitall","MPI_Wait","MPI_Allreduce","MPI_Barrier","MPI_Allgather"}
 
@@ -109,8 +114,8 @@ def parse(stream):
     gpu_copy_ns  = defaultdict(int); gpu_bytes  = defaultdict(int)
     kern_exec_ns = defaultdict(int); kern_n = defaultdict(int)   # by kernel name (node)
     dev_seen = set()
-    # energy: first enter / last exit gpu_uj vector
-    e_enter = None; e_enter_t = None; e_exit = None; e_exit_t = None
+    # energy: (host, pid) -> seq -> {'enter': (t_s, vec), 'exit': (t_s, vec)}
+    espans = defaultdict(lambda: defaultdict(dict))
 
     for line in stream:
         tm = ts_re.match(line)
@@ -120,17 +125,13 @@ def parse(stream):
         if not em: continue
         prov, ev = em.group(1), em.group(2)
 
-        if ev == "energy_enter":
-            g = gpuj_re.search(line)
-            if g:
+        if ev in ("energy_enter", "energy_exit"):
+            g = gpuj_re.search(line); hp = hp_re.search(line); sq = seq_re.search(line)
+            if g and hp and sq:
                 vec = [int(v) for v in gpuj_val.findall(g.group(1))]
-                if e_enter is None or t < e_enter_t: e_enter, e_enter_t = vec, t
-            continue
-        if ev == "energy_exit":
-            g = gpuj_re.search(line)
-            if g:
-                vec = [int(v) for v in gpuj_val.findall(g.group(1))]
-                if e_exit is None or t > e_exit_t: e_exit, e_exit_t = vec, t
+                key = (hp.group(1), int(hp.group(2)))
+                kind = 'enter' if ev == "energy_enter" else 'exit'
+                espans[key][int(sq.group(1))][kind] = (t/1e9, vec)
             continue
 
         if ev == "hipKernelActivity":
@@ -176,8 +177,31 @@ def parse(stream):
     return dict(ranks=ranks, dur=dur, first=first, last=last, launch_count=launch_count,
                 mpi_count=mpi_count, gpu_exec_ns=gpu_exec_ns, gpu_kern_n=gpu_kern_n,
                 gpu_copy_ns=gpu_copy_ns, gpu_bytes=gpu_bytes, kern_exec_ns=kern_exec_ns,
-                kern_n=kern_n, dev2rank=dev2rank,
-                e_enter=e_enter, e_exit=e_exit, e_enter_t=e_enter_t, e_exit_t=e_exit_t)
+                kern_n=kern_n, dev2rank=dev2rank, energy=energy_summary(espans))
+
+def energy_summary(espans):
+    """(host,pid)->seq->{'enter','exit'} pairs -> per-host summary. Sums the
+    per-device deltas over COMPLETE spans; a span missing its enter or exit
+    (windowed capture) is counted in 'incomplete' and skipped. One
+    representative pid per host (node-wide counters: measuring ranks on a
+    node report duplicate values), chosen by most measured time."""
+    best = {}
+    for (host, pid), by_seq in espans.items():
+        joules = None; secs = 0.0; complete = 0; incomplete = 0
+        for s in sorted(by_seq):
+            pair = by_seq[s]
+            if 'enter' not in pair or 'exit' not in pair:
+                incomplete += 1
+                continue
+            (t0, v0), (t1, v1) = pair['enter'], pair['exit']
+            complete += 1; secs += t1 - t0
+            d = [(b - a)/1e6 for a, b in zip(v0, v1)]
+            joules = d if joules is None else [x + y for x, y in zip(joules, d)]
+        e = dict(pid=pid, joules=joules or [], measured_s=secs,
+                 spans=complete, incomplete=incomplete)
+        if host not in best or e['measured_s'] > best[host]['measured_s']:
+            best[host] = e
+    return best
 
 def per_rank_rows(R):
     rank2dev = {r: d for d, r in R['dev2rank'].items()}
@@ -222,14 +246,16 @@ def print_tables(R, rows):
     mpis=[x['mpi'] for x in rows]; gex=[x['gpu_exec'] for x in rows]
     print(f"load imbalance (max-min/mean):  MPI {imb(mpis):.0f}%   GPU-exec {imb(gex):.0f}%")
 
-    # energy per device (node-wide counter; not rank-attributed)
-    if R['e_enter'] and R['e_exit']:
-        secs = (R['e_exit_t']-R['e_enter_t'])/1e9
-        print(f"\nPer-device energy (first-enter -> last-exit, window {secs:.2f}s; "
-              f"node-wide counters, same for every rank on that node):")
+    # energy per device (node-wide counter; not rank-attributed; armed spans)
+    for host, e in sorted(R['energy'].items()):
+        if not e['spans']: continue
+        secs = e['measured_s']
+        note = f"; {e['incomplete']} incomplete span(s) skipped" if e['incomplete'] else ""
+        print(f"\nPer-device energy on {host} ({e['spans']} armed span(s), "
+              f"measured {secs:.2f}s{note}; node-wide counters, same for every "
+              f"rank on that node):")
         print(f"{'dev':>4} {'Joules':>10} {'avg W':>8}")
-        for i,(a,b) in enumerate(zip(R['e_enter'], R['e_exit'])):
-            J=(b-a)/1e6
+        for i, J in enumerate(e['joules']):
             print(f"{i:>4} {J:10.1f} {J/secs if secs else 0:8.1f}")
 
     # GPU kernel hotspots (node-total), aggregated by simplified name
@@ -269,21 +295,22 @@ def make_figures(R, rows, outdir, tag):
     fig.tight_layout(); f1=os.path.join(outdir,f"{tag}_time_breakdown.png")
     fig.savefig(f1,dpi=150); plt.close(fig)
 
-    # ---- Fig 2: per-device energy (J) + avg power ----
-    if R['e_enter'] and R['e_exit']:
-        secs=(R['e_exit_t']-R['e_enter_t'])/1e9
-        J=[(b-a)/1e6 for a,b in zip(R['e_enter'],R['e_exit'])]
+    # ---- Fig 2: per-device energy (J) + avg power, one figure per host ----
+    for host, e in sorted(R['energy'].items()):
+        if not e['spans'] or not e['joules']: continue
+        secs=e['measured_s']; J=e['joules']
         W=[j/secs if secs else 0 for j in J]
         fig,ax=plt.subplots(figsize=(7,4))
         x=np.arange(len(J)); bars=ax.bar(x,J,color="#9467bd")
         ax.set_xticks(x); ax.set_xticklabels([f"device {i}" for i in x])
         ax.set_ylabel("energy (J)")
         ax.set_ylim(0, max(J)*1.15)
-        ax.set_title(f"Per-device energy ({tag}, {secs:.1f}s)")
+        ax.set_title(f"Per-device energy ({tag}, {host}, {e['spans']} span(s), {secs:.1f}s)")
         for xi,(j,w) in enumerate(zip(J,W)):
             ax.text(xi,j,f"{w:.0f} W",ha="center",va="bottom",fontsize=9)
         fig.tight_layout()
-        f2=os.path.join(outdir,f"{tag}_energy_per_device.png"); fig.savefig(f2,dpi=150); plt.close(fig)
+        suffix = f"_{host}" if len(R['energy']) > 1 else ""
+        f2=os.path.join(outdir,f"{tag}_energy_per_device{suffix}.png"); fig.savefig(f2,dpi=150); plt.close(fig)
 
     # ---- Fig 3: top GPU kernels by node-total exec time ----
     tops=top_kernels_agg(R, 10)
@@ -313,9 +340,7 @@ def main():
     print_tables(R,rows)
     if a.json:
         summary=dict(rows=rows,
-                     energy=dict(enter=R['e_enter'],exit=R['e_exit'],
-                                 window_s=(R['e_exit_t']-R['e_enter_t'])/1e9
-                                          if R['e_enter'] and R['e_exit'] else None),
+                     energy=R['energy'],  # per host: pid, joules[], measured_s, spans, incomplete
                      top_kernels=[dict(kernel=nm,exec_s=sec,count=cnt)
                                   for nm,sec,cnt in top_kernels_agg(R,20)])
         json.dump(summary,open(a.json,"w"),indent=2)

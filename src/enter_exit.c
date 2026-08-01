@@ -73,9 +73,10 @@ void enter_pinsight_func() {
   initial_setup_trace_config();
 
 #ifdef PINSIGHT_ENERGY
-  /* Baseline energy snapshot precedes the enter_pinsight app-start marker. */
-  pinsight_energy_init();
-  pinsight_energy_snapshot_enter();
+  /* Arm energy (backend init + baseline energy_enter, span 0) if [Energy]
+   * measure != off; no-op under the default off. Precedes the enter_pinsight
+   * app-start marker. */
+  pinsight_energy_arm();
 #endif
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 

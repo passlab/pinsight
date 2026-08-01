@@ -831,9 +831,12 @@ int pinsight_mpi_local_rank = -1;
 // Ranks per node, published by the MPI wrapper (§6.5); -1 if unknown.
 int pinsight_mpi_ranks_per_node = -1;
 
-// Energy node-singleton policy (default ON = every rank; today's behavior).
+// Energy node-singleton policy. Default OFF (2026-07-31): energy is an
+// independent, opt-in collection subsystem ([Energy] measure or env
+// PINSIGHT_MEASURE_ENERGY), so a preloaded process with all domains OFF stays
+// fully dormant — no backend init, no ambient work.
 // Defined here so the standalone config-parser test links without energy.c.
-pinsight_nodepolicy_t energy_measure_policy = PINSIGHT_NODEPOLICY_ON;
+pinsight_nodepolicy_t energy_measure_policy = PINSIGHT_NODEPOLICY_OFF;
 
 const char *pinsight_nodepolicy_str(pinsight_nodepolicy_t p) {
   switch (p) {

@@ -8,7 +8,9 @@
 // All energy events share one field layout: the common global fields plus two
 // dynamic-length sequences in microjoules — one per-CPU-socket, one per-GPU/
 // accelerator-device (incl. the MI300A combined APU package) — and a `seq` field
-// (0 for enter/exit; a monotonic counter for the future energy_sample). Using
+// (armed-span ordinal for enter/exit — the enter/exit pair of span i shares
+// seq=i, so consumers pair by seq, not adjacency; reserved as a monotonic
+// counter for the future energy_sample). Using
 // LTTng sequences instead of fixed cpuN/gpuN scalars removes any ceiling on
 // socket/device count: the sequence length is the number of discovered sockets/
 // devices, the element position is the source index, and an element is 0 when

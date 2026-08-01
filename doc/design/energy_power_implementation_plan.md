@@ -5,6 +5,56 @@
 **Status:** Feature 1 (enter/exit energy) implemented & validated on Tuolumne MI300A;
 Feature 2 (power polling) and the `[Energy]`/`[Power]` config sections still TODO
 
+> **2026-07-31 update — default OFF + reconfig semantics (armed spans).** Decided during
+> the WS1 manifest dormancy discussion (`ws1_manifest_design.md` §2.4); where this note
+> conflicts with the 2026-07-23 note below (default `on`; `measure` resolved once per-run),
+> this note wins. Independent of WS1 (which only reads current state).
+> **IMPLEMENTED + validated 2026-07-31** (same day): arm/disarm/apply_config in
+> `energy.{c,h}`, reload hook + shutdown disarm in `pinsight_control_thread.c`,
+> constructor arm in `enter_exit.c`. Validated on the Tuolumne login node with a real
+> LTTng session driving off→on→off→on reloads via SIGUSR1: no events while off at start,
+> `energy_enter`/`energy_exit` pairs share `seq` (spans 0 and 1), mid-run variant change
+> warns and is ignored, teardown closes the open span. Consumers updated same day:
+> `parse_energy.py` and `mpi_gpu_energy_report.py` pair enter/exit by
+> (hostname, pid, seq), sum complete spans, skip+report incomplete ones, and dedupe
+> node-wide values via one representative pid per host; watts are averaged over
+> measured (armed) time. Validated against a numeric fixture and the two-span trace.
+>
+> - **Default flipped to `off`** (`energy_measure_policy = PINSIGHT_NODEPOLICY_OFF` in
+>   `trace_config.c`, landed 2026-07-31). Energy is an independent, opt-in collection
+>   subsystem — deliberately NOT tied to domain modes (energy-only observation with all
+>   domains OFF is supported). Preload with all domains OFF + energy off = fully dormant:
+>   no backend init, no ambient work (the all-OFF ≈ zero-ambient-overhead contract).
+> - **`measure` becomes reloadable, but only `off ↔ <armed>` — the "armed span" model.**
+>   Split `pinsight_energy_init()` into `energy_arm()` / `energy_disarm()`; the control
+>   thread applies transitions in its config-reload handler (thread-safe per the teardown
+>   constraint: mid-run reads happen on the live control thread; constructor arm stays on
+>   the main thread as today).
+>   - **Disarm always completes the measurement**: a final counter read + `energy_exit`
+>     closes the span — never a bare stop. Same closing-read pattern the teardown path
+>     already uses, just earlier.
+>   - One `energy_enter`/`energy_exit` pair per armed span; **`seq` = armed-span ordinal**
+>     on both events (first span = 0, backward compatible). Baseline is arm time; energy
+>     consumed while disarmed is unattributed by design.
+>   - Backends stay initialized across disarm (we never call `amdsmi_shut_down()`);
+>     re-arm skips dlopen/discovery.
+> - **Variant changes between active values (`on`/`anyone_per_node`/`leader_per_node`)
+>   are latched at first arm, per run** — a reload changing the variant while armed warns
+>   ("takes effect next run") and is ignored. Rationale: per-rank SIGUSR1 reloads are
+>   unsynchronized, so mid-run measurer handoff creates windows where old+new measurers
+>   overlap (double-counting the node-wide counters) or nobody reads; flock re-election
+>   (`anyone_per_node`) risks split-brain; and the variant doesn't change the data — only
+>   which rank carries the read overhead — so the value is ~zero.
+> - **Interim state until implemented:** the reload path parses `[Energy] measure` into
+>   the global but applies nothing — a silent no-op. Minimal near-term fix: warn on a
+>   reload that changes `measure`. Consumers note: `parse_energy`/`mpi_gpu_energy_report`
+>   must sum over pairs (pair by `seq`), not assume exactly one.
+> - **Manifest coupling (WS1):** the manifest dormancy predicate uses the configured
+>   **policy** (`measure ≠ off`, uniform across ranks), never the per-rank elected role.
+> - **Future:** window `end_action` targets (`Energy:measure=off`, like
+>   `HIP:device_activity=off`) ride the same arm/disarm machinery — supersedes the old
+>   `follow_mode` idea.
+
 > **2026-07-23 update — runtime `measure` config (env + `[Energy] measure`), via the shared
 > node-policy.** Energy gains its **first runtime control** (it is compile-time-only today —
 > no env, no config parser; see "Current Status"). One policy selects *which ranks* measure:

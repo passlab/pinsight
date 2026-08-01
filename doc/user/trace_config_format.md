@@ -106,7 +106,8 @@ so it uses a plain `[Energy]` section. The only runtime key today is `measure`:
     measure = off | on | anyone_per_node | leader_per_node
 ```
 - Selects **which ranks measure energy** (same node-policy values; `rotate_per_node` is
-  **not** valid for energy). Default **`on`** (every rank — today's behavior).
+  **not** valid for energy). Default **`off`** (since 2026-07-31 — energy is
+  opt-in; earlier builds defaulted to `on`).
   `leader_per_node`/`anyone_per_node` → exactly one rank/node measures, yielding one clean
   node-energy series (fixes multi-rank multi-counting of the shared node counters).
 - Also settable via env **`PINSIGHT_MEASURE_ENERGY`** (`ON|OFF|ANYONE_PER_NODE|LEADER_PER_NODE`),

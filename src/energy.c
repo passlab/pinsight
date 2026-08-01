@@ -17,8 +17,19 @@
 
 /* energy_measure_policy is DEFINED in trace_config.c (always linked, incl. the
  * standalone config-parser test which does not link energy.c); declared in
- * trace_config.h. Resolved once in pinsight_energy_init: does THIS proc measure? */
-static int energy_measure_active = 1;
+ * trace_config.h. Resolved at first arm: does THIS proc measure? */
+static int energy_measure_active = 0;
+
+/* ---- Armed-span state (2026-07-31 amendment, energy_power_implementation_plan.md)
+ * A span is one armed interval bracketed by energy_enter/energy_exit sharing
+ * seq = the span ordinal (0,1,2,...). Disarm ALWAYS closes the open span with a
+ * final counter read — never a bare stop. Writers: the library constructor
+ * (main thread, before the control thread exists) and the control thread
+ * (reload transitions + shutdown) — never concurrent, plain ints suffice. */
+static int energy_armed = 0;         /* inside an open span? */
+static int energy_ever_armed = 0;    /* role + variant latched, backends inited */
+static uint64_t energy_span_seq = 0; /* ordinal of the open (or next) span */
+static pinsight_nodepolicy_t energy_latched_policy; /* variant at first arm */
 
 /* The energy provider is defined in exactly this translation unit. */
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
@@ -41,20 +52,24 @@ static const pinsight_energy_backend_t *const all_backends[] = {
 static const pinsight_energy_backend_t *active[NUM_BACKENDS];
 static int num_active = 0;
 
-void pinsight_energy_init(void) {
-  num_active = 0;
-
-  /* Node-policy gate (per-run): env PINSIGHT_MEASURE_ENERGY overrides the
-   * [Energy] measure config value, then resolve WHO measures. If this process
-   * is not the measurer, initialize no backends (keeps AMD-SMI init/teardown to
-   * one rank) — read/snapshot then no-op. */
+/* Effective measure policy: env PINSIGHT_MEASURE_ENERGY overrides the
+ * [Energy] measure config value at EVERY evaluation (startup and reload). */
+static pinsight_nodepolicy_t energy_resolved_policy(void) {
   const char *menv = getenv("PINSIGHT_MEASURE_ENERGY");
   if (menv && *menv)
-    energy_measure_policy =
-        pinsight_parse_nodepolicy(menv, energy_measure_policy).policy;
-  energy_measure_active = pinsight_node_role("energy", energy_measure_policy);
-  if (!energy_measure_active)
+    return pinsight_parse_nodepolicy(menv, energy_measure_policy).policy;
+  return energy_measure_policy;
+}
+
+/* Backend discovery/init. Runs once, at first arm, and only on the measuring
+ * process (keeps AMD-SMI init/teardown to one rank under *_per_node policies).
+ * Backends stay initialized across disarm — re-arm skips this entirely. */
+static void backends_init_once(void) {
+  static int backends_inited = 0;
+  if (backends_inited)
     return;
+  backends_inited = 1;
+  num_active = 0;
 
   int node_active = 0, cpu_active = 0;
 
@@ -94,6 +109,7 @@ void pinsight_energy_init(void) {
 }
 
 void pinsight_energy_fini(void) {
+  pinsight_energy_disarm(); /* defensive: never tear down with an open span */
   for (int i = 0; i < num_active; i++)
     active[i]->fini();
   num_active = 0;
@@ -105,22 +121,81 @@ void pinsight_energy_read(pinsight_energy_t *e) {
     active[i]->read(e);
 }
 
-void pinsight_energy_snapshot_enter(void) {
-  if (!energy_measure_active)
-    return; /* not the node's energy measurer — emit nothing */
+static void energy_emit(int is_exit, uint64_t seq) {
   pinsight_energy_t e;
   pinsight_energy_read(&e);
-  lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_enter,
-                       (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
-                       (unsigned int)e.num_gpu_devices, e.gpu_energy_uj, (uint64_t)0);
+  if (is_exit)
+    lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_exit,
+                         (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
+                         (unsigned int)e.num_gpu_devices, e.gpu_energy_uj, seq);
+  else
+    lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_enter,
+                         (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
+                         (unsigned int)e.num_gpu_devices, e.gpu_energy_uj, seq);
 }
 
-void pinsight_energy_snapshot_exit(void) {
+void pinsight_energy_arm(void) {
+  if (energy_armed)
+    return;
+  pinsight_nodepolicy_t pol = energy_resolved_policy();
+  if (pol == PINSIGHT_NODEPOLICY_OFF)
+    return;
+  if (!energy_ever_armed) {
+    /* First arm: latch the variant for the whole run and elect this process's
+     * role with it. Mid-run variant changes are ignored (per-rank reloads are
+     * unsynchronized — a measurer handoff would double-count or drop the
+     * node-wide counters). */
+    energy_latched_policy = pol;
+    energy_measure_active = pinsight_node_role("energy", pol);
+    if (energy_measure_active)
+      backends_init_once();
+    energy_ever_armed = 1;
+  } else if (pol != energy_latched_policy) {
+    fprintf(stderr,
+            "PInsight ENERGY: measure variant change (%s -> %s) ignored — "
+            "variant is latched per run; re-arming as %s\n",
+            pinsight_nodepolicy_str(energy_latched_policy),
+            pinsight_nodepolicy_str(pol),
+            pinsight_nodepolicy_str(energy_latched_policy));
+  }
+  energy_armed = 1;
   if (!energy_measure_active)
-    return; /* not the node's energy measurer — emit nothing */
-  pinsight_energy_t e;
-  pinsight_energy_read(&e);
-  lttng_ust_tracepoint(energy_pinsight_lttng_ust, energy_exit,
-                       (unsigned int)e.num_cpu_sockets, e.cpu_energy_uj,
-                       (unsigned int)e.num_gpu_devices, e.gpu_energy_uj, (uint64_t)0);
+    return; /* armed, but not this node's measurer — emit nothing */
+  energy_emit(0, energy_span_seq);
+}
+
+void pinsight_energy_disarm(void) {
+  if (!energy_armed)
+    return;
+  energy_armed = 0;
+  uint64_t s = energy_span_seq++;
+  if (!energy_measure_active)
+    return;
+  /* Final read closes the span (enter/exit pair shares seq) — never a bare stop. */
+  energy_emit(1, s);
+}
+
+void pinsight_energy_apply_config(void) {
+  pinsight_nodepolicy_t pol = energy_resolved_policy();
+  if (!energy_armed) {
+    if (pol != PINSIGHT_NODEPOLICY_OFF)
+      pinsight_energy_arm();
+    return;
+  }
+  if (pol == PINSIGHT_NODEPOLICY_OFF) {
+    pinsight_energy_disarm();
+    return;
+  }
+  if (pol != energy_latched_policy) {
+    /* Armed and the variant changed: warn once per distinct requested value. */
+    static pinsight_nodepolicy_t warned = PINSIGHT_NODEPOLICY_OFF;
+    if (pol != warned) {
+      warned = pol;
+      fprintf(stderr,
+              "PInsight ENERGY: [Energy] measure variant change (%s -> %s) "
+              "ignored mid-run — takes effect next run\n",
+              pinsight_nodepolicy_str(energy_latched_policy),
+              pinsight_nodepolicy_str(pol));
+    }
+  }
 }

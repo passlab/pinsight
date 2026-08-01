@@ -1,8 +1,10 @@
 //
 // PInsight energy/power measurement — public interface.
 //
-// Total application energy from two counter reads (library enter and exit) on a
-// dedicated LTTng provider. Energy is gathered through pluggable *backends*
+// Energy is measured in ARMED SPANS: each span is bracketed by two counter
+// reads emitted as energy_enter/energy_exit (sharing seq = span ordinal) on a
+// dedicated LTTng provider. A run that never reconfigures has exactly one span
+// (library enter to exit). Energy is gathered through pluggable *backends*
 // (see energy_backend.h): native sysfs (powercap / amd_energy), AMD-SMI for AMD
 // GPU/APU, and an optional Variorum backend for portable systems. Each backend
 // contributes per-socket / per-device microjoule readings that are emitted as
@@ -18,11 +20,15 @@
 #include "pinsight_config.h"
 #include "trace_config.h" /* pinsight_nodepolicy_t */
 
-/* WHICH ranks measure energy (node-singleton policy). Default ON = every rank
- * (today's behavior). Set by env PINSIGHT_MEASURE_ENERGY (overrides) or the
- * minimal `[Energy] measure` config key; resolved once at startup (per-run).
- * anyone_per_node/leader_per_node => exactly one rank/node measures (fixes the
- * multi-rank node-energy multi-count). See doc/node_singleton_measurement_design.md.
+/* WHICH ranks measure energy (node-singleton policy). Default OFF since
+ * 2026-07-31 — energy is opt-in, independent of domain modes. Set by env
+ * PINSIGHT_MEASURE_ENERGY (overrides at every evaluation) or the minimal
+ * `[Energy] measure` config key. off <-> armed is switchable at config reload
+ * (armed-span model below); the VARIANT (on/anyone_per_node/leader_per_node)
+ * is latched at first arm, per run. anyone_per_node/leader_per_node => exactly
+ * one rank/node measures (fixes the multi-rank node-energy multi-count).
+ * See doc/node_singleton_measurement_design.md and the 2026-07-31 amendment in
+ * doc/design/energy_power_implementation_plan.md.
  * (Folds into energy_power_config_t when that struct is built.)
  * DECLARED in trace_config.h / DEFINED in trace_config.c (so the standalone
  * config-parser test, which doesn't link energy.c, still resolves it). */
@@ -40,30 +46,37 @@ typedef struct {
   uint64_t gpu_energy_uj[MAX_ENERGY_GPU_DEVS];
 } pinsight_energy_t;
 
-/* Discover and initialize all compiled-in backends. Called once from the
- * library constructor (main thread). Safe when no backend is present or
- * readable — reads then yield an empty sequence rather than failing. */
-void pinsight_energy_init(void);
-
 /* Read every active backend into *e (zero-initialized first); each backend
  * appends its sources to the cpu/gpu arrays. */
 void pinsight_energy_read(pinsight_energy_t *e);
 
-/* Read counters and emit the energy_enter / energy_exit tracepoints. These own
- * the dedicated energy_pinsight_lttng_ust provider, so callers never touch the
- * provider directly — it stays defined in one translation unit.
+/* ---- Armed-span API (2026-07-31) ----
+ * Energy measurement runs in ARMED SPANS: arm takes a counter read and emits
+ * energy_enter; disarm takes a FINAL read and emits energy_exit — a span is
+ * always completed, never bare-stopped. The enter/exit pair of span i share
+ * seq = i (0,1,2,... per process). First arm resolves the node role, latches
+ * the policy variant for the run, and initializes backends; backends stay
+ * initialized across disarm, so re-arm is just a read. All three functions
+ * no-op as appropriate (arm when policy=off or already armed; disarm when not
+ * armed; emissions when this process is not the node's measurer).
  *
- * THREADING CONSTRAINT: energy_enter is emitted from the constructor (main
- * thread); energy_exit MUST be emitted from the control thread as it shuts down,
- * NOT from the library destructor. AMD-SMI's gpu_metrics path corrupts the heap
- * if read on the main thread during DSO teardown after the constructor's read
- * (empirically: a teardown read after a constructor read aborts; a read from a
- * separate live thread is clean). The control thread is such a thread. */
-void pinsight_energy_snapshot_enter(void);
-void pinsight_energy_snapshot_exit(void);
+ * THREADING CONSTRAINT: the startup arm runs in the library constructor (main
+ * thread); every mid-run transition and the final disarm MUST run on the
+ * control thread, NOT the library destructor. AMD-SMI's gpu_metrics path
+ * corrupts the heap if read on the main thread during DSO teardown after the
+ * constructor's read (empirically: a teardown read after a constructor read
+ * aborts; a read from a separate live thread is clean). */
+void pinsight_energy_arm(void);
+void pinsight_energy_disarm(void);
 
-/* Finalize active backends. Called from the control thread alongside
- * snapshot_exit, NOT a destructor (same AMD-SMI teardown constraint). */
+/* Control-thread hook, called after each config reload: applies off<->armed
+ * transitions from the re-parsed [Energy] measure (env override still wins);
+ * warns and ignores mid-run VARIANT changes (latched at first arm). */
+void pinsight_energy_apply_config(void);
+
+/* Finalize active backends (disarms first if a span is open). Called from the
+ * control thread as it shuts down, NOT a destructor (same AMD-SMI teardown
+ * constraint). */
 void pinsight_energy_fini(void);
 
 #endif /* PINSIGHT_ENERGY_H */
