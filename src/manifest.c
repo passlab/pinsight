@@ -163,6 +163,8 @@ void pinsight_manifest_set_run_id(const char *id) {
   snprintf(run_id, sizeof(run_id), "%s", id);
 }
 
+const char *pinsight_manifest_get_run_id(void) { return run_id; }
+
 void pinsight_manifest_init(void) {
   /* run_id: launcher-provided (tier 1) else 16 random bytes hex (tier 2/3);
    * MPI unifies the random form at MPI_Init (design §2.5). */

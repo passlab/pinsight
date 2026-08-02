@@ -9,6 +9,7 @@
  * MPI APIs with PMPI and LTTng UST tracepoint inserted.
  *
  */
+#include "manifest.h"
 #include "pinsight.h"
 #include "pinsight_control_thread.h"
 #include "trace_config.h"
@@ -243,6 +244,22 @@ static void pinsight_mpi_publish_node_info(void) {
   }
 }
 
+/* WS1 §2.5 (Step 2): unify the provisional per-process run_id — rank 0's
+ * value becomes the experiment-wide one via a 64-byte bcast inside the
+ * already-collective Init — then re-emit the manifest so every rank's
+ * "mpi_init" burst carries the unified run_id AND the authoritative
+ * mpirank. When the launcher exported PINSIGHT_RUN_ID, all ranks already
+ * agree and the bcast is a no-op by value. Latest-wins-per-key consumers
+ * see the provisional->unified transition as a normal update. */
+static void pinsight_manifest_mpi_unify(void) {
+  char rid[64];
+  snprintf(rid, sizeof(rid), "%s", pinsight_manifest_get_run_id());
+  PMPI_Bcast(rid, (int)sizeof(rid), MPI_CHAR, 0, MPI_COMM_WORLD);
+  rid[sizeof(rid) - 1] = '\0';
+  pinsight_manifest_set_run_id(rid);
+  pinsight_manifest_emit("mpi_init");
+}
+
 /* ================== C Wrappers for MPI_Init ================== */
 _EXTERN_C_ int MPI_Init_thread(int *argc, char ***argv, int required,
                                int *provided) {
@@ -251,6 +268,7 @@ _EXTERN_C_ int MPI_Init_thread(int *argc, char ***argv, int required,
   int return_val = PMPI_Init_thread(argc, argv, required, provided);
   PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
   pinsight_mpi_publish_node_info();
+  pinsight_manifest_mpi_unify();
   // printf("process %d rank: %d\n", pid, mpirank);
 
   PMPI_CALL_EPILOGUE(MPI_Init_thread, *provided, return_val);
@@ -265,6 +283,7 @@ _EXTERN_C_ int MPI_Init(int *argc, char ***argv) {
   int return_val = PMPI_Init(argc, argv);
   PMPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
   pinsight_mpi_publish_node_info();
+  pinsight_manifest_mpi_unify();
   PMPI_CALL_EPILOGUE(MPI_Init, return_val);
 
   // printf("process %d rank: %d\n", pid, mpirank);

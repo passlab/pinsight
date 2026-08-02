@@ -473,17 +473,21 @@ authoritative-rank burst.
 - **Test:** single-process smoke; `babeltrace2 | grep manifest_` shows one
   burst with expected keys; kv values truncated at 256 B.
 
-### Step 2 — emission hooks (~½ day)
+### Step 2 — emission hooks (~½ day) — **DONE 2026-07-31**
 
 - `enter_exit.c`: `pinsight_manifest_init()` + `emit("init")` in the
   constructor after config load, before the `enter_pinsight` marker;
-  `emit("fini")` next to the `exit_pinsight` marker (plain tracepoint —
-  no energy-style teardown hazard).
-- `pmpi_mpi.c`: in both `MPI_Init` / `MPI_Init_thread` wrappers after
-  `PMPI_Comm_rank`: `PMPI_Bcast` rank 0's 16-byte `run_id` over
-  `MPI_COMM_WORLD`, `pinsight_manifest_set_run_id()`, `emit("mpi_init")`.
-- **Test:** 2-rank MPI smoke — both ranks' `mpi_init` bursts carry rank 0's
-  `run_id` and authoritative `mpirank`.
+  `emit("fini")` next to the `exit_pinsight` marker (landed with Step 1).
+- `pmpi_mpi.c`: `pinsight_manifest_mpi_unify()` in both `MPI_Init` /
+  `MPI_Init_thread` wrappers after `PMPI_Comm_rank` +
+  `pinsight_mpi_publish_node_info`: `PMPI_Bcast` of rank 0's run_id
+  (64-byte buffer over `MPI_COMM_WORLD`, inside the already-collective
+  Init), `pinsight_manifest_set_run_id()`, `emit("mpi_init")`.
+- **Validated** (2-rank flux run on Tuolumne, no `PINSIGHT_RUN_ID` set —
+  the tier-2 path): `init` bursts carry per-rank provisional random
+  run_ids and env-derived ranks; both `mpi_init` bursts carry rank 0's
+  run_id + authoritative `mpirank`; `fini` bursts keep the unified id.
+  Tier-1 (env-provided id) covered by the Step 1 smoke test.
 
 ### Step 3 — periodic + transition re-emit (~½–1 day)
 

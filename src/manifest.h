@@ -34,4 +34,9 @@ void pinsight_manifest_emit(const char *reason);
  * a NUL-terminated string (33 bytes for the 16-byte-hex form). */
 void pinsight_manifest_set_run_id(const char *id);
 
+/* Current run_id (launcher-provided or provisional). Used by the MPI_Init
+ * wrapper as the bcast source/destination buffer copy. Always NUL-terminated;
+ * may be "" if generation failed. */
+const char *pinsight_manifest_get_run_id(void);
+
 #endif /* PINSIGHT_MANIFEST_H */
