@@ -67,6 +67,8 @@
 
 #include "bitset.h"
 #include <signal.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define PINSIGHT_DEBUG "PINSIGHT_DEBUG"
@@ -412,6 +414,19 @@ extern void print_domain_trace_config(FILE *out);
 extern void print_lexgion_trace_config(FILE *out);
 extern void pinsight_load_trace_config(char *filepath);
 extern void pinsight_invalidate_config_mtime(void);
+
+// ---- Effective-config dump cache (WS1 manifest — ws1_manifest_design.md §2.8)
+// Round-trippable in-memory dump of the EFFECTIVE config (domain config + app
+// knobs; NOT the file bytes) and its FNV-1a 64 hash. Refreshed automatically
+// at the end of EVERY pinsight_load_trace_config (initial load and reloads).
+// SWMR: the buffer belongs to the load callers (constructor, control thread);
+// any thread may read the hash via the atomic getter (relaxed — a plain mov).
+extern void pinsight_config_dump_refresh(void);
+// Published hash; 0 = not yet computed. Emitted as `pinsight.config_hash`.
+extern uint64_t pinsight_config_hash_get(void);
+// Cached dump buffer (content of pinsight_config.<hash>.txt). WRITER SIDE
+// ONLY (control-thread file flush) — never call from burst/app threads.
+extern const char *pinsight_config_dump_get(size_t *lenp);
 
 // ---- Node-policy (device_activity / energy measure) ---------------------
 // Parse "off|on|anyone_per_node|leader_per_node|rotate_per_node[:<ms>]"

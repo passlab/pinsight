@@ -263,6 +263,49 @@ void pinsight_load_trace_config(char *filepath) {
     trace_config_change_counter++; // Bump counter so threads re-resolve
                                    // cached trace_config pointers
   }
+
+  /* Refresh the effective-config dump cache unconditionally — covers the
+   * initial load, reloads, and the no-file/defaults case. Cheap in-memory
+   * formatting; deterministic (same state -> same hash). */
+  pinsight_config_dump_refresh();
+}
+
+/* ---- Effective-config dump cache (WS1 manifest — ws1_manifest_design.md
+ * §2.8). Contract in trace_config.h: the buffer belongs to the load callers
+ * (constructor / control thread, never concurrent); the hash is readable
+ * from any thread via the atomic getter. ---- */
+static char *config_dump_buf = NULL;
+static size_t config_dump_len = 0;
+static uint64_t config_dump_hash = 0; /* atomic access; 0 = not computed */
+
+void pinsight_config_dump_refresh(void) {
+  char *buf = NULL;
+  size_t len = 0;
+  FILE *f = open_memstream(&buf, &len);
+  if (!f)
+    return;
+  print_domain_trace_config(f);
+  pinsight_print_knob_config(f);
+  fclose(f);
+  if (!buf)
+    return;
+  uint64_t h = 0xcbf29ce484222325ULL; /* FNV-1a 64 */
+  for (size_t i = 0; i < len; i++)
+    h = (h ^ (uint64_t)(unsigned char)buf[i]) * 0x100000001b3ULL;
+  free(config_dump_buf);
+  config_dump_buf = buf;
+  config_dump_len = len;
+  __atomic_store_n(&config_dump_hash, h, __ATOMIC_RELAXED);
+}
+
+uint64_t pinsight_config_hash_get(void) {
+  return __atomic_load_n(&config_dump_hash, __ATOMIC_RELAXED);
+}
+
+const char *pinsight_config_dump_get(size_t *lenp) {
+  if (lenp)
+    *lenp = config_dump_len;
+  return config_dump_buf;
 }
 
 void initial_setup_trace_config() {

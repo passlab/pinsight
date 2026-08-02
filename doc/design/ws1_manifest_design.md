@@ -88,8 +88,7 @@ change**.
 | `run_id` | see §2.5 | join key to sidecar and across nodes |
 | `pinsight.version` | `PINSIGHT_VERSION` | plus git rev if cmake provides it |
 | `pinsight.domains` | compiled + actually-initialized | e.g. `MPI,HIP,energy` |
-| `pinsight.config_path` | `PINSIGHT_TRACE_CONFIG_FILE` as resolved | |
-| `pinsight.config_hash` | hash of parsed config file bytes | distinguishes six near-identical runs |
+| `pinsight.config_hash` | FNV-1a of the **effective in-memory config dump** (domains + knobs); cached, refreshed per config load, atomic-read per burst | join key to the sidecar config dump file (§2.8); reflects defaults/env/reload state, ignores comment-only edits |
 | `launcher.rank` | `FLUX_TASK_RANK` / `PMI_RANK` / `SLURM_PROCID` | early best-effort |
 | `launcher.job_id` | `FLUX_JOB_ID` / `SLURM_JOB_ID` | |
 | `gpu.rocr_visible_devices` | env, raw string | likewise `hip.`/`cuda._visible_devices` |
@@ -279,6 +278,87 @@ Resulting scopes:
 The binary's `host.exe_build_id` is an *attribute* of the process (kv +
 sidecar `software` section), never a component of any ID.
 
+### 2.7 User-provided facts (decided 2026-07-31 — noted for future reference)
+
+Application/platform facts only the user knows (problem size, solver/
+algorithm choice, campaign labels) are supported by two mechanisms; a third
+was considered and rejected:
+
+- **Sidecar (in scope, Step 4):** `pinsight-manifest.sh run --kv key=value`
+  (repeatable) and/or merging a `user_manifest.json` found in the run dir →
+  a `user:` section of `run_manifest.json`. Launcher-time facts, zero
+  runtime involvement. Covers batch analysis and reports.
+- **In-trace app-note API (follow-on after Step 1, not part of WS1):** the
+  in-situ mirror of the existing app-knob API (`app_knob.h` is config→app;
+  this is app→trace): `pinsight_note_kv/int/double(key, value)` emits the
+  existing `manifest_kv` event with an `app.` key prefix — latest-wins,
+  window-scoped, TC-visible, no new event type or consumer logic. Deployed
+  as a header-only dlsym shim that no-ops when PInsight is not preloaded
+  (the NVTX pattern; zero link dependency). Scope guard: this API is for
+  **facts** (latest value = the meaning); *time-varying* values to plot
+  (residual, timestep) are a sample series and belong to a WS11b-family
+  event, never the manifest. First validation use case: stamping AMG
+  problem size + solver into campaign traces.
+- **Rejected:** user kvs in `[Manifest]` config (literal or
+  script-valued `$(cmd)`), and `PINSIGHT_KV_*` env auto-emission — no
+  concrete use case; script evaluation brings subprocess lifecycle/
+  timeout/caching complexity; the two mechanisms above cover the named
+  needs with less machinery. Revisit only with a use case neither covers.
+
+### 2.8 Effective-config dump files (decided 2026-07-31)
+
+The full config **content** is bulk, so per the §1 division rule it is NOT
+an in-event record (a `manifest_config` blob event was considered and
+rejected). Instead:
+
+- Every burst carries `pinsight.config_hash` = FNV-1a over the
+  **round-trippable in-memory dump** (`print_domain_trace_config` +
+  `pinsight_print_knob_config` via `open_memstream` — pure formatting, no
+  file I/O). **Cached-buffer mechanism (decided 2026-07-31, implemented;
+  ownership moved to `trace_config.{h,c}` same day):** the cache (buffer +
+  atomic `uint64` hash) belongs to the config subsystem —
+  `pinsight_config_dump_refresh()` runs **automatically at the end of every
+  `pinsight_load_trace_config`** (initial load, reloads, no-file/defaults
+  case), so no caller ever wires a refresh. SWMR: the buffer belongs to the
+  load callers (constructor / control thread, never concurrent); any thread
+  reads the hash via `pinsight_config_hash_get()` (`__atomic_load`,
+  relaxed — a plain mov), so burst/app threads do zero formatting and no
+  locking exists. The Step 3 file flush writes exactly this cached buffer
+  (`pinsight_config_dump_get()`, writer-side only), making hash↔file
+  consistent by construction.
+  This is the *effective* config: defaults applied, env overrides, reload
+  state; comment-only file edits don't change it. The earlier
+  `pinsight.config_path` key was dropped along with everything else
+  config-file-related (2026-07-31): with the hash keyed to the effective
+  state and the content in dump files, the on-disk path is redundant and
+  potentially misleading (the file can change after parse).
+- The **control thread writes the content** to
+  `$PINSIGHT_MANIFEST_DIR/pinsight_config.<hash>.txt` at control-thread
+  start and after each reload (Step 3). Content-addressed → idempotent and
+  deduped: write only if absent (tmp + rename), so N ranks/node produce
+  one file per distinct config and a run with two reloads at most three
+  small files. `PINSIGHT_MANIFEST_DIR` is set by the launcher
+  (`pinsight-manifest.sh`); **unset → no dump** (LD_PRELOAD-anywhere, no
+  surprise files; the hash stays in the trace regardless).
+- The **sidecar packs** `pinsight_config.*.txt` into `manifest/` and lists
+  them in `run_manifest.json` (Step 4). Consumer story: burst's
+  `config_hash` → `manifest/pinsight_config.<hash>.txt`.
+- Accepted trade-off: a bare trace dir shipped without its run folder
+  loses the config *content* (keeps the hash) — the standard sidecar
+  trade-off.
+
+**Granularity / nodepolicy (clarified 2026-07-31):** the in-trace manifest
+is **per rank, always, no nodepolicy** — its facts (rank, pid, affinity,
+visible-devices as seen, cmdline) differ per rank, so any
+`leader_per_node`-style reduction would destroy exactly the information it
+exists to capture (contrast energy, whose node-wide *duplicate* values make
+singleton election lossless). The sidecar is **per node (hardware) + per
+run (job)**. The config dump files sit between and get per-node dedupe for
+free from content addressing (first-writer-wins ≈ `anyone_per_node` with
+no election machinery); ranks with genuinely different effective configs
+produce different hashes → different files, each rank's bursts pointing to
+its own — correct, not a conflict.
+
 ## 3. Artifact B — `run_manifest.json` sidecar (script, no PInsight change)
 
 Written by a new collector script `scripts/pinsight-manifest.sh` invoked by
@@ -357,7 +437,21 @@ only, no on/off key; dormancy rule — manifest periodic arms iff any domain
 kv value cap 256 bytes; latest-wins **per key** in consumers (§8
 burst-atomicity point — adopted).
 
-### Step 1 — provider + core emitter (~½ day)
+### Step 1 — provider + core emitter (~½ day) — **DONE 2026-07-31**
+
+Implemented as designed (`manifest_lttng_ust_tracepoint.h`, `manifest.c/.h`,
+CMake unconditional) plus the constructor/`fini` hooks from Step 2 so it is
+testable end-to-end. Validated on Tuolumne with a live session enabling only
+`pinsight_manifest_lttng_ust:*`: init + fini bursts (seq 0/1) carry all
+knowable keys (run_id from env, version, domains, affinity,
+omp.num_threads, exe, exe_build_id — verified byte-identical to
+`readelf -n` — cwd, cmdline); unknowable keys correctly skipped
+(launcher.*/gpu.* with no launcher); no-session preload is silent
+(tracepoint_enabled guard). `config_hash` repointed same day to the
+effective in-memory dump (§2.8) — verified always present, stable across a
+process's bursts, and different between a default-config and a
+config-file process. Remaining from Step 2: MPI_Init run_id unification +
+authoritative-rank burst.
 
 - `src/manifest_lttng_ust_tracepoint.h`: provider
   `pinsight_manifest_lttng_ust`, events `manifest_process` / `manifest_kv`
@@ -405,6 +499,14 @@ burst-atomicity point — adopted).
   (config-derived kvs may have changed). Arm the deadline only per the
   dormancy rule (§2.4: any domain ≠ OFF or energy measure on);
   re-evaluate after every reload/transition.
+- Effective-config dump flush (§2.8): the cache refresh is already
+  automatic (inside `pinsight_load_trace_config`), so the reload handler
+  only adds the FLUSH — write `pinsight_config_dump_get()`'s buffer to
+  `$PINSIGHT_MANIFEST_DIR/pinsight_config.<hash>.txt` if absent
+  (tmp + rename), then emit the `window` burst — so the file exists
+  before any burst references its hash. Same flush once at control-thread
+  start. Env unset → flush returns immediately: zero file I/O even across
+  reloads (the refresh itself is pure in-memory formatting).
 - **Test:** snapshot-mode run with `manifest_interval` < snapshot period —
   every snapshot chunk contains ≥1 burst per live process (the WS1
   acceptance property); cyclic-window run (`test/rocm/cyclic_traces`
@@ -417,9 +519,12 @@ burst-atomicity point — adopted).
     cpu model/mem/kernel, env dump) into `manifest/*.<host>.*`; every
     field optional, partial failure tolerated.
   - `run <rundir>` — generate `run_id` (§2.5), assemble
-    `run_manifest.json` (schema §3), export `PINSIGHT_RUN_ID`; post-run
+    `run_manifest.json` (schema §3), export `PINSIGHT_RUN_ID` and
+    `PINSIGHT_MANIFEST_DIR` (§2.8); accept `--kv key=value` / merge
+    `user_manifest.json` into the `user:` section (§2.7); post-run
     invocation adds `trace_sha256` (per node dir; per chunk on
-    rotation-mode runs, §3).
+    rotation-mode runs, §3) and packs `pinsight_config.*.txt` into
+    `manifest/` with references in `run_manifest.json`.
 - Wire into the pinsight-eval launch harness (one `flux exec` pass at job
   start); session scripts add
   `lttng enable-event -u 'pinsight_manifest_lttng_ust:*'`.
@@ -451,8 +556,6 @@ entanglement. Branch: `ws1-manifest`.
 
 - Exact value cap (256 B proposed) and whether `host.cmdline` is worth the
   truncation noise.
-- `pinsight.config_hash`: hash file bytes (cheap, catches edits) vs hash the
-  parsed/normalized config (robust to comments) — propose file bytes first.
 - Burst atomicity: a snapshot can slice a burst mid-way; consumers must
   tolerate a partial newest burst by falling back to the previous complete
   `seq` per key (latest-wins per key, not per burst, makes this a non-issue —

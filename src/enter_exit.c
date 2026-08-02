@@ -11,6 +11,7 @@
 #ifdef PINSIGHT_ENERGY
 #include "energy.h"
 #endif
+#include "manifest.h"
 
 #define LTTNG_UST_TRACEPOINT_CREATE_PROBES
 #define LTTNG_UST_TRACEPOINT_DEFINE
@@ -78,6 +79,11 @@ void enter_pinsight_func() {
    * app-start marker. */
   pinsight_energy_arm();
 #endif
+  /* First manifest burst (reason="init", rank best-effort from env) —
+   * emitted before the app-start marker so even a trace of a crashing app
+   * carries its provenance. */
+  pinsight_manifest_init();
+  pinsight_manifest_emit("init");
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, enter_pinsight);
 
 #ifdef PINSIGHT_CUDA
@@ -97,6 +103,8 @@ void enter_pinsight_func() {
 
 void exit_pinsight_func() {
   // printf("exiting pinsight at host: %s by process: %d\n", hostname, pid);
+  /* Final manifest burst precedes the app-end marker (mirrors init order). */
+  pinsight_manifest_emit("fini");
   lttng_ust_tracepoint(pinsight_enter_exit_lttng_ust, exit_pinsight);
 #ifdef PINSIGHT_CUDA
   LTTNG_CUPTI_Fini();

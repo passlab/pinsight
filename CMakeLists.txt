@@ -49,6 +49,9 @@ set(SOURCE_FILES
         src/trace_domain_loader.c
         src/enter_exit.c
         src/enter_exit_lttng_ust_tracepoint.h
+        src/manifest.c
+        src/manifest.h
+        src/manifest_lttng_ust_tracepoint.h
         src/common_tp_fields_global_lttng_ust_tracepoint.h
         src/app_knob.h
         src/app_knob.c
