@@ -12,7 +12,11 @@ import re, subprocess, sys
 from dataclasses import dataclass
 
 _ts_re  = re.compile(r'^\[(\d\d):(\d\d):(\d\d)\.(\d{9})\]')
-_ev_re  = re.compile(r'(\S+?)_pinsight_lttng_ust:(\w+):')
+# All PInsight providers end in _lttng_ust; most are named <X>_pinsight_lttng_ust
+# (provider reported as "<X>"), but two are pinsight_<X>_lttng_ust
+# (pinsight_enter_exit, pinsight_manifest — reported with that full prefix).
+# The old pattern (\S+?)_pinsight_lttng_ust silently dropped those two.
+_ev_re  = re.compile(r'(\S+?)_lttng_ust:(\w+):')
 _host_re= re.compile(r'hostname = "([^"]*)"')
 # generic "key = value" fields; values may be numbers, hex, quoted strings, or
 # enum-like ( "label" : container = N ) blobs -- keep the raw string, callers
@@ -23,8 +27,9 @@ _fld_re = re.compile(r'(\w+) = (0x[0-9A-Fa-f]+|-?\d+|"[^"]*"|\( "[^"]*" : contai
 class Event:
     t_ns: int
     host: str
-    provider: str   # pmpi | roctracer | ompt | energy | pinsight_enter_exit
-    name: str       # e.g. MPI_Isend_begin, hipKernelActivity
+    provider: str   # pmpi | roctracer | cupti | ompt | pysysmon | energy |
+                    # pinsight_enter_exit | pinsight_manifest
+    name: str       # e.g. MPI_Isend_begin, hipKernelActivity, manifest_kv
     fields: dict    # raw string values keyed by field name
 
     def i(self, key, default=None):
@@ -52,9 +57,12 @@ def _events_one(trace_dirs, babeltrace="babeltrace2"):
             em = _ev_re.search(line)
             if not em: continue
             hm = _host_re.search(line)
+            prov = em.group(1)
+            if prov.endswith("_pinsight"):
+                prov = prov[:-9]   # pmpi_pinsight -> pmpi (etc.)
             yield Event(t_ns=_to_ns(*tm.groups()),
                         host=hm.group(1) if hm else "",
-                        provider=em.group(1), name=em.group(2),
+                        provider=prov, name=em.group(2),
                         fields=dict(_fld_re.findall(line)))
     finally:
         # No orphaned decoders: kill on abnormal exit (harmless after normal
@@ -177,6 +185,62 @@ def expand_dirs(paths):
         if d not in seen:
             seen.add(d); uniq.append(d)
     return uniq
+
+# ---------------- manifest access (WS1 Step 5) ----------------------------
+# The manifest makes traces self-describing (doc/user/manifest.md): each
+# process periodically emits a BURST — manifest_process + N manifest_kv
+# (key, value) events sharing `seq`. Consumption rule: LATEST-WINS PER KEY
+# per (hostname, pid); bursts are idempotent and full (no deltas), so a
+# window sliced mid-burst still resolves from the previous burst's keys.
+
+def manifests(trace_dirs, at_ns=None, babeltrace="babeltrace2"):
+    """Manifest facts per process: {(hostname, pid): {key: value}}.
+    Latest-wins per key over the time-ordered stream; with at_ns, only
+    bursts at or before that timestamp count ("what was true then" — e.g.
+    pinsight.config_hash identifies the config epoch of a window).
+    manifest_process fields appear as mpirank/exe/window_gen/nprocs_hint;
+    kv values are plain strings. Missing manifests => {} (analyses must
+    degrade gracefully — manifest facts are additive)."""
+    out = {}
+    for ev in events(trace_dirs, babeltrace):
+        if ev.provider != "pinsight_manifest":
+            continue
+        if at_ns is not None and ev.t_ns > at_ns:
+            continue
+        d = out.setdefault((ev.host, ev.i("pid")), {})
+        if ev.name == "manifest_process":
+            for f in ("mpirank", "window_gen", "nprocs_hint"):
+                v = ev.i(f)
+                if v is not None:
+                    d[f] = v
+            v = ev.s("exe")
+            if v:
+                d["exe"] = v
+        elif ev.name == "manifest_kv":
+            k = ev.s("key")
+            if k:
+                d[k] = ev.s("value", "")
+    return out
+
+def load_run_manifest(path):
+    """The run-level sidecar (run_manifest.json, written by
+    scripts/pinsight-manifest.sh): given a run dir, a trace dir inside one,
+    or the JSON path itself, ascend looking for it (a CTF dir sits at least
+    4 levels — ust/uid/<uid>/64-bit — below its node dir, plus run layout).
+    Returns the parsed dict, or None (traces never depend on the sidecar)."""
+    import json, os
+    p = os.path.abspath(path)
+    if os.path.isfile(p) and os.path.basename(p) == "run_manifest.json":
+        return json.load(open(p))
+    for _ in range(9):
+        cand = os.path.join(p, "run_manifest.json")
+        if os.path.isfile(cand):
+            return json.load(open(cand))
+        parent = os.path.dirname(p)
+        if parent == p:
+            break
+        p = parent
+    return None
 
 # ---------------- neutral machine-readable output (--json / --csv) --------
 # Every analysis script declares TABLE SPECS: an ordered dict

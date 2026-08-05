@@ -68,7 +68,7 @@ make no assumptions about which application produced the trace.
 | `gpu_datamovement.py` | Host↔device copy analysis: direction/bytes/host time from `hipMemcpy` host events; actual GPU copy time and bandwidth from activity records |
 | `halo_exchange.py` | Point-to-point (halo) vs collective cost split, neighbor topology (who talks to whom, same-node vs cross-node), and message-size profile (latency-bound vs bandwidth-bound) |
 | `phase_detect.py` | Splits the run into execution phases (change-point detection over binned event-rate features), characterizes each phase (MPI-dense, collective-heavy, p2p-heavy, kernel-dense), and detects the iteration period and cycle count per phase |
-| `mpi_gpu_energy_report.py` | Combined per-rank report (MPI/GPU/energy + figures + kernel hotspots) |
+| `mpi_gpu_energy_report.py` | Combined per-rank report (MPI/GPU/energy + figures + kernel hotspots); rank↔GPU mapping from recorded manifest facts when present, inference fallback otherwise |
 | `parse_energy.py` | Minimal per-device energy/power summary (one line per trace dir) |
 
 Notes:
@@ -81,10 +81,16 @@ Notes:
 - `mpi_gpu_energy_report.py` reads a `babeltrace2` stream on stdin instead of
   taking paths:
   `babeltrace2 <trace> | python3 mpi_gpu_energy_report.py --tag run1`.
-  Per-rank GPU-exec attribution requires an unambiguous one-GPU-per-rank
-  mapping and degrades gracefully (with a note) otherwise.
+  Per-rank GPU-exec attribution uses recorded manifest facts when the trace
+  has them (enable `pinsight_manifest_lttng_ust:*` in the session), falls
+  back to the unambiguous one-GPU-per-rank inference, and degrades
+  gracefully (with a note) otherwise.
 - `pinsight_reader.py` is not an analysis — it is the shared trace reader all
-  scripts build on.
+  scripts build on. It also provides manifest access
+  (`doc/user/manifest.md`): `manifests(dirs, at_ns=None)` → latest-wins
+  facts per `(hostname, pid)` (optionally "as of" a timestamp, e.g. to
+  resolve a window's config epoch), and `load_run_manifest(path)` → the
+  run-level `run_manifest.json` found by ascending from any trace dir.
 
 ## TraceCompass GUI
 

@@ -20,13 +20,16 @@
 # `devId` instead (see PInsight's ROCR_VISIBLE_DEVICES-based devId fix,
 # src/roctracer_callback.c) -- there is no rank field on activity records, so
 # attributing GPU execution time to a rank requires a rank<->device mapping.
-# This script infers that mapping ONLY when it is unambiguous: exactly one
-# physical device seen per rank (the common one-GPU-per-rank deployment
-# pattern). If that does not hold (fewer/more devices than ranks -- e.g.
-# multiple ranks sharing a GPU, or a CPU-only run), per-rank GPU-exec
-# attribution is skipped (reported as 0 with a note), rather than silently
-# guessing wrong. Node-wide GPU stats (kernel hotspots, per-device energy)
-# are always reported regardless, since those do not need the mapping.
+# PREFERRED source (WS1, 2026-08-05): recorded manifest facts -- each rank's
+# manifest bursts carry gpu.physical_dev_offset / *_VISIBLE_DEVICES as that
+# process actually saw them, plus the authoritative mpirank (enable
+# `pinsight_manifest_lttng_ust:*` in the session; doc/user/manifest.md).
+# FALLBACK (no manifest events in the trace): infer the mapping ONLY when it
+# is unambiguous -- exactly one physical device seen per rank (the common
+# one-GPU-per-rank deployment). If neither source resolves it, per-rank
+# GPU-exec attribution is skipped (reported as 0 with a note), rather than
+# silently guessing wrong. Node-wide GPU stats (kernel hotspots, per-device
+# energy) are always reported regardless, since those need no mapping.
 #
 # Energy note: gpu_uj is a NODE-WIDE counter -- every rank on a node reports
 # the same values (see energy_lttng_ust_tracepoint.h). Energy runs in ARMED
@@ -49,6 +52,10 @@ gpuj_re = re.compile(r'gpu_uj = \[(.*?)\], seq')
 gpuj_val= re.compile(r'\[\d+\] = (\d+)')
 hp_re   = re.compile(r'hostname = "([^"]*)", pid = (\d+)')
 seq_re  = re.compile(r'seq = (\d+)')
+man_re  = re.compile(r'pinsight_manifest_lttng_ust:(manifest_process|manifest_kv)')
+mankv_re= re.compile(r'key = "([^"]*)", value = "([^"]*)"')
+MAN_GPU_KEYS = ("gpu.physical_dev_offset", "gpu.rocr_visible_devices",
+                "gpu.hip_visible_devices", "gpu.cuda_visible_devices")
 
 MPI_WAIT = {"MPI_Waitall","MPI_Wait","MPI_Allreduce","MPI_Barrier","MPI_Allgather"}
 
@@ -116,11 +123,29 @@ def parse(stream):
     dev_seen = set()
     # energy: (host, pid) -> seq -> {'enter': (t_s, vec), 'exit': (t_s, vec)}
     espans = defaultdict(lambda: defaultdict(dict))
+    # manifest facts (latest-wins): (host, pid) -> rank / physical device
+    man_rank = {}; man_dev = {}
 
     for line in stream:
         tm = ts_re.match(line)
         if not tm: continue
         t = to_ns(tm.groups())
+        mm = man_re.search(line)
+        if mm:
+            hp = hp_re.search(line)
+            if hp:
+                key = (hp.group(1), int(hp.group(2)))
+                if mm.group(1) == "manifest_process":
+                    r = rank_re.search(line)
+                    if r: man_rank[key] = int(r.group(1))
+                else:
+                    kv = mankv_re.search(line)
+                    if kv and kv.group(1) in MAN_GPU_KEYS:
+                        try:
+                            man_dev[key] = int(kv.group(2).split(",")[0])
+                        except ValueError:
+                            pass
+            continue
         em = ev_re.search(line)
         if not em: continue
         prov, ev = em.group(1), em.group(2)
@@ -168,16 +193,30 @@ def parse(stream):
             for c in cat_of(prov, base): dur[r][c]+=d
 
     ranks = sorted(set(first)|set(dur))
-    # devId -> rank: ONLY when unambiguous (exactly one physical device per
-    # rank -- the common one-GPU-per-rank deployment). If counts don't match
-    # (shared GPUs, CPU-only run, etc.) leave the map empty rather than guess.
+    # devId -> rank: PREFER recorded manifest facts (each rank's physical
+    # device as its process actually saw it + authoritative mpirank);
+    # FALLBACK to inference ONLY when unambiguous (exactly one physical
+    # device per rank -- the common one-GPU-per-rank deployment). Otherwise
+    # leave the map empty rather than guess.
+    man_dev2rank = {}
+    for key, dev in man_dev.items():
+        r = man_rank.get(key)
+        if r is not None:
+            man_dev2rank[dev] = r
     dev_sorted = sorted(dev_seen)
-    dev2rank = {d: r for d, r in zip(dev_sorted, ranks)} if len(dev_sorted) == len(ranks) else {}
+    if man_dev2rank:
+        dev2rank, dev2rank_src = man_dev2rank, "manifest"
+    elif len(dev_sorted) == len(ranks) and dev_sorted:
+        dev2rank = {d: r for d, r in zip(dev_sorted, ranks)}
+        dev2rank_src = "inferred"
+    else:
+        dev2rank, dev2rank_src = {}, "none"
 
     return dict(ranks=ranks, dur=dur, first=first, last=last, launch_count=launch_count,
                 mpi_count=mpi_count, gpu_exec_ns=gpu_exec_ns, gpu_kern_n=gpu_kern_n,
                 gpu_copy_ns=gpu_copy_ns, gpu_bytes=gpu_bytes, kern_exec_ns=kern_exec_ns,
-                kern_n=kern_n, dev2rank=dev2rank, energy=energy_summary(espans))
+                kern_n=kern_n, dev2rank=dev2rank, dev2rank_src=dev2rank_src,
+                energy=energy_summary(espans))
 
 def energy_summary(espans):
     """(host,pid)->seq->{'enter','exit'} pairs -> per-host summary. Sums the
@@ -229,10 +268,15 @@ def top_kernels_agg(R, n):
     return [(nm, ns/1e9, agg_n[nm]) for nm, ns in tops]
 
 def print_tables(R, rows):
-    if not R['dev2rank'] and R['ranks']:
-        print("[note: rank<->GPU-device mapping is ambiguous (device count != rank "
-              "count) -- per-rank GPU-exec time below is reported as 0; node-wide "
-              "GPU stats further down are unaffected]")
+    if R['dev2rank_src'] == "manifest":
+        print("[rank<->GPU-device mapping from recorded manifest facts]")
+    elif R['dev2rank_src'] == "inferred":
+        print("[note: rank<->GPU-device mapping INFERRED (one device per rank); "
+              "enable 'pinsight_manifest_lttng_ust:*' in the session to record it]")
+    elif R['ranks']:
+        print("[note: rank<->GPU-device mapping unavailable (no manifest facts, "
+              "device count != rank count) -- per-rank GPU-exec time below is "
+              "reported as 0; node-wide GPU stats further down are unaffected]")
     print(f"\n{'rank':>4} {'wall(s)':>8} {'MPI(s)':>8} {'MPIwait':>8} {'GPUsync':>8} "
           f"{'launch':>7} {'memcpy':>7} {'GPUexec':>8} {'kernels':>8}   MPI%  GPUexec%")
     print("-"*98)

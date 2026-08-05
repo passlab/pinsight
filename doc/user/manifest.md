@@ -220,9 +220,22 @@ Example burst (abridged):
 ... manifest_kv: { ... seq = 1, key = "cpu.affinity", value = "72-95" }
 ```
 
-Analysis-toolkit integration (`analysis/pinsight_reader.py` helpers,
-TraceCompass row labels) is WS1 Step 5 — until then, the events are plain
-CTF and any consumer can apply the latest-wins rule directly.
+From Python, the analysis toolkit reads manifests directly
+(`analysis/pinsight_reader.py`):
+
+```python
+from pinsight_reader import expand_dirs, manifests, load_run_manifest
+dirs = expand_dirs(["/path/to/run"])       # any mix of run/node/trace dirs
+m  = manifests(dirs)                       # {(hostname, pid): {key: value}}
+m0 = manifests(dirs, at_ns=t)              # facts as of timestamp t (epochs)
+rm = load_run_manifest(dirs[0])            # run_manifest.json, found by ascent
+```
+
+`mpi_gpu_energy_report.py` uses these facts for its rank↔GPU-device mapping
+(falling back to inference on manifest-less traces), and the TraceCompass
+state provider stores every kv under `/manifest/<pid>/<key>` for views to
+query. The events are plain CTF regardless — any consumer can apply the
+latest-wins rule directly.
 
 ## 9. Producing the sidecar: `scripts/pinsight-manifest.sh`
 

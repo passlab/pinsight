@@ -249,7 +249,43 @@
 				<stateValue type="eventField" value="cpu" />
 			</stateChange>
 		</eventHandler>
-		
+
+		<!-- WS1 manifest (doc/user/manifest.md): store the per-process
+		     provenance facts under /manifest/<pid>/... — latest-wins per key
+		     falls out of the state system (later writes overwrite). Generic:
+		     the kv key field names the attribute, so new keys need no XML
+		     change. Consumers (row labels, devId relabeling — WS2) query
+		     these; nothing here affects the timeline states. -->
+		<eventHandler eventName="pinsight_manifest_lttng_ust:manifest_process">
+			<stateChange>
+				<stateAttribute type="constant" value="manifest"/>
+				<stateAttribute type="eventField" value="pid"/>
+				<stateAttribute type="constant" value="mpirank"/>
+				<stateValue type="eventField" value="mpirank"/>
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="manifest"/>
+				<stateAttribute type="eventField" value="pid"/>
+				<stateAttribute type="constant" value="exe"/>
+				<stateValue type="eventField" value="exe"/>
+			</stateChange>
+			<stateChange>
+				<stateAttribute type="constant" value="manifest"/>
+				<stateAttribute type="eventField" value="pid"/>
+				<stateAttribute type="constant" value="window_gen"/>
+				<stateValue type="eventField" value="window_gen"/>
+			</stateChange>
+		</eventHandler>
+
+		<eventHandler eventName="pinsight_manifest_lttng_ust:manifest_kv">
+			<stateChange>
+				<stateAttribute type="constant" value="manifest"/>
+				<stateAttribute type="eventField" value="pid"/>
+				<stateAttribute type="eventField" value="key"/>
+				<stateValue type="eventField" value="value"/>
+			</stateChange>
+		</eventHandler>
+
 		<eventHandler eventName="ompt_pinsight_lttng_ust:thread_begin">
 			<stateChange>
 				<stateAttribute type="location" value="Processor"/>

@@ -614,7 +614,34 @@ Original spec:
 - **Test:** 4-node AMG run → sidecar + blobs present; traces echo the
   sidecar's `run_id`.
 
-### Step 5 — consumers (~1–2 days)
+### Step 5 — consumers (~1–2 days) — **DONE 2026-08-05 — WS1 COMPLETE**
+
+- `pinsight_reader.py`: `manifests(dirs, at_ns=None)` (latest-wins per key
+  per `(hostname,pid)`; `at_ns` = config-epoch/as-of queries) and
+  `load_run_manifest(path)` (ascends from any trace dir). Along the way,
+  fixed a latent reader bug: the old provider regex
+  `(\S+?)_pinsight_lttng_ust` silently dropped `pinsight_enter_exit` AND
+  `pinsight_manifest` events; generalized to `(\S+?)_lttng_ust` with a
+  `_pinsight`-suffix strip — provider names unchanged for all existing
+  consumers (verified for every provider form + statedump non-match).
+- `mpi_gpu_energy_report.py` (the acceptance test): rank↔GPU-device
+  mapping now PREFERS recorded manifest facts (`gpu.physical_dev_offset` /
+  first visible device + authoritative mpirank), with the one-GPU-per-rank
+  inference as fallback and a source note in the output. Fixture proof:
+  facts deliberately reversed vs. sorted order → manifest mapping right
+  where inference is wrong. Bonus find: MI300A compute nodes export
+  `ROCR_VISIBLE_DEVICES` node-wide — the manifest recorded it faithfully.
+- `tc/pinsight_analysis.xml`: `manifest_process`/`manifest_kv` handlers →
+  `/manifest/<pid>/{mpirank,exe,window_gen,<kv key>}`; the kv key field
+  names the attribute, so new keys need no XML change; latest-wins falls
+  out of the state system. xmllint-clean; WS2 consumes for labels/devIds.
+- Docs: `analysis/README.md` (reader helpers + report row);
+  `doc/user/manifest.md` §8 now shows the Python API.
+- Regression: load_imbalance / mpi_latency / phase_detect run cleanly on
+  manifest-only traces; reader join validated against the 2-node run
+  (4 processes, unified run_id, sidecar found by ascent, as-of works).
+
+Original spec:
 
 - `analysis/pinsight_reader.py`: `manifests(traces)` → latest-wins-per-key
   `{(hostname,pid): {...}}` + as-of-timestamp variant;
