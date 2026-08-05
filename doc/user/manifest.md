@@ -18,8 +18,8 @@ user view.
 |---|---|---|---|
 | Manifest **bursts** (events) | per **process** | inside the CTF trace, like any other events | implemented |
 | Effective-config **dump files** | per distinct config, per node | `$PINSIGHT_MANIFEST_DIR/pinsight_config.<hash>.txt` | implemented |
-| `run_manifest.json` **sidecar** | per **run/experiment** | run-folder root, next to the per-node trace dirs | planned (WS1 Step 4) |
-| Hardware/env blobs (lstopo, amd-smi, env dumps) | per **node** | `<run dir>/manifest/` | planned (WS1 Step 4) |
+| `run_manifest.json` **sidecar** | per **run/experiment** | run-folder root, next to the per-node trace dirs | implemented (`scripts/pinsight-manifest.sh`) |
+| Hardware/env blobs (lstopo, amd-smi, env dumps) | per **node** | `<run dir>/manifest/` | implemented (`scripts/pinsight-manifest.sh`) |
 
 How the scopes fit together:
 
@@ -36,6 +36,34 @@ How the scopes fit together:
 A trace **never depends on** the sidecar files: they enrich (hardware
 inventory, job metadata, config *content*), but every analysis works from
 the trace alone.
+
+### 1.1 Run-folder layout and the three `manifest*` files
+
+A fully-managed run folder looks like this:
+
+```
+<rundir>/
+  run_manifest.json     # THE manifest — the tool-owned sidecar record (§9.3)
+  user_manifest.json    # optional INPUT you write; merged into `user:` (§9.2)
+  manifest.env          # 2-line env shim; source it to (re)export run identity
+  manifest/             # the manifest's bulk attachments:
+    lstopo.<host>.xml  amdsmi.<host>.txt  env.<host>.txt  node.<host>.json
+    pinsight_config.<hash>.txt         #   effective-config dumps (§7)
+  <per-node trace dirs ...>            # CTF traces — the bursts live in here
+```
+
+Three similarly-named files, three different roles — only one is actually
+a manifest:
+
+| File | Who writes it | Role |
+|---|---|---|
+| `run_manifest.json` | `pinsight-manifest.sh` | **The manifest** (output): the run-level record — job, software, user facts, per-node hardware refs, config dumps, trace integrity hashes. Structure in §9.3 |
+| `user_manifest.json` | **you** (optional) | **Input**: structured facts only you know (campaign parameters, solver config). Merged verbatim into the manifest's `user:` section at `run` time; use it when flat `--kv key=value` args aren't enough |
+| `manifest.env` | `pinsight-manifest.sh` | **Convenience shim** (not manifest content): the two `export PINSIGHT_RUN_ID=… / PINSIGHT_MANIFEST_DIR=…` lines, persisted so *another shell* can join the same run later (`. <rundir>/manifest.env`) — e.g. a debug session or a launcher split across scripts. The primary mechanism is `eval "$(… run …)"`; this file is its durable copy |
+
+The **burst** structure (the in-trace half) is described in §3 (when bursts
+are emitted, latest-wins consumption) and §5 (fields and keys); the
+**sidecar** structure in §9.3.
 
 ## 2. Turning it on
 
@@ -196,12 +224,101 @@ Analysis-toolkit integration (`analysis/pinsight_reader.py` helpers,
 TraceCompass row labels) is WS1 Step 5 — until then, the events are plain
 CTF and any consumer can apply the latest-wins rule directly.
 
-## 9. Coming with WS1 Step 4 (launcher sidecar)
+## 9. Producing the sidecar: `scripts/pinsight-manifest.sh`
 
-`scripts/pinsight-manifest.sh` will assemble the run-level record no process
-can write: `run_manifest.json` (job metadata, campaign parameters,
-user-provided facts via `--kv key=value`, per-node `trace_sha256` integrity
-hashes) plus per-node hardware blobs (lstopo XML, `amd-smi static`, env
-dumps) under `<run dir>/manifest/`, and will export `PINSIGHT_RUN_ID` /
-`PINSIGHT_MANIFEST_DIR` so the in-trace side joins to it automatically. A
-trace without any of this remains fully usable (§1).
+Assembles the run-level record no process can write. Everything is
+optional and fail-soft: a missing tool skips its file, a partial node
+collection still finalizes, and a trace produced without any of this
+remains fully usable (§1).
+
+### 9.1 Subcommands and typical wiring
+
+```bash
+PM=<pinsight>/scripts/pinsight-manifest.sh
+
+# 1. Job start: mint run_id, create <rundir>/manifest/, write
+#    run_manifest.json, and export PINSIGHT_RUN_ID + PINSIGHT_MANIFEST_DIR
+#    (also saved to <rundir>/manifest.env for later sourcing):
+eval "$($PM run <rundir> --kv problem_size=100^3 --kv solver=BoomerAMG)"
+
+# 2. Once per node (hardware/env collection; all best-effort):
+flux exec -r all bash $PM node <rundir>      # or: srun --ntasks-per-node=1
+
+# 3. Run the traced application (it inherits the two exported variables).
+
+# 4. Post-run: merge node facts, reference the config dumps, and add
+#    sha256 integrity hashes for every CTF trace dir found:
+$PM finalize <rundir> --traces <rundir>/traces
+```
+
+`run` keeps stdout to the export lines only (that's what `eval` consumes);
+all diagnostics go to stderr. Rotation-mode trace chunks each get their own
+sha256 at `finalize` (any directory containing a CTF `metadata` file is
+hashed independently).
+
+### 9.2 The three `manifest*` files
+
+See the table in §1.1: `run_manifest.json` is the tool's output (the
+manifest itself); `user_manifest.json` is your optional structured input,
+merged into the `user:` section (flat facts can just use `--kv`);
+`manifest.env` is the persisted copy of the two exports for re-use from
+other shells.
+
+### 9.3 `run_manifest.json` structure
+
+All sections optional; present iff knowable. From a real 2-node run:
+
+```json
+{
+  "schema_version": 1,
+  "run":   { "run_id": "f3QWwM3kBTg3-01a81be2",
+             "created":  "2026-08-05T14:53:01-07:00",
+             "finalized": "2026-08-05T14:54:12-07:00" },
+  "job":   { "scheduler": "flux", "job_id": "f3QWwM3kBTg3" },
+  "software": { "pinsight_git_rev": "2c11d42" },
+  "user":  { "app": "mpi_sleeper", "problem_size": "100^3" },
+  "nodes": {
+    "tuolumne1017": {
+      "kernel": "4.18.0-553...", "cpu_model": "AMD Instinct MI300A ...",
+      "mem_total_kb": 526343792,
+      "files": { "lstopo": "lstopo.tuolumne1017.xml",
+                 "amdsmi": "amdsmi.tuolumne1017.txt",
+                 "env":    "env.tuolumne1017.txt" },
+      "trace_sha256": { "traces/tuolumne1017/ust/uid/54705/64-bit": "624e..." }
+    }
+  },
+  "config_dumps": [ "pinsight_config.bb782e81ade0105c.txt" ],
+  "traces": { "root": "...", "sha256": { "traces/tuolumne1017/...": "624e..." } }
+}
+```
+
+`files` entries are relative to `<rundir>/manifest/`. The join to the
+traces is `run.run_id` (every burst echoes it) and, per config epoch,
+`config_dumps` ↔ each burst's `pinsight.config_hash`.
+
+### 9.4 With and without a job scheduler
+
+**Flux** (batch script): as in §9.1 — note that inside a batch script
+`FLUX_JOB_ID` is not in the environment; the script queries
+`flux getattr jobid` itself, so the run_id is still `<jobid>-<suffix>`.
+Per-node collection via `flux exec -r all bash $PM node <rundir>`.
+
+**Slurm** (sbatch script): identical wiring; `SLURM_JOB_ID` is read from
+the environment, and per-node collection uses
+`srun --ntasks-per-node=1 bash $PM node <rundir>`.
+
+**No scheduler** (single node / plain `mpirun` / interactive):
+
+```bash
+eval "$($PM run ./myrun)"     # run_id falls back to a uuid
+$PM node ./myrun              # this node's hardware/env
+mpirun -np 4 env LD_PRELOAD=... myapp    # env is inherited by the ranks
+$PM finalize ./myrun --traces ./myrun/traces
+```
+
+The only scheduler-dependent parts are the run_id prefix (job id vs uuid)
+and how you fan `node` out across machines. And with **no script at all**,
+the manifest still works at trace scope: ranks generate a provisional
+run_id and unify it through `MPI_Init` (§4), config hashes still appear in
+every burst — you lose only the run-level record (job facts, hardware
+inventory, config *content*, integrity hashes).

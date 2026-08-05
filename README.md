@@ -260,6 +260,18 @@ The file is searched in this order:
 
 See [`doc/user/trace_config_format.md`](doc/user/trace_config_format.md) for the full config format specification.
 
+### Trace Manifest (provenance)
+
+PInsight traces can be made **self-describing**: with the manifest provider
+enabled (`lttng enable-event -u 'pinsight_manifest_lttng_ust:*'`), every
+process periodically emits its provenance — run id, rank, binding as seen,
+binary build-id, effective-config hash — directly into the trace, and the
+launcher-side [`scripts/pinsight-manifest.sh`](scripts/pinsight-manifest.sh)
+assembles the run-level sidecar (`run_manifest.json`: job metadata, per-node
+hardware inventory, user-provided facts, trace integrity hashes), with or
+without a job scheduler. See the user guide:
+[`doc/user/manifest.md`](doc/user/manifest.md).
+
 ### Runtime Reconfiguration via SIGUSR1
 
 Domain modes and tracing options can be changed at runtime without restarting:
@@ -386,6 +398,7 @@ Documentation is organized by audience: [`doc/user/`](doc/user/) for users,
 | Document | Description |
 |----------|-------------|
 | [`doc/user/trace_config_format.md`](doc/user/trace_config_format.md) | Config file format specification |
+| [`doc/user/manifest.md`](doc/user/manifest.md) | Trace manifest: self-describing traces + run sidecar (`pinsight-manifest.sh`) |
 | [`doc/user/domain_trace_modes.md`](doc/user/domain_trace_modes.md) | Domain mode benchmark results |
 | [`doc/user/rate-limit-tracing.md`](doc/user/rate-limit-tracing.md) | Rate-based sampling design |
 | [`doc/user/python_trace_config.md`](doc/user/python_trace_config.md) | Python tracing configuration reference |

@@ -555,7 +555,33 @@ Original spec:
   acceptance property); cyclic-window run (`test/rocm/cyclic_traces`
   recipe) shows `reason="window"` bursts at each transition.
 
-### Step 4 — sidecar collector (~1 day)
+### Step 4 — sidecar collector (~1 day) — **DONE 2026-08-05**
+
+Implemented as `scripts/pinsight-manifest.sh` with three subcommands — the
+"post-run invocation" of the spec below became an explicit `finalize`
+subcommand: `run <rundir> [--kv k=v ...]` (mint run_id: scheduler job id —
+incl. `flux getattr jobid`, since a batch script's env lacks FLUX_JOB_ID —
+plus random suffix, else uuid; assemble `run_manifest.json` with job/
+software/user sections + `user_manifest.json` merge; print eval-able
+`PINSIGHT_RUN_ID`/`PINSIGHT_MANIFEST_DIR` exports, also saved to
+`manifest.env`); `node <rundir>` (once per node: lstopo XML,
+amd-smi/rocm-smi/nvidia-smi static, env dump, `node.<host>.json` facts —
+all best-effort); `finalize <rundir> [--traces <dir>]` (merge node files,
+reference `pinsight_config.*.txt` — no packing needed since
+PINSIGHT_MANIFEST_DIR *is* `<rundir>/manifest/` — and add per-CTF-dir
+sha256, computed over sorted per-file hashes; rotation chunks hash
+per-chunk via their own `metadata`). Optional `segment` subcommand:
+deferred (no consumer yet).
+
+Validated: local full cycle (run → node → traced app → finalize) with
+trace run_id == sidecar run_id and node facts collected (lstopo + amd-smi
++ env on MI300A); 2-node pdebug job with the script fully integrated —
+readable tier-1 run_id `<flux-jobid>-<suffix>` echoed by all 44 in-trace
+references across both nodes, both nodes' hardware + per-node
+`trace_sha256` in the JSON, config dump referenced, `job` section
+populated via the getattr fallback. User doc §9 updated to usage.
+
+Original spec:
 
 - `scripts/pinsight-manifest.sh`, two subcommands:
   - `node <outdir>` — per-node collection (lstopo XML, `amd-smi static`,
