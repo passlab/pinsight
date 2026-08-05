@@ -30,10 +30,24 @@
 #       default <rundir> — rotation chunks each get their own entry).
 #
 # All diagnostics go to stderr; `run` keeps stdout = export lines only.
+#
+# NO-PYTHON BEST-EFFORT MODE: run_manifest.json (the canonical manifest) is
+# only ever written by python3 — bash never emits JSON (unescapable user
+# values could corrupt it). Without python3, `run`/`node` write flat
+# `key=value` FRAGMENTS (manifest/run.frag, manifest/node.<host>.frag) and
+# `finalize` computes trace hashes into manifest/trace_sha256.frag; nothing
+# is lost, and re-running `finalize` on any machine WITH python3 merges all
+# fragments (+ the deferred user_manifest.json) into the full JSON. The
+# critical path — run_id minting, env exports, hardware blobs, hashes —
+# never needs python at all.
 set -u
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PY=${PYTHON3:-python3}
+HAVE_PY=1
+command -v "$PY" >/dev/null 2>&1 || HAVE_PY=0
+[ "$HAVE_PY" = 1 ] || echo "pinsight-manifest: python3 not found — best-effort mode:" \
+  "writing flat fragments; re-run 'finalize' where python3 exists to produce run_manifest.json" >&2
 
 die() { echo "pinsight-manifest: $*" >&2; exit 1; }
 
@@ -67,6 +81,37 @@ run)
   # PInsight source rev (this script lives in <pinsight>/scripts) — optional.
   pinsight_rev=$(git -C "$SCRIPT_DIR/.." rev-parse --short HEAD 2>/dev/null || true)
 
+  if [ "$HAVE_PY" = 0 ]; then
+    # Fallback: flat fragment (dotted keys mirror the JSON paths); a later
+    # python-equipped `finalize` merges it into run_manifest.json.
+    frag="$rundir/manifest/run.frag"
+    {
+      echo "schema_version=1"
+      echo "run.run_id=$run_id"
+      echo "run.created=$(date -Iseconds 2>/dev/null || date)"
+      if [ -n "${SLURM_JOB_ID:-}" ]; then echo "job.scheduler=slurm"
+      elif [ -n "$jid" ]; then echo "job.scheduler=flux"; fi
+      [ -z "$jid" ] || echo "job.job_id=$jid"
+      [ -z "$pinsight_rev" ] || echo "software.pinsight_git_rev=$pinsight_rev"
+    } > "$frag"
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "--kv" ] && [ $# -ge 2 ]; then
+        kv=$2; k=${kv%%=*}; v=${kv#*=}
+        if [ -n "$k" ] && [ "$k" != "$kv" ] && printf '%s' "$k" | grep -Eq '^[A-Za-z0-9_.-]+$'; then
+          printf 'user.%s=%s\n' "$k" "$(printf '%s' "$v" | tr '\n' ' ')" >> "$frag"
+        else
+          echo "pinsight-manifest: warning: skipped --kv '$kv' (key must be [A-Za-z0-9_.-]+)" >&2
+        fi
+        shift 2
+      else
+        echo "pinsight-manifest: warning: ignored argument '$1'" >&2
+        shift
+      fi
+    done
+    [ ! -f "$rundir/user_manifest.json" ] || echo "pinsight-manifest:" \
+      "user_manifest.json merge deferred to a python3-equipped 'finalize'" >&2
+    echo "pinsight-manifest: wrote $frag (run_id $run_id; no-python mode)" >&2
+  else
   "$PY" - "$rundir" "$run_id" "$pinsight_rev" "$jid" "$@" <<'PYEOF' 1>&2 || die "run: JSON assembly failed"
 import json, os, sys, datetime
 rundir, run_id, rev, jid, *rest = sys.argv[1:]
@@ -114,6 +159,7 @@ out = os.path.join(rundir, "run_manifest.json")
 json.dump(doc, open(out, "w"), indent=2)
 print(f"pinsight-manifest: wrote {out} (run_id {run_id})", file=sys.stderr)
 PYEOF
+  fi
 
   envfile="$rundir/manifest.env"
   {
@@ -146,6 +192,25 @@ node)
   fi
   env | sort > "$m/env.$h.txt" 2>/dev/null || rm -f "$m/env.$h.txt"
 
+  if [ "$HAVE_PY" = 0 ]; then
+    # Fallback: flat fragment; merged into run_manifest.json by a later
+    # python-equipped `finalize`. Values here are machine-derived.
+    frag="$m/node.$h.frag"
+    {
+      echo "hostname=$h"
+      echo "kernel=$(uname -r 2>/dev/null || true)"
+      cm=$(grep -m1 -E '^model name' /proc/cpuinfo 2>/dev/null | sed 's/^[^:]*:[[:space:]]*//')
+      [ -z "$cm" ] || echo "cpu_model=$cm"
+      mt=$(grep -m1 -oE '[0-9]+' /proc/meminfo 2>/dev/null)
+      [ -z "$mt" ] || echo "mem_total_kb=$mt"
+      for spec in "lstopo:lstopo.$h.xml" "amdsmi:amdsmi.$h.txt" \
+                  "nvidiasmi:nvidiasmi.$h.txt" "env:env.$h.txt"; do
+        key=${spec%%:*}; name=${spec#*:}
+        [ ! -f "$m/$name" ] || echo "files.$key=$name"
+      done
+    } > "$frag"
+    echo "pinsight-manifest: wrote $frag (no-python mode)" >&2
+  else
   "$PY" - "$m" "$h" <<'PYEOF' 1>&2 || die "node: JSON assembly failed"
 import json, os, re, sys
 m, h = sys.argv[1:3]
@@ -182,6 +247,7 @@ out = os.path.join(m, f"node.{h}.json")
 json.dump(node, open(out, "w"), indent=2)
 print(f"pinsight-manifest: wrote {out}", file=sys.stderr)
 PYEOF
+  fi
   ;;
 
 # ============================================================ finalize
@@ -192,16 +258,94 @@ finalize)
   if [ "${1:-}" = "--traces" ]; then
     traces=${2:-}; [ -n "$traces" ] || die "finalize: --traces needs a dir"
   fi
-  [ -f "$rundir/run_manifest.json" ] || die "finalize: $rundir/run_manifest.json not found (run 'run' first)"
+  [ -f "$rundir/run_manifest.json" ] || [ -f "$rundir/manifest/run.frag" ] || \
+    die "finalize: neither run_manifest.json nor manifest/run.frag found (run 'run' first)"
 
+  if [ "$HAVE_PY" = 0 ]; then
+    # Fallback: compute the trace integrity hashes now (they need the trace
+    # files, which may be purged later) into a sha256sum-style fragment; the
+    # JSON merge waits for a python3-equipped re-run of `finalize`.
+    # Dir-hash scheme MUST match the python one: sha256 over the sorted
+    # "relname:sha256(file)" lines, joined by \n with NO trailing newline.
+    m="$rundir/manifest"
+    frag="$m/trace_sha256.frag"
+    : > "$frag"
+    find "$traces" -name metadata -type f 2>/dev/null | while read -r meta; do
+      d=$(dirname "$meta")
+      case "$(cd "$d" && pwd)" in "$(cd "$m" && pwd)"*) continue;; esac
+      rel=${d#"$traces"/}; [ "$rel" != "$d" ] || rel=$(basename "$d")
+      hash=$( (cd "$d" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | \
+               while read -r f; do
+                 printf '%s:%s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)"
+               done) | LC_ALL=C sort | \
+              awk 'NR>1{printf "\n"} {printf "%s", $0}' | sha256sum | cut -d' ' -f1 )
+      printf '%s  %s\n' "$hash" "$rel" >> "$frag"
+    done
+    n=$(wc -l < "$frag" 2>/dev/null || echo 0)
+    echo "pinsight-manifest: wrote $frag ($n trace dir(s); no-python mode)." \
+         "Re-run 'finalize' where python3 exists to produce run_manifest.json" \
+         "— all inputs are preserved." >&2
+  else
   "$PY" - "$rundir" "$traces" <<'PYEOF' 1>&2 || die "finalize: failed"
 import datetime, glob, hashlib, json, os, sys
 rundir, traces = sys.argv[1:3]
 m = os.path.join(rundir, "manifest")
-doc = json.load(open(os.path.join(rundir, "run_manifest.json")))
 
-# 1. Merge per-node collections.
+def load_frag(path):
+    """Flat key=value fragment written by the no-python fallback."""
+    d = {}
+    try:
+        for line in open(path):
+            line = line.rstrip("\n")
+            if line and "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                d[k] = v
+    except Exception as e:
+        print(f"pinsight-manifest: warning: {path} ignored: {e}", file=sys.stderr)
+    return d
+
+mf = os.path.join(rundir, "run_manifest.json")
+if os.path.exists(mf):
+    doc = json.load(open(mf))
+else:
+    # `run` executed in no-python mode: build the doc from its fragment and
+    # perform the deferred user_manifest.json merge.
+    fr = load_frag(os.path.join(m, "run.frag"))
+    doc = {"schema_version": 1, "run": {}, "job": {}, "software": {},
+           "user": {}, "nodes": {}}
+    for k, v in fr.items():
+        if k == "schema_version":
+            continue
+        if "." in k:
+            sec, kk = k.split(".", 1)
+            doc.setdefault(sec, {})[kk] = v
+    um = os.path.join(rundir, "user_manifest.json")
+    if os.path.exists(um):
+        try:
+            merged = json.load(open(um))
+            merged.update(doc.get("user", {}))  # --kv wins over the file
+            doc["user"] = merged
+        except Exception as e:
+            print(f"pinsight-manifest: warning: user_manifest.json ignored: {e}",
+                  file=sys.stderr)
+
+# 1. Merge per-node collections (JSON from python-mode `node`, fragments
+#    from no-python-mode `node`; JSON wins where both exist).
 nodes = doc.setdefault("nodes", {})
+for nf in sorted(glob.glob(os.path.join(m, "node.*.frag"))):
+    fr = load_frag(nf)
+    host = fr.get("hostname") or os.path.basename(nf)[5:-5]
+    n = nodes.setdefault(host, {})
+    for k, v in fr.items():
+        if k.startswith("files."):
+            n.setdefault("files", {})[k[6:]] = v
+        elif k == "mem_total_kb":
+            try:
+                n[k] = int(v)
+            except ValueError:
+                n[k] = v
+        elif v:
+            n[k] = v
 for nf in sorted(glob.glob(os.path.join(m, "node.*.json"))):
     try:
         n = json.load(open(nf))
@@ -241,6 +385,15 @@ for root, dirs, fns in os.walk(traces):
         rel = os.path.relpath(root, traces)
         trace_hashes[rel] = dir_sha256(root)
         dirs[:] = []          # a CTF dir is a leaf for our purposes
+if not trace_hashes:
+    # Traces gone/elsewhere (e.g. purged node-local storage) but a no-python
+    # finalize recorded their hashes earlier: use that fragment.
+    tf = os.path.join(m, "trace_sha256.frag")
+    if os.path.exists(tf):
+        for line in open(tf):
+            parts = line.rstrip("\n").split("  ", 1)
+            if len(parts) == 2 and parts[0]:
+                trace_hashes[parts[1]] = parts[0]
 if trace_hashes:
     doc["traces"] = {"root": os.path.abspath(traces),
                      "sha256": trace_hashes}
@@ -257,6 +410,7 @@ print(f"pinsight-manifest: finalized {out} "
       f"({len(nodes)} node(s), {len(trace_hashes)} trace dir(s), "
       f"{len(dumps)} config dump(s))", file=sys.stderr)
 PYEOF
+  fi
   ;;
 
 *)

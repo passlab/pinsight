@@ -322,3 +322,33 @@ the manifest still works at trace scope: ranks generate a provisional
 run_id and unify it through `MPI_Init` (§4), config hashes still appear in
 every burst — you lose only the run-level record (job facts, hardware
 inventory, config *content*, integrity hashes).
+
+### 9.5 Without python3 (best-effort mode)
+
+The script's only soft dependency is `python3` (stdlib only; override with
+`PYTHON3=<path>`), used for all JSON work — `libpinsight` itself needs
+nothing. Where python3 is missing (minimal compute images), the script
+degrades without losing anything: `run` still mints the run_id and prints
+the exports (the parts traces depend on), and `run`/`node` write flat
+`key=value` **fragments** (`manifest/run.frag`, `manifest/node.<host>.frag`)
+instead of JSON — bash never emits JSON, so `run_manifest.json` is always
+python-written and always valid. A no-python `finalize` computes the trace
+hashes (they need the trace files, which may not survive) into
+`manifest/trace_sha256.frag` using the same hash scheme. **Re-running
+`finalize` on any machine with python3 then merges all fragments — plus the
+deferred `user_manifest.json` — into the full `run_manifest.json`.**
+Degradation is temporary, not lossy. Limitation: fragment `--kv` keys are
+restricted to `[A-Za-z0-9_.-]` (others are skipped with a warning); values
+are free-form.
+
+Packaging note: the script is deliberately **one self-contained file** —
+the python programs are embedded as *static* heredocs (quoted delimiters:
+bash never substitutes into them; all data passes via arguments, so user
+values cannot inject into the code) and piped to `python3 -`. Bash must be
+the outer layer anyway (a python entry point couldn't run at all on the
+python-less nodes this mode exists for), and a single file survives being
+copied into job-script directories and harnesses with no companion-file
+path resolution or version skew. File names/locations are identical in
+both modes: `run_manifest.json` is simply *absent* (never renamed or
+relocated) until a python-equipped `finalize` writes it; fragments are a
+producer-side staging detail under `manifest/` that consumers never read.

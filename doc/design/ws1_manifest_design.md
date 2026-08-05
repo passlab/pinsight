@@ -573,6 +573,18 @@ sha256, computed over sorted per-file hashes; rotation chunks hash
 per-chunk via their own `metadata`). Optional `segment` subcommand:
 deferred (no consumer yet).
 
+No-python best-effort mode (added same day, user request): python3 is the
+script's only soft dependency (stdlib-only JSON work; `PYTHON3` override);
+without it, `run`/`node` write flat key=value FRAGMENTS (bash never emits
+JSON — unescapable values could corrupt it; the canonical
+`run_manifest.json` is always python-written), `finalize` computes trace
+hashes into `trace_sha256.frag` with a bash implementation of the SAME
+dir-hash scheme (verified byte-identical), and a later python-equipped
+`finalize` merges all fragments + the deferred `user_manifest.json` into
+the full JSON — temporary, not lossy. Validated: full no-python cycle,
+fragment→JSON upgrade, bash/python hash equality, and all-python
+regression.
+
 Validated: local full cycle (run → node → traced app → finalize) with
 trace run_id == sidecar run_id and node facts collected (lstopo + amd-smi
 + env on MI300A); 2-node pdebug job with the script fully integrated —
