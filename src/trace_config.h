@@ -454,6 +454,8 @@ extern int pinsight_ranks_per_node(void);
 // (off<->armed reloadable; variant latched at first arm). Defined here (not
 // energy.c) so the standalone config-parser test links without energy.c.
 extern pinsight_nodepolicy_t energy_measure_policy;
+// [Manifest] interval seconds (WS1 §2.4); default 10, 0 = no periodic bursts.
+extern int manifest_interval_sec;
 
 // --------------------------------------------------------
 // Safe environment variable query functions

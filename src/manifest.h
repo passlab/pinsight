@@ -39,4 +39,11 @@ void pinsight_manifest_set_run_id(const char *id);
  * may be "" if generation failed. */
 const char *pinsight_manifest_get_run_id(void);
 
+/* Flush the cached effective-config dump to
+ * $PINSIGHT_MANIFEST_DIR/pinsight_config.<hash>.txt — content-addressed,
+ * write-if-absent, tmp+rename; immediate no-op when the env is unset.
+ * CONTROL-THREAD ONLY (start + after each config reload): all manifest file
+ * I/O stays off app threads. Design §2.8. */
+void pinsight_manifest_dump_config(void);
+
 #endif /* PINSIGHT_MANIFEST_H */

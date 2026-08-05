@@ -881,6 +881,13 @@ int pinsight_mpi_ranks_per_node = -1;
 // Defined here so the standalone config-parser test links without energy.c.
 pinsight_nodepolicy_t energy_measure_policy = PINSIGHT_NODEPOLICY_OFF;
 
+// [Manifest] interval seconds (WS1 §2.4): periodic manifest-burst cadence.
+// Default 10; 0 = startup/transition-only. Periodic arming is additionally
+// gated by the dormancy rule (any domain != OFF or energy measure != off),
+// evaluated by the control thread. No on/off key — session-level provider
+// enablement is the switch.
+int manifest_interval_sec = 10;
+
 const char *pinsight_nodepolicy_str(pinsight_nodepolicy_t p) {
   switch (p) {
   case PINSIGHT_NODEPOLICY_OFF:            return "off";

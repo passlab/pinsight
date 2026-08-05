@@ -35,7 +35,8 @@ typedef enum {
   SECTION_LEXGION_DEFAULT,
   SECTION_LEXGION_DOMAIN_DEFAULT,
   SECTION_KNOB,
-  SECTION_ENERGY /* [Energy] — minimal: only `measure` for now */
+  SECTION_ENERGY,  /* [Energy] — minimal: only `measure` for now */
+  SECTION_MANIFEST /* [Manifest] — only `interval` (WS1 §2.4; no on/off key) */
 } SectionType;
 
 typedef enum {
@@ -521,6 +522,11 @@ static int parse_section_header(char *line) {
   else if (strcmp(target, "Energy") == 0) {
     current_section_type = SECTION_ENERGY;
   }
+  // Case 2a'': Manifest section (WS1 §2.4 — only `interval`; deliberately no
+  // on/off key: session-level provider enablement is the switch).
+  else if (strcmp(target, "Manifest") == 0) {
+    current_section_type = SECTION_MANIFEST;
+  }
   // Case 2b: Domain.default
   else if (strstr(target, ".default")) {
     current_section_type = SECTION_DOMAIN_DEFAULT;
@@ -985,6 +991,13 @@ static void parse_key_value(char *line) {
       energy_measure_policy = pinsight_parse_nodepolicy(val, energy_measure_policy).policy;
     }
     // (per-platform enables + socket/device masks are future work — ignored.)
+  } else if (current_section_type == SECTION_MANIFEST) {
+    // --- [Manifest] key-value parsing (only `interval`, seconds; 0 = no
+    // periodic bursts). Reloadable: the control thread re-evaluates its
+    // manifest deadline after every reload. ---
+    if (strcmp(key, "interval") == 0) {
+      manifest_interval_sec = atoi(val);
+    }
   }
 }
 

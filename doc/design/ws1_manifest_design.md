@@ -489,7 +489,46 @@ authoritative-rank burst.
   run_id + authoritative `mpirank`; `fini` bursts keep the unified id.
   Tier-1 (env-provided id) covered by the Step 1 smoke test.
 
-### Step 3 — periodic + transition re-emit (~½–1 day)
+### Step 3 — periodic + transition re-emit (~½–1 day) — **DONE 2026-07-31**
+
+Implemented as specified below, all validated on Tuolumne: `[Manifest]
+interval` parsed (`SECTION_MANIFEST`, plain global, reloadable); the control
+loop waits on the earliest of rotation/window/manifest deadlines (three-way
+`ts_before` selection replacing the two-way special-case); dormancy rule
+enforced via the configured domain modes + energy policy. Scenario tests:
+(A) active domain, interval=1 → 4 periodic bursts in 5 s + start-time dump
+file whose name matches the in-burst hash; (B) all-OFF + interval=1 → init/
+fini only, zero periodic (dormant); (C) dormant start → SIGUSR1 reload to
+active → `window` burst with the NEW hash, periodic begins mid-run, both
+epoch hashes have matching dump files (file-before-burst order held). Bonus
+correctness demo from (C): the post-reload hash reflects the *merged*
+effective state (OpenMP stayed OFF from the first config), which file-bytes
+hashing could never capture. User doc: `[Manifest]` section added to
+`trace_config_format.md`; full user guide added as `doc/user/manifest.md`.
+
+**Extended validation (2026-08-05, login node + 2-node pdebug job):**
+(T1) cyclic windows (`window_timeout=2` + INTROSPECT resume) × periodic
+(interval=1): 3 cycles, `window_gen` 0→3 stamped on every burst, `window`
+bursts on auto-triggers, WAKE_WINDOW/WAKE_MANIFEST deadlines interleave,
+periodic re-arms from each transition; (T2) all-domains-OFF +
+`measure=on`: periodic fires — energy term of the dormancy predicate
+works; (T3) snapshot session: `snapshot record` at t≈6.5 captures init +
+4 periodic, newest burst complete (all 9 kvs); (T4) reload interval 1→0:
+periodic stops (6 s silent), `window` burst marks the boundary. Multi-node
+(flux batch, 2 nodes × 2 ranks, `mpi_sleeper`): per-node sessions/traces;
+every rank init+mpi_init+8 periodic+fini with correct mpirank 0-3;
+run_id bcast unified ACROSS nodes (per-rank provisionals only at seq 0);
+8 racing writers on the shared `PINSIGHT_MANIFEST_DIR` produced exactly
+ONE content-addressed dump file. Rotation interplay (same day, HIP build
+on the MI300A login node, `looping_pinsight` 2 ranks,
+`device_activity=rotate_per_node:500` + `interval=1`): activity
+collection alternated between the two vpids exactly on every 500 ms
+boundary (30 records each) while manifest periodic held its 1 s cadence
+on both ranks — WAKE_ROTATE and WAKE_MANIFEST interleaving through the
+refactored three-way selection, which also regression-tests the rotation
+path itself. All Step 3 paths are now validated.
+
+Original spec:
 
 - `trace_config_parse.c` / `trace_config.h`: new `[Manifest]` section
   (§2.4) modeled on `SECTION_ENERGY`: `interval = <sec>` (default 10;

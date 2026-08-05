@@ -14,6 +14,7 @@
  *   - Updates application knobs.
  */
 #include "pinsight_control_thread.h"
+#include "manifest.h"
 #include "pinsight.h"
 #include "pinsight_config.h"
 #include "trace_config.h"
@@ -91,6 +92,46 @@ static int window_already_ended(window_end_action_t *ma) {
             return 0; /* a targeted domain has not switched yet */
     }
     return has_target;
+}
+
+/* ----------------------------------------------------------------
+ * Periodic manifest timer (WS1 Step 3). State touched ONLY by the control
+ * thread. Dormancy rule (ws1_manifest_design.md §2.4): the periodic burst
+ * arms iff anything is being collected — any domain mode != OFF (the
+ * CONFIGURED mode, uniform across ranks — never the per-rank elected role)
+ * or energy measure != off — and [Manifest] interval > 0. Lifecycle bursts
+ * (init/mpi_init/window/fini) are unconditional and emitted elsewhere.
+ * ---------------------------------------------------------------- */
+static int             manifest_timer_armed = 0;
+static struct timespec manifest_deadline; /* CLOCK_REALTIME */
+
+static int manifest_periodic_wanted(void) {
+  if (manifest_interval_sec <= 0)
+    return 0;
+  if (energy_measure_policy != PINSIGHT_NODEPOLICY_OFF)
+    return 1;
+  for (int d = 0; d < num_domain; d++)
+    if (domain_default_trace_config[d].mode != PINSIGHT_DOMAIN_OFF)
+      return 1;
+  return 0;
+}
+
+/* (Re)arm/disarm per the dormancy rule. Called at control-thread start, after
+ * each periodic emission, and after every reload/mode transition (the
+ * predicate inputs — modes, energy policy, interval — may all have changed). */
+static void manifest_timer_arm_from_config(void) {
+  if (manifest_periodic_wanted()) {
+    clock_gettime(CLOCK_REALTIME, &manifest_deadline);
+    manifest_deadline.tv_sec += manifest_interval_sec;
+    manifest_timer_armed = 1;
+  } else {
+    manifest_timer_armed = 0;
+  }
+}
+
+static int ts_before(const struct timespec *a, const struct timespec *b) {
+  return a->tv_sec < b->tv_sec ||
+         (a->tv_sec == b->tv_sec && a->tv_nsec < b->tv_nsec);
 }
 
 /* (Re)arm the window timer from the current default config. Called at control
@@ -256,6 +297,14 @@ static void *pinsight_control_loop(void *arg) {
      * window_timeout clock is relative to here (design decision §7). */
     window_timer_arm_from_default();
 
+    /* WS1 Step 3: arm the periodic manifest timer (dormancy-gated) and flush
+     * the effective-config dump file once at start — the constructor's init
+     * burst already published this config's hash (ws1 design §2.8: file I/O
+     * happens only here and after reloads, only on this thread, and only
+     * when PINSIGHT_MANIFEST_DIR is set). */
+    manifest_timer_arm_from_config();
+    pinsight_manifest_dump_config();
+
     while (!control_shutdown) {
         /* Block until signaled — zero CPU when idle. When a window timeout is
          * armed, block with a deadline instead so the window ends on time even
@@ -282,9 +331,16 @@ static void *pinsight_control_loop(void *arg) {
             if (t > 0 && (rotate_ms == 0 || t < rotate_ms)) rotate_ms = t;
         }
 #endif
-        int rotate_wake = 0; /* the armed deadline is a rotation boundary */
+        /* Wait on the EARLIEST armed deadline — rotation boundary, window
+         * timeout, or periodic manifest — remembering which kind it was so
+         * an ETIMEDOUT dispatches to the right handler. No deadline armed =>
+         * pure event-driven sem_wait (zero polling; the dormancy rule keeps
+         * the manifest timer disarmed when nothing is collected). */
+        enum { WAKE_NONE, WAKE_ROTATE, WAKE_WINDOW, WAKE_MANIFEST } wake_kind =
+            WAKE_NONE;
+        struct timespec rotate_deadline, *earliest = NULL;
         if (rotate_ms > 0) {
-            struct timespec mono, rt, rotate_deadline;
+            struct timespec mono, rt;
             clock_gettime(CLOCK_MONOTONIC, &mono);
             clock_gettime(CLOCK_REALTIME, &rt);
             unsigned long long mono_ms =
@@ -295,24 +351,25 @@ static void *pinsight_control_loop(void *arg) {
             long ns = rt.tv_nsec + (rem_ms % 1000) * 1000000L;
             rotate_deadline.tv_sec  = rt.tv_sec + rem_ms / 1000 + ns / 1000000000L;
             rotate_deadline.tv_nsec = ns % 1000000000L;
-            if (!window_timer_armed ||
-                rotate_deadline.tv_sec < window_deadline.tv_sec ||
-                (rotate_deadline.tv_sec == window_deadline.tv_sec &&
-                 rotate_deadline.tv_nsec < window_deadline.tv_nsec)) {
-                rotate_wake = 1;
-                rc = sem_timedwait(&control_sem, &rotate_deadline);
-            } else {
-                rc = sem_timedwait(&control_sem, &window_deadline);
-            }
-        } else if (window_timer_armed) {
-            rc = sem_timedwait(&control_sem, &window_deadline);
-        } else {
-            rc = sem_wait(&control_sem);
+            earliest = &rotate_deadline;
+            wake_kind = WAKE_ROTATE;
         }
+        if (window_timer_armed &&
+            (!earliest || ts_before(&window_deadline, earliest))) {
+            earliest = &window_deadline;
+            wake_kind = WAKE_WINDOW;
+        }
+        if (manifest_timer_armed &&
+            (!earliest || ts_before(&manifest_deadline, earliest))) {
+            earliest = &manifest_deadline;
+            wake_kind = WAKE_MANIFEST;
+        }
+        rc = earliest ? sem_timedwait(&control_sem, earliest)
+                      : sem_wait(&control_sem);
         if (rc == -1 && errno == EINTR)
             continue;
 
-        if (rc == -1 && errno == ETIMEDOUT && rotate_wake) {
+        if (rc == -1 && errno == ETIMEDOUT && wake_kind == WAKE_ROTATE) {
             /* Rotation boundary: re-evaluate the live collect decision (the
              * outgoing collector closes its pool, the incoming one opens).
              * Loop back to recompute the next boundary. */
@@ -322,6 +379,14 @@ static void *pinsight_control_loop(void *arg) {
 #ifdef PINSIGHT_CUDA
             pinsight_control_cuda_apply_collect_state();
 #endif
+            continue;
+        }
+
+        if (rc == -1 && errno == ETIMEDOUT && wake_kind == WAKE_MANIFEST) {
+            /* Periodic manifest burst (WS1 §2.3 point 3) — from this thread,
+             * so the app pays nothing. Re-arm and loop. */
+            pinsight_manifest_emit("periodic");
+            manifest_timer_arm_from_config();
             continue;
         }
 
@@ -374,6 +439,12 @@ static void *pinsight_control_loop(void *arg) {
              * only forbids main-thread reads during DSO teardown. */
             pinsight_energy_apply_config();
 #endif
+            /* The load above auto-refreshed the effective-config dump cache;
+             * flush the new config's content file (no-op if unchanged config
+             * or PINSIGHT_MANIFEST_DIR unset). The `window` burst that
+             * references the new hash is emitted below, after mode handling —
+             * file-before-burst order (ws1 design §2.8). */
+            pinsight_manifest_dump_config();
             /* Note: we intentionally do NOT reset mode_change_fired here.
              * Config reload updates configuration (modes, rates, events)
              * but does not touch runtime state (counters, trigger guards).
@@ -459,6 +530,16 @@ static void *pinsight_control_loop(void *arg) {
                       PINSIGHT_WAKEUP_MODE_CHANGE |
                       PINSIGHT_WAKEUP_INTROSPECT)) {
             control_apply_all_modes();
+
+            /* 5. WS1 Step 3: manifest transition burst + timer re-evaluation.
+             * Config and/or modes changed — the burst re-stamps the new epoch
+             * (config_hash, window_gen, modes-derived facts); the dormancy
+             * predicate's inputs (domain modes, energy policy, interval) may
+             * all have flipped, so re-arm/disarm the periodic timer. The
+             * burst is a lifecycle burst — unconditional, not dormancy-gated
+             * (§2.4). */
+            manifest_timer_arm_from_config();
+            pinsight_manifest_emit("window");
         }
     }
 

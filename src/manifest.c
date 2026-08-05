@@ -165,6 +165,43 @@ void pinsight_manifest_set_run_id(const char *id) {
 
 const char *pinsight_manifest_get_run_id(void) { return run_id; }
 
+/* Flush the cached effective-config dump to
+ * $PINSIGHT_MANIFEST_DIR/pinsight_config.<hash>.txt (design §2.8).
+ * CONTROL-THREAD ONLY (plus its start path): keeps all manifest file I/O off
+ * app threads — shared-filesystem metadata ops from N ranks at once are the
+ * OS-noise class PInsight must not cause. Content-addressed and idempotent:
+ * same config -> same name; write-if-absent (first rank per node wins, the
+ * rest cost one access()); tmp + rename for atomicity. Env unset -> return
+ * immediately: zero file I/O ever, even across reloads. */
+void pinsight_manifest_dump_config(void) {
+  const char *dir = getenv("PINSIGHT_MANIFEST_DIR");
+  if (!dir || !*dir)
+    return;
+  uint64_t h = pinsight_config_hash_get();
+  if (!h)
+    return;
+  size_t len = 0;
+  const char *buf = pinsight_config_dump_get(&len);
+  if (!buf || !len)
+    return;
+  char path[512];
+  snprintf(path, sizeof(path), "%s/pinsight_config.%016lx.txt", dir,
+           (unsigned long)h);
+  if (access(path, F_OK) == 0)
+    return; /* content-addressed: this config is already on disk */
+  char tmp[560];
+  snprintf(tmp, sizeof(tmp), "%s.tmp.%d", path, (int)getpid());
+  FILE *f = fopen(tmp, "wb");
+  if (!f)
+    return; /* dir missing/unwritable — fail soft, hash stays in-trace */
+  size_t w = fwrite(buf, 1, len, f);
+  fclose(f);
+  if (w == len)
+    rename(tmp, path);
+  else
+    unlink(tmp);
+}
+
 void pinsight_manifest_init(void) {
   /* run_id: launcher-provided (tier 1) else 16 random bytes hex (tier 2/3);
    * MPI unifies the random form at MPI_Init (design §2.5). */

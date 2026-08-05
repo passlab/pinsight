@@ -115,6 +115,30 @@ so it uses a plain `[Energy]` section. The only runtime key today is `measure`:
 - **Limitation:** per-platform enables and socket/device masks are future work
   (`doc/energy_power_implementation_plan.md`); any other `[Energy]` keys are currently ignored.
 
+#### `[Manifest]` Section
+
+The manifest (trace-provenance bursts: run_id, binding, binary identity, effective-config
+hash — **user guide: `doc/user/manifest.md`**; design: `doc/design/ws1_manifest_design.md`)
+is a service like energy — plain section, one key:
+
+```ini
+[Manifest]
+    interval = 10
+```
+- Periodic burst cadence in **seconds**; `0` = startup/transition bursts only. Default
+  **`10`**. Reloadable via SIGUSR1. For windowed captures (snapshot/rotation), set it
+  below half the shortest window so every chunk contains a full burst.
+- There is deliberately **no on/off key** — whether manifest events are recorded is
+  decided by the LTTng session (`lttng enable-event -u 'pinsight_manifest_lttng_ust:*'`),
+  which is uniform per session; a mid-run-flippable config key would leave later
+  snapshot windows without provenance. Periodic emission additionally requires that
+  something is being collected (any domain ≠ `OFF` or `[Energy] measure ≠ off`) — the
+  dormancy rule: a fully-off preloaded process stays at zero ambient activity.
+- With env `PINSIGHT_MANIFEST_DIR` set (normally by the launcher/`pinsight-manifest.sh`),
+  the control thread also writes the effective-config content to
+  `$PINSIGHT_MANIFEST_DIR/pinsight_config.<hash>.txt` (content-addressed; at start and
+  after each reload). Unset → no files are ever written.
+
 #### Lexgion Configuration (applies to `Lexgion.default`, `Lexgion(Domain).default`, and `Lexgion(Address)`)
 - **Tracing Rate**: `tracing_rate = N` (Trace 1 out of N executions)
 - **Max Traces**: `max_num_traces = N`
