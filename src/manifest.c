@@ -1,6 +1,6 @@
 //
 // PInsight manifest — coordinator and sole translation unit of the
-// pinsight_manifest_lttng_ust provider (WS1, doc/design/ws1_manifest_design.md).
+// pinsight_manifest_lttng_ust provider (WS1, pinsight-eval/docs/design/ws1_manifest_design.md (private dev repo)).
 //
 #define _GNU_SOURCE
 #include <elf.h>

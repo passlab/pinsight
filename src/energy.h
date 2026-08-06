@@ -28,7 +28,7 @@
  * is latched at first arm, per run. anyone_per_node/leader_per_node => exactly
  * one rank/node measures (fixes the multi-rank node-energy multi-count).
  * See doc/node_singleton_measurement_design.md and the 2026-07-31 amendment in
- * doc/design/energy_power_implementation_plan.md.
+ * pinsight-eval/docs/design/energy_power_implementation_plan.md (private dev repo).
  * (Folds into energy_power_config_t when that struct is built.)
  * DECLARED in trace_config.h / DEFINED in trace_config.c (so the standalone
  * config-parser test, which doesn't link energy.c, still resolves it). */

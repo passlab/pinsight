@@ -9,9 +9,10 @@ ways:
    right-click menu, plus XML-defined timeline views, via the integration in
    [`tc/`](tc/).
 
-For the design and implementation of this toolkit (architecture, the neutral
-table contract, TraceCompass/LAMI internals, roadmap), see
-[`doc/design/visualization_analysis_redesign.md`](../doc/design/visualization_analysis_redesign.md).
+The design and implementation record of this toolkit (architecture, the
+neutral table contract, TraceCompass/LAMI internals, roadmap) is maintained
+in the private development repo:
+`pinsight-eval/docs/design/visualization_analysis_redesign.md`.
 
 ## Prerequisites
 
@@ -151,7 +152,7 @@ wrapper; do not point it at the Python scripts directly).
 
 A new analysis is one Python file declaring the neutral table contract plus a
 two-line `tc/lami_<name>.sh` wrapper — text/JSON/CSV output and the
-TraceCompass integration are all inherited. See the *Implementation
-conventions* section of
-[`doc/design/visualization_analysis_redesign.md`](../doc/design/visualization_analysis_redesign.md)
-for the contract, layout rules, and conventions.
+TraceCompass integration are all inherited. The contract, layout rules, and
+conventions are documented in the *Implementation conventions* section of
+`pinsight-eval/docs/design/visualization_analysis_redesign.md` (private dev
+repo).

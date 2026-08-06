@@ -391,22 +391,16 @@ for the full script list and usage.
 
 ## Documentation
 
-Documentation is organized by audience: [`doc/user/`](doc/user/) for users,
-[`doc/design/`](doc/design/) for design and implementation notes. See
-[`doc/README.md`](doc/README.md) for the full index.
+User documentation lives in [`doc/user/`](doc/user/) — the PInsight user
+guide; see [`doc/README.md`](doc/README.md) for the index.
 
 | Document | Description |
 |----------|-------------|
 | [`doc/user/trace_config_format.md`](doc/user/trace_config_format.md) | Config file format specification |
 | [`doc/user/manifest.md`](doc/user/manifest.md) | Trace manifest: self-describing traces + run sidecar (`pinsight-manifest.sh`) |
-| [`doc/user/domain_trace_modes.md`](doc/user/domain_trace_modes.md) | Domain mode benchmark results |
-| [`doc/user/rate-limit-tracing.md`](doc/user/rate-limit-tracing.md) | Rate-based sampling design |
+| [`doc/user/domain_trace_modes.md`](doc/user/domain_trace_modes.md) | Domain trace modes and benchmark results |
+| [`doc/user/rate-limit-tracing.md`](doc/user/rate-limit-tracing.md) | Rate-controlled tracing |
 | [`doc/user/python_trace_config.md`](doc/user/python_trace_config.md) | Python tracing configuration reference |
-| [`doc/design/four_mode_trace_design.md`](doc/design/four_mode_trace_design.md) | 4-mode trace hierarchy design |
-| [`doc/design/control_thread_design.md`](doc/design/control_thread_design.md) | Control thread and INTROSPECT architecture |
-| [`doc/design/cuda_support_design.md`](doc/design/cuda_support_design.md) | CUDA/CUPTI tracing design |
-| [`doc/design/python_tracing_design.md`](doc/design/python_tracing_design.md) | Python domain support design |
-| [`doc/design/python_tracing_implementation.md`](doc/design/python_tracing_implementation.md) | Python domain implementation notes |
 
 ---
 

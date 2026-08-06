@@ -118,7 +118,7 @@ so it uses a plain `[Energy]` section. The only runtime key today is `measure`:
 #### `[Manifest]` Section
 
 The manifest (trace-provenance bursts: run_id, binding, binary identity, effective-config
-hash — **user guide: `doc/user/manifest.md`**; design: `doc/design/ws1_manifest_design.md`)
+hash — **user guide: `doc/user/manifest.md`**; design: `pinsight-eval/docs/design/ws1_manifest_design.md (private dev repo)`)
 is a service like energy — plain section, one key:
 
 ```ini

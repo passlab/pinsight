@@ -9,7 +9,7 @@ you what was running and under which config; binding mistakes (the launcher
 *intended* one GPU map, the process *saw* another) become visible in the
 trace instead of requiring a diagnostic cluster job.
 
-Design and rationale: `doc/design/ws1_manifest_design.md`. This page is the
+Design and rationale: `pinsight-eval/docs/design/ws1_manifest_design.md (private dev repo)`. This page is the
 user view.
 
 ## 1. The pieces, and where each one lives

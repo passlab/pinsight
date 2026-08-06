@@ -10,7 +10,7 @@
 // idempotent, LATEST-WINS PER KEY per (hostname, pid) — never rely on stream
 // identity or event adjacency (shared per-UID buffers). A snapshot may slice
 // a burst; per-key latest-wins makes that harmless. Full design:
-// doc/design/ws1_manifest_design.md.
+// pinsight-eval/docs/design/ws1_manifest_design.md (private dev repo).
 //
 #undef LTTNG_UST_TRACEPOINT_PROVIDER
 #define LTTNG_UST_TRACEPOINT_PROVIDER pinsight_manifest_lttng_ust

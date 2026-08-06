@@ -1,5 +1,5 @@
 //
-// PInsight manifest — public interface (WS1, doc/design/ws1_manifest_design.md).
+// PInsight manifest — public interface (WS1, pinsight-eval/docs/design/ws1_manifest_design.md (private dev repo)).
 //
 // The manifest makes traces self-describing: a periodic, latest-wins-per-key
 // record of what only this process can know at runtime (env as seen, binding,

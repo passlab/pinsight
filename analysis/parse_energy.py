@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Per-node GPU energy from PInsight traces (energy domain only).
 #
-# Armed-span model (2026-07-31; doc/design/energy_power_implementation_plan.md):
+# Armed-span model (2026-07-31; pinsight-eval/docs/design/energy_power_implementation_plan.md (private dev repo)):
 # energy measurement runs in ARMED SPANS — the energy_enter/energy_exit pair of
 # span i shares seq = i (per process), and a run that never reconfigures has
 # exactly one span. This script pairs enter/exit by (hostname, pid, seq), SUMS
