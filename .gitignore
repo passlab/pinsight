@@ -135,3 +135,7 @@ experiment/lttng_roctracer/vecadd_lttng_traces/
 eva/
 test/LULESH/
 test/cuda-samples/
+build-matrix/
+trace-compass-server/
+test/rocm/cyclic_traces*/
+test/rocm/*.applog
