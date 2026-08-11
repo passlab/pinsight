@@ -20,23 +20,6 @@ PInsight is a lightweight, dynamic tracing and in-situ performance analysis fram
 - **Cyclic introspection** — Repeat the trace→analyze→tune cycle throughout a long-running application via generation-based counter reset
 - **Runtime reconfiguration** — Edit the config file and send `SIGUSR1` to hot-reload tracing parameters, domain modes, and event filters
 
-## Paper
-
-The design and evaluation of PInsight is described in:
-
-> **PInsight: In-Situ Performance Analysis for Adaptive Tuning of Parallel Applications**
-> Yonghong Yan, et al. ACM/IEEE International Conference for High Performance Computing, Networking, Storage, and Analysis (SC'26), submitted.
-
-### Contributions
-
-1. **Asynchronous, low-overhead tracing**: Multi-domain tracing via OMPT/PMPI/CUPTI with LTTng UST backend, achieving <1% overhead for rate-limited tracing on production workloads (LULESH, Castro).
-
-2. **Dynamic, hierarchical tracing control**: A 4-mode trace hierarchy (OFF/STANDBY/MONITORING/TRACING) with per-domain, per-event, per-punit, and per-lexgion configuration — enabling precise, adaptive control of tracing overhead at runtime.
-
-3. **In-situ performance introspection**: A closed-loop mechanism where the application automatically pauses, rotates trace data, invokes an analysis script, and resumes with tuned parameters — enabling **self-adaptive performance optimization** without human in the loop.
-
----
-
 ## Architecture
 
 ```
@@ -70,7 +53,7 @@ The design and evaluation of PInsight is described in:
 ```bash
 # Ubuntu/Debian
 sudo apt-get install build-essential cmake git
-sudo apt-get install lttng-tools lttng-modules-dkms liblttng-ust-dev babeltrace2
+sudo apt-get install lttng-tools liblttng-ust-dev babeltrace2
 ```
 
 - **OpenMP**: Clang/LLVM with OMPT support (provides `omp.h`, `omp-tools.h`, `libomp.so`)
@@ -167,6 +150,7 @@ lttng enable-event --userspace 'cupti_pinsight_lttng_ust:*'      # CUDA
 lttng enable-event --userspace 'roctracer_pinsight_lttng_ust:*'  # AMD HIP/ROCm
 lttng enable-event --userspace 'pysysmon_pinsight_lttng_ust:*'   # Python
 lttng enable-event --userspace 'pinsight_enter_exit_lttng_ust:*' # process enter/exit
+lttng enable-event --userspace 'pinsight_manifest_lttng_ust:*'   # trace manifest (provenance)
 
 # 3. Start tracing
 lttng start
@@ -177,6 +161,22 @@ LD_PRELOAD=./build/libpinsight.so ./your_application
 # 5. Stop and collect
 lttng stop && lttng destroy
 ```
+
+### Running under a Job Scheduler (Flux, Slurm)
+
+Batch/multi-node launches change *where the LTTng session daemon lives and
+how long it survives* — getting this wrong is the most common cause of
+"job ran fine, trace is empty". The four invariants:
+
+1. **One LTTng session per node** (`--output=$OUT/$(hostname)`); traces are grouped per node afterwards.
+2. **`LTTNG_HOME` must be node-local** (e.g. `/tmp/$USER/lttng-$JOBID`) — NFS-shared `$HOME` makes concurrent nodes' daemons collide — and set for both the `lttng` CLI and the traced app.
+3. **The sessiond must live in the same job step as the app** — a daemon started in its own `flux run`/`srun` invocation is killed with that step's cgroup before the app starts. Multi-node: fold session start → app → session stop into the single launched task each rank runs.
+4. **Session setup is idempotent, not coordinated** — every local rank attempts `lttng create/start/stop/destroy`; the fastest wins, the rest fail harmlessly.
+
+See [`doc/user/scheduler_launching.md`](doc/user/scheduler_launching.md) for
+complete recipes (plain `mpirun`, Slurm single-node, Flux/Slurm multi-node),
+GPU-binding caveats (`--gpus-per-task` devId collapse), manifest wiring, and
+troubleshooting.
 
 ### View Traces
 
@@ -220,6 +220,10 @@ PINSIGHT_TRACE_WINDOW=0:100:1:0:MONITORING
 
 # Config file path
 PINSIGHT_TRACE_CONFIG_FILE=/path/to/config.txt
+
+# Trace manifest (normally exported by scripts/pinsight-manifest.sh)
+PINSIGHT_RUN_ID=<id>              # run identifier; if unset, one is generated (and unified at MPI_Init)
+PINSIGHT_MANIFEST_DIR=/path/dir   # where effective-config dumps are written; unset = no files written
 
 # Debug output
 PINSIGHT_DEBUG_ENABLE=0|1
@@ -269,8 +273,17 @@ binary build-id, effective-config hash — directly into the trace, and the
 launcher-side [`scripts/pinsight-manifest.sh`](scripts/pinsight-manifest.sh)
 assembles the run-level sidecar (`run_manifest.json`: job metadata, per-node
 hardware inventory, user-provided facts, trace integrity hashes), with or
-without a job scheduler. See the user guide:
-[`doc/user/manifest.md`](doc/user/manifest.md).
+without a job scheduler.
+
+The periodic burst cadence is set in the config file (SIGUSR1-reloadable);
+there is deliberately no on/off key — enabling the LTTng provider is the switch:
+
+```ini
+[Manifest]
+    interval = 10    # seconds between periodic bursts; 0 = startup/transition bursts only (default: 10)
+```
+
+See the user guide: [`doc/user/manifest.md`](doc/user/manifest.md).
 
 ### Runtime Reconfiguration via SIGUSR1
 
@@ -367,6 +380,10 @@ Cycle 3: ...
 - Function call/return (PyFunction), named-lexgion filtering by qualified name
 - Per-thread tracing with rate control, integrating into the same lexgion/mode hierarchy
 
+### Manifest Events (provenance, provider `pinsight_manifest_lttng_ust`)
+- `manifest_process` — per-process provenance burst: sequence number, reason (`init`, `mpi_init`, periodic, window/config transitions), MPI rank, executable path, window generation
+- `manifest_kv` — generic `(key, value)` facts (run id, binding as seen, binary build-id, effective-config hash, launcher/GPU/host facts); new facts need no schema change
+
 ---
 
 ## Analysis and Visualization
@@ -398,6 +415,7 @@ guide; see [`doc/README.md`](doc/README.md) for the index.
 |----------|-------------|
 | [`doc/user/trace_config_format.md`](doc/user/trace_config_format.md) | Config file format specification |
 | [`doc/user/manifest.md`](doc/user/manifest.md) | Trace manifest: self-describing traces + run sidecar (`pinsight-manifest.sh`) |
+| [`doc/user/scheduler_launching.md`](doc/user/scheduler_launching.md) | Running under Flux/Slurm: per-node sessions, multi-node recipes, GPU binding |
 | [`doc/user/domain_trace_modes.md`](doc/user/domain_trace_modes.md) | Domain trace modes and benchmark results |
 | [`doc/user/rate-limit-tracing.md`](doc/user/rate-limit-tracing.md) | Rate-controlled tracing |
 | [`doc/user/python_trace_config.md`](doc/user/python_trace_config.md) | Python tracing configuration reference |
