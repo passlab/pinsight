@@ -270,15 +270,26 @@ static CUptiResult cupti_activity_register_once(void) {
 static CUptiResult cupti_activity_enable_collection(void) {
   CUptiResult rc_reg = cupti_activity_register_once();
   CUptiResult r_mcpy = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
-  CUptiResult r_krn = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
+  /* KERNEL and CONCURRENT_KERNEL are MUTUALLY EXCLUSIVE in CUPTI: with KERNEL
+   * already enabled, enabling CONCURRENT_KERNEL returns CUPTI_ERROR_NOT_COMPATIBLE
+   * (14) and is a no-op.  Enabling them in that order therefore left collection
+   * pinned to the KERNEL kind, which SERIALIZES kernel execution for profiling —
+   * inflating GPU time and overhead on any multi-stream workload, silently,
+   * because the return codes were discarded.  Prefer CONCURRENT_KERNEL (does not
+   * serialize; same CUpti_ActivityKernel9 record layout, already handled by the
+   * shared case in activity_bufferCompleted) and fall back to KERNEL only if it
+   * is genuinely unavailable. */
   CUptiResult r_ckrn = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
-  CUDA_DBG("enable reg_rc=%d memcpy_rc=%d kernel_rc=%d conc_kernel_rc=%d",
-           (int)rc_reg, (int)r_mcpy, (int)r_krn, (int)r_ckrn);
+  CUptiResult r_krn = CUPTI_SUCCESS;
+  if (r_ckrn != CUPTI_SUCCESS)
+    r_krn = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
+  CUDA_DBG("enable reg_rc=%d memcpy_rc=%d conc_kernel_rc=%d kernel_fallback_rc=%d",
+           (int)rc_reg, (int)r_mcpy, (int)r_ckrn, (int)r_krn);
   if (r_mcpy != CUPTI_SUCCESS)
     return r_mcpy;
-  if (r_krn != CUPTI_SUCCESS)
-    return r_krn;
-  return r_ckrn;
+  if (r_ckrn == CUPTI_SUCCESS)
+    return CUPTI_SUCCESS;
+  return r_krn;
 }
 
 /* Stop activity COLLECTION so MONITORING/STANDBY/OFF do not keep filling buffers
