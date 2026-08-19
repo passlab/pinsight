@@ -30,8 +30,14 @@ FAIL=0
 check() {
     local label="$1"
     local pattern="$2"
-    if babeltrace2 "$TRACE_DIR" 2>/dev/null | grep -q "$pattern"; then
-        echo "  PASS  $label"
+    # grep -c, never grep -q: `-q` exits at the first match, SIGPIPEs
+    # babeltrace2, and `set -o pipefail` then reports 141 -> the check reads as
+    # a failure for any pattern occurring EARLY in the stream.  `grep -c`
+    # consumes the whole stream.  (Same fix as test/cuda/verify_trace.sh.)
+    local n
+    n=$(babeltrace2 "$TRACE_DIR" 2>/dev/null | grep -c "$pattern" || true)
+    if [[ "$n" -gt 0 ]]; then
+        echo "  PASS  $label  ($n)"
         ((PASS++)) || true
     else
         echo "  FAIL  $label   (pattern: '$pattern')"

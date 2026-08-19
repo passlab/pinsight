@@ -21,19 +21,28 @@ if [[ -z "$TRACE_DIR" ]]; then
     exit 1
 fi
 
-if ! command -v babeltrace2 &>/dev/null; then
-    echo "ERROR: babeltrace2 not found in PATH" >&2
+# babeltrace2 preferred; babeltrace 1.x reads the same CTF traces.
+BT=$(command -v babeltrace2 || command -v babeltrace) || {
+    echo "ERROR: neither babeltrace2 nor babeltrace found in PATH" >&2
     exit 1
-fi
+}
 
 PASS=0
 FAIL=0
 
+# NOTE: use grep -c, never grep -q, here.  `grep -q` exits at the first match,
+# which SIGPIPEs the reader; under `set -o pipefail` the pipeline then reports
+# 141 and the check reads as a failure.  Patterns occurring EARLY in the stream
+# fail that way while late ones pass — which silently broke every host-callback
+# check in this script.  `grep -c` consumes the whole stream, so the reader
+# exits 0.  Counting also makes the output more informative than a bare PASS.
 check() {
     local label="$1"
     local pattern="$2"
-    if babeltrace2 "$TRACE_DIR" 2>/dev/null | grep -q "$pattern"; then
-        echo "  PASS  $label"
+    local n
+    n=$("$BT" "$TRACE_DIR" 2>/dev/null | grep -c "$pattern" || true)
+    if [[ "$n" -gt 0 ]]; then
+        echo "  PASS  $label  ($n)"
         ((PASS++)) || true
     else
         echo "  FAIL  $label   (pattern: '$pattern')"
@@ -72,10 +81,27 @@ check "clock_monotonic_ns field"         "clock_monotonic_ns ="
 check "cupti_timestamp_ns field"         "cupti_timestamp_ns ="
 
 echo ""
-echo "--- Correlation sanity: callback and activity share correlationId=3 ---"
-# correlationId=3 is the first kernel launch (after 2 H2D memcpies) in vecadd
-check "KernelLaunch_begin correlationId=3" "cudaKernelLaunch_begin.*correlationId = 3"
-check "KernelActivity     correlationId=3" "cudaKernelActivity.*correlationId = 3"
+echo "--- Correlation sanity: every kernel launch has a matching activity record ---"
+# Do NOT hardcode a correlationId: the value depends on which events are enabled
+# (e.g. tracing cudaMalloc shifts every later id).  The real invariant is that
+# the SET of correlationIds on the host launches equals the set on the GPU
+# activity records — that is what makes CB<->ACT correlation usable downstream.
+ids() {
+    "$BT" "$TRACE_DIR" 2>/dev/null | grep "$1" \
+        | grep -o 'correlationId = [0-9]*' | awk '{print $3}' | sort -un
+}
+launch_ids=$(ids cudaKernelLaunch_begin)
+act_ids=$(ids cudaKernelActivity)
+n_launch=$(printf '%s\n' "$launch_ids" | grep -c . || true)
+if [[ "$n_launch" -gt 0 && "$launch_ids" == "$act_ids" ]]; then
+    echo "  PASS  launch/activity correlationId sets match  ($n_launch ids)"
+    ((PASS++)) || true
+else
+    echo "  FAIL  launch/activity correlationId sets differ"
+    echo "          launches: $(printf '%s ' $launch_ids)"
+    echo "          activity: $(printf '%s ' $act_ids)"
+    ((FAIL++)) || true
+fi
 
 echo ""
 echo "--- Summary ---"
