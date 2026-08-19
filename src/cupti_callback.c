@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 int CUDA_domain_index;
 domain_info_t *CUDA_domain_info;
@@ -223,33 +224,77 @@ static _Atomic int activity_init_done = 0;
  * (and the first-callback init); read in activity_bufferCompleted(). */
 static volatile int cuda_activity_emit = 0;
 
+/* Diagnostic: PINSIGHT_DEBUG_ACTIVITY=1 logs every activity-machinery action
+ * with a monotonic timestamp + the (normally unchecked) CUPTI return codes.
+ * CUDA mirror of hip_dbg_activity()/HIP_DBG in roctracer_callback.c.  Note the
+ * CUPTI-specific extra: buffer deliveries are logged too, because CUPTI cannot
+ * deregister its buffer callbacks (§6.9.2 asymmetry) — so buffers CAN still
+ * arrive after a 1->0 transition, and only this knob makes that visible. */
+static int cuda_dbg_activity(void) {
+  static int on = -1;
+  if (on < 0) {
+    const char *v = getenv("PINSIGHT_DEBUG_ACTIVITY");
+    on = (v && *v && *v != '0');
+  }
+  return on;
+}
+#define CUDA_DBG(...)                                                          \
+  do {                                                                         \
+    if (cuda_dbg_activity()) {                                                 \
+      struct timespec _ts;                                                     \
+      clock_gettime(CLOCK_MONOTONIC, &_ts);                                    \
+      fprintf(stderr, "PINSIGHT_DBG t=%ld.%03ld pid=%d ", (long)_ts.tv_sec,    \
+              _ts.tv_nsec / 1000000L, getpid());                               \
+      fprintf(stderr, __VA_ARGS__);                                            \
+      fputc('\n', stderr);                                                     \
+    }                                                                          \
+  } while (0)
+
 /* Register the activity buffer callbacks exactly once.  This only installs
  * function pointers (no CUDA context required), so it is safe from any thread. */
-static void cupti_activity_register_once(void) {
+static CUptiResult cupti_activity_register_once(void) {
+  CUptiResult rc = CUPTI_SUCCESS;
   if (!activity_registered &&
       __atomic_exchange_n(&activity_registered, 1, __ATOMIC_SEQ_CST) == 0) {
-    cuptiActivityRegisterCallbacks(activity_bufferRequested,
-                                   activity_bufferCompleted);
+    rc = cuptiActivityRegisterCallbacks(activity_bufferRequested,
+                                        activity_bufferCompleted);
+    CUDA_DBG("register_callbacks rc=%d", (int)rc);
   }
+  return rc;
 }
 
 /* Start activity COLLECTION (kernel + memcpy).  cuptiActivityEnable requires the
  * CUDA driver to be initialized, so this must run from a context where CUDA is
  * live (a CUPTI callback, or the control thread while the app is actively using
  * CUDA).  Registration is ensured first. */
-static void cupti_activity_enable_collection(void) {
-  cupti_activity_register_once();
-  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
-  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
-  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+static CUptiResult cupti_activity_enable_collection(void) {
+  CUptiResult rc_reg = cupti_activity_register_once();
+  CUptiResult r_mcpy = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
+  CUptiResult r_krn = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_KERNEL);
+  CUptiResult r_ckrn = cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+  CUDA_DBG("enable reg_rc=%d memcpy_rc=%d kernel_rc=%d conc_kernel_rc=%d",
+           (int)rc_reg, (int)r_mcpy, (int)r_krn, (int)r_ckrn);
+  if (r_mcpy != CUPTI_SUCCESS)
+    return r_mcpy;
+  if (r_krn != CUPTI_SUCCESS)
+    return r_krn;
+  return r_ckrn;
 }
 
 /* Stop activity COLLECTION so MONITORING/STANDBY/OFF do not keep filling buffers
  * and firing bufferCompleted for records that are never emitted. */
-static void cupti_activity_disable_collection(void) {
-  cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMCPY);
-  cuptiActivityDisable(CUPTI_ACTIVITY_KIND_KERNEL);
-  cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+static CUptiResult cupti_activity_disable_collection(void) {
+  CUptiResult r_mcpy = cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMCPY);
+  CUptiResult r_krn = cuptiActivityDisable(CUPTI_ACTIVITY_KIND_KERNEL);
+  CUptiResult r_ckrn =
+      cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+  CUDA_DBG("disable memcpy_rc=%d kernel_rc=%d conc_kernel_rc=%d", (int)r_mcpy,
+           (int)r_krn, (int)r_ckrn);
+  if (r_mcpy != CUPTI_SUCCESS)
+    return r_mcpy;
+  if (r_krn != CUPTI_SUCCESS)
+    return r_krn;
+  return r_ckrn;
 }
 
 /* ================================================================
@@ -362,12 +407,14 @@ void pinsight_control_cuda_apply_collect_state(void) {
   if (s == cuda_collect_state)
     return;
   if (s) {
-    cupti_activity_enable_collection();
+    CUptiResult rc_en = cupti_activity_enable_collection();
     cuda_activity_emit = 1;
+    CUDA_DBG("apply 0->1 enable_rc=%d", (int)rc_en);
   } else {
-    cuptiActivityFlushAll(1); /* emit==1 → tail emitted (blocking) */
+    CUptiResult rc_fl = cuptiActivityFlushAll(1); /* emit==1 → tail emitted (blocking) */
     cuda_activity_emit = 0;
-    cupti_activity_disable_collection();
+    CUptiResult rc_dis = cupti_activity_disable_collection();
+    CUDA_DBG("apply 1->0 flush_rc=%d disable_rc=%d", (int)rc_fl, (int)rc_dis);
   }
   cuda_collect_state = s;
 }
@@ -381,10 +428,14 @@ static void cupti_activity_init_once(void) {
       __atomic_exchange_n(&activity_init_done, 1, __ATOMIC_SEQ_CST) != 0)
     return;
   cupti_activity_register_once();
-  if (cuda_should_collect_now()) {
-    cupti_activity_enable_collection();
+  int collect = cuda_should_collect_now();
+  if (collect) {
+    CUptiResult rc_en = cupti_activity_enable_collection();
     cuda_activity_emit = 1;
     cuda_collect_state = 1;
+    CUDA_DBG("init_once deferred setup: collect=1 enable_rc=%d", (int)rc_en);
+  } else {
+    CUDA_DBG("init_once deferred setup: collect=0 (registered, not enabled)");
   }
 }
 
@@ -944,9 +995,13 @@ static void CUPTIAPI activity_bufferCompleted(CUcontext ctx, uint32_t streamId,
    * async ops still in-flight at a TRACING->lower switch can leak/drop —
    * best-effort by design. */
   if (!cuda_activity_emit) {
+    CUDA_DBG("buffer DROPPED (emit=0) validSize=%zu ctx=%p streamId=%u",
+             validSize, (void *)ctx, streamId);
     free(buffer);
     return;
   }
+  CUDA_DBG("buffer delivered validSize=%zu ctx=%p streamId=%u", validSize,
+           (void *)ctx, streamId);
   CUpti_Activity *record = NULL;
 
   do {
