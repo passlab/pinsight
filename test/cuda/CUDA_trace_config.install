@@ -1,15 +1,33 @@
+# CUDA trace config for test/cuda.
+#
+# SECTION FORM MATTERS: all domain keys — trace_mode, punit ranges, node-policy
+# keys, AND per-event on/off — go in a single [CUDA.default] section.  A
+# [CUDA(subdomain).default] section (e.g. [CUDA(malloc).default]) is silently
+# IGNORED by the parser, so per-event settings written that way never take
+# effect.  Same gotcha as HIP; see doc/user/trace_config_format.md and
+# pinsight-eval/code-memory/trace_config_convention.md.
+#
+# Events not listed here keep the DSL default from src/trace_domain_CUDA.h.
+
 [CUDA.default]
     trace_mode = TRACING
     CUDA.device = (0, 16)
 
-[CUDA(contextdevice).default]
+    # Which ranks open the CUPTI activity collection (GPU-side timestamps).
+    # off | on | anyone_per_node | leader_per_node | rotate_per_node:<ms>
+    # Default is `off`; `on` here so `make test` / verify_trace.sh see the
+    # cudaKernelActivity + cudaMemcpyActivity records they check for.
+    # Gates ONLY activity collection — host-side CUDA tracing is never gated.
+    device_activity = on
+
+    # --- contextdevice ---
     CUDA_context_create = off
     CUDA_context_destroy = off
     CUDA_device_init = off
     CUDA_device_reset = off
     CUDA_device_synchronize = on
 
-[CUDA(streamevent).default]
+    # --- streamevent ---
     CUDA_stream_create = off
     CUDA_stream_destroy = off
     CUDA_stream_synchronize = on
@@ -18,27 +36,27 @@
     CUDA_event_synchronize = off
     CUDA_event_destroy = off
 
-[CUDA(memcpy).default]
+    # --- memcpy (each CB pair has a matching cudaMemcpyActivity record) ---
     CUDA_memcpy_HtoD = on
     CUDA_memcpy_DtoH = on
     CUDA_memcpy_DtoD = on
     CUDA_memcpy_HtoH = on
     CUDA_memcpy_async = on
 
-[CUDA(malloc).default]
+    # --- malloc ---
     CUDA_memset = off
-    CUDA_malloc = off
-    CUDA_free = off
+    CUDA_malloc = on
+    CUDA_free = on
     CUDA_malloc_host = off
     CUDA_free_host = off
     CUDA_malloc_managed = off
 
-[CUDA(kernel).default]
+    # --- kernel (CB records the call site; ACT records the GPU exec window) ---
     CUDA_kernel_launch = on
     CUDA_kernel_complete = off
     CUDA_kernel_enqueue = off
 
-[CUDA(others).default]
+    # --- others (misc driver/runtime events; off by default) ---
     CUDA_api_enter = off
     CUDA_api_exit = off
     CUDA_driver_call = off
@@ -57,4 +75,3 @@
     CUDA_nvtx_range_push = off
     CUDA_nvtx_range_pop = off
     CUDA_nvtx_mark = off
-
