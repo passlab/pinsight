@@ -94,6 +94,7 @@ src/CMakeFiles/
 
 # Built test binaries and intermediate CUDA build files
 test/hello/helloomp
+test/hello/helloomp_loop
 test/jacobi/jacobi
 test/jacobi/OpenMP_trace_config.install
 test/trace_config_parse/test_parser
