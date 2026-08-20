@@ -24,7 +24,19 @@
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PINSIGHT_LIB=${PINSIGHT_LIB:-$ROOT/build_cuda/libpinsight.so}
-CUPTI_LIB_DIR=${CUPTI_LIB_DIR:-/usr/lib/x86_64-linux-gnu}
+# Locate libcupti rather than assuming the distro path (CUDA 13 moved it out of
+# extras/CUPTI/lib64 into targets/).  See device_activity_test.sh for why the
+# blind /usr/lib/x86_64-linux-gnu default is also an LD_LIBRARY_PATH hazard.
+cupti_default() {
+    local c d
+    for c in /usr/lib/x86_64-linux-gnu/libcupti.so \
+             "${CUDA_PATH:-/usr/local/cuda}"/extras/CUPTI/lib64/libcupti.so \
+             "${CUDA_PATH:-/usr/local/cuda}"/targets/x86_64-linux/lib/libcupti.so; do
+        [ -e "$c" ] && { d=$(dirname "$c"); break; }
+    done
+    echo "${d:-/usr/lib/x86_64-linux-gnu}"
+}
+CUPTI_LIB_DIR=${CUPTI_LIB_DIR:-$(cupti_default)}
 BIN=$(cd "$(dirname "$0")" && pwd)/looping_pinsight
 OUT=${OUT:-$(dirname "$0")/cyclic_traces}
 CFG=$(mktemp /tmp/cyc_cuda_cfg.XXXX.txt)

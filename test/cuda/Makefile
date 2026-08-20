@@ -4,7 +4,13 @@
 # Override CUDA_PATH / CUPTI_LIB_DIR for a /usr/local/cuda-style toolkit.
 CUDA_PATH     ?= $(shell dirname $(shell dirname $(shell which nvcc)))
 CUDA_ARCH     ?= 75
-CUPTI_LIB_DIR ?= $(shell dirname $(firstword $(wildcard /usr/lib/x86_64-linux-gnu/libcupti.so $(CUDA_PATH)/extras/CUPTI/lib64/libcupti.so)))
+# CUDA 13 moved CUPTI out of extras/CUPTI/lib64 into the targets/ tree; probe
+# both, or an otherwise-fine toolkit yields an empty CUPTI_LIB_DIR (which
+# `dirname` turns into ".") and the app fails to find libcupti at run time.
+CUPTI_LIB_DIR ?= $(shell dirname $(firstword $(wildcard \
+                     /usr/lib/x86_64-linux-gnu/libcupti.so \
+                     $(CUDA_PATH)/extras/CUPTI/lib64/libcupti.so \
+                     $(CUDA_PATH)/targets/x86_64-linux/lib/libcupti.so)))
 LTTNG_HOME    ?=
 
 NVCC     := $(CUDA_PATH)/bin/nvcc
@@ -59,6 +65,12 @@ vecadd_pinsight: vecadd_pinsight.cu
 
 # long-running loop for runtime-mode / activity-collection cycling tests
 looping_pinsight: looping_pinsight.cu
+	$(NVCC) $(NVFLAGS) -o $@ $^
+
+# multi-stream probe for the CUPTI kernel-serialization check (commit 2384cd4);
+# run it under PInsight and feed the trace to
+# analysis/gpu_kernel_concurrency.py
+concurrency_probe: concurrency_probe.cu
 	$(NVCC) $(NVFLAGS) -o $@ $^
 
 # cyclic TRACING<->MONITORING test (drives the activity disable/re-enable path)
