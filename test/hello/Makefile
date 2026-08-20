@@ -3,10 +3,10 @@ include ../environment.mk
 default: helloomp helloomp_loop
 
 helloomp: helloomp.c
-	clang-21 -fopenmp -g $^ -o $@ -lm
+	$(CLANG) -fopenmp -g $^ -o $@ -lm
 
 helloomp_loop: helloomp_loop.c
-	clang-21 -fopenmp -g $^ -o $@ -lm
+	$(CLANG) -fopenmp -g $^ -o $@ -lm
 
 objdump:
 	objdump -d helloomp > helloomp.objdump

@@ -7,7 +7,7 @@ auto-trigger logic runs off per-region trace counters regardless of any trace
 sink, so the test asserts on PInsight's stderr control messages.
 
 ```bash
-./window_all_test.sh          # builds mode_test.c (clang-21 -fopenmp) and runs 6 cases
+./window_all_test.sh          # builds mode_test.c ($CLANG -fopenmp, default clang-22) and runs 6 cases
 # env: PINSIGHT_LIB=<…/build_omp/libpinsight.so>  OMP_LIB=<…/libomp.so>
 ```
 

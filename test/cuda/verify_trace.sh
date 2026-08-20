@@ -10,7 +10,7 @@
 #
 # Typical workflow:
 #   bash trace.sh /tmp/cuda_traces my_session /path/to/libpinsight.so \
-#                 /usr/lib/llvm-21/lib ./vecadd_pinsight 5
+#                 /usr/lib/llvm-22/lib ./vecadd_pinsight 5
 #   bash verify_trace.sh /tmp/cuda_traces
 
 set -euo pipefail

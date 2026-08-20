@@ -1,6 +1,6 @@
 include ../environment.mk
 
-CC = clang-21
+CC = $(CLANG)
 
 jacobi: jacobi.c
 	$(CC) -fopenmp -g -O3 $^ -o $@ -lm

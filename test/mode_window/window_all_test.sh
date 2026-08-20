@@ -5,11 +5,17 @@
 # (the auto-trigger logic runs off trace counters regardless of any trace sink;
 # we assert on PInsight's stderr control messages).
 #
-# Build + run:  ./window_all_test.sh   (env: PINSIGHT_LIB, OMP_LIB)
+# Build + run:  ./window_all_test.sh   (env: PINSIGHT_LIB, OMP_LIB, CLANG)
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PINSIGHT_LIB=${PINSIGHT_LIB:-$ROOT/build_omp/libpinsight.so}
-OMP_LIB=${OMP_LIB:-$(clang-21 -print-file-name=libomp.so 2>/dev/null)}
+CLANG=${CLANG:-clang-22}
+# Resolve libomp from the compiler's own prefix, not -print-file-name: the
+# latter returns the DISTRO libomp (package libomp5), not the one shipped with
+# this clang.  Both export ompt_start_tool, so the mismatch is silent.
+_pfx=$(dirname "$(dirname "$(readlink -f "$(command -v "$CLANG" 2>/dev/null)" 2>/dev/null)")" 2>/dev/null)
+OMP_LIB=${OMP_LIB:-$_pfx/lib/libomp.so}
+[ -e "$OMP_LIB" ] || OMP_LIB=$($CLANG -print-file-name=libomp.so 2>/dev/null)
 [ -e "$OMP_LIB" ] || OMP_LIB=/lib64/libomp.so
 BIN=$(dirname "$0")/mode_test
 CFG=$(mktemp /tmp/win_all.XXXX.txt)
@@ -17,7 +23,7 @@ PRE="$OMP_LIB:$PINSIGHT_LIB"
 fails=0
 
 [ -e "$PINSIGHT_LIB" ] || { echo "missing $PINSIGHT_LIB (build with PINSIGHT_OPENMP=TRUE)"; exit 1; }
-clang-21 -fopenmp -g "$(dirname "$0")/mode_test.c" -o "$BIN" -lm || { echo "compile failed"; exit 1; }
+$CLANG -fopenmp -g "$(dirname "$0")/mode_test.c" -o "$BIN" -lm || { echo "compile failed"; exit 1; }
 
 run(){ env LD_PRELOAD="$PRE" PINSIGHT_TRACE_CONFIG_FILE="$CFG" "$BIN" "$@" 2>&1; }
 # iteration after which the synchronous immediate (count) auto-trigger printed
