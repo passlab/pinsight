@@ -24,7 +24,22 @@ set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 HERE=$(cd "$(dirname "$0")" && pwd)
 PINSIGHT_LIB=${PINSIGHT_LIB:-$ROOT/build_cuda/libpinsight.so}
-CUPTI_LIB_DIR=${CUPTI_LIB_DIR:-/usr/lib/x86_64-linux-gnu}
+# Locate libcupti rather than assuming the distro path.  Two reasons: CUDA 13
+# moved it out of extras/CUPTI/lib64 into targets/, and blindly prepending
+# /usr/lib/x86_64-linux-gnu to LD_LIBRARY_PATH can shadow an MPI's bundled
+# libpmix with the distro one, which kills mpirun before the app ever starts
+# ("undefined symbol: pmix_value_load") and shows up here as every mpirun arm
+# silently reporting zero events.
+cupti_default() {
+    local c d
+    for c in /usr/lib/x86_64-linux-gnu/libcupti.so \
+             "${CUDA_PATH:-/usr/local/cuda}"/extras/CUPTI/lib64/libcupti.so \
+             "${CUDA_PATH:-/usr/local/cuda}"/targets/x86_64-linux/lib/libcupti.so; do
+        [ -e "$c" ] && { d=$(dirname "$c"); break; }
+    done
+    echo "${d:-/usr/lib/x86_64-linux-gnu}"
+}
+CUPTI_LIB_DIR=${CUPTI_LIB_DIR:-$(cupti_default)}
 BIN=$HERE/looping_pinsight
 OUT=${OUT:-$HERE/activity_traces}
 NRANKS=${NRANKS:-2}
@@ -49,9 +64,9 @@ lttng-sessiond --daemonize >/dev/null 2>&1; sleep 0.3
 
 mkcfg() { printf '[CUDA.default]\n    trace_mode = TRACING\n    device_activity = %s\n' "$1" > "$CFG"; }
 
-# run <policy> <nranks> -> populates $OUT, echoes nothing
+# run <policy> <nranks> [iters] [sleep_ms] -> populates $OUT, echoes nothing
 run_arm() {
-    local policy="$1" nranks="$2"
+    local policy="$1" nranks="$2" iters="${3:-12}" sleep_ms="${4:-60}"
     mkcfg "$policy"
     lttng destroy -a >/dev/null 2>&1
     rm -rf "$OUT"
@@ -63,10 +78,10 @@ run_arm() {
         mpirun -np "$nranks" --oversubscribe \
             -x LD_PRELOAD="$PINSIGHT_LIB" -x PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
             -x LD_LIBRARY_PATH -x PINSIGHT_DEBUG_ACTIVITY \
-            "$BIN" 12 60 >/dev/null 2>"$OUT".applog
+            "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
     else
         env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
-            "$BIN" 12 60 >/dev/null 2>"$OUT".applog
+            "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
     fi
     lttng stop >/dev/null; lttng destroy >/dev/null 2>&1
 }
@@ -118,6 +133,133 @@ else
     check   "all $NRANKS ranks emit host launches" "$hv" "$NRANKS"
     check   "exactly 1 rank collects activity"     "$av" 1
     checkgt "winner actually produced records"     "$ac" 0
+fi
+
+echo "== A5: physical devId mapping under one-GPU-per-rank (needs >= 2 GPUs) =="
+# Regression test for commit c260d34.  cuptiGetDeviceId() returns the ordinal
+# RELATIVE to the process's CUDA_VISIBLE_DEVICES-masked view, so under a
+# one-GPU-per-rank launcher EVERY rank sees ordinal 0 and the pre-fix trace
+# collapsed all ranks onto devId=0.  cuda_parse_visible_devices() maps that
+# ordinal back to the physical index.
+#
+# The assignment is deliberately REVERSED (rank r -> physical GPU N-1-r) so the
+# map is non-identity.  That is what makes the arm decisive: it fails both for
+# the original collapse bug (all devIds 0) AND for a naive devId=local_rank
+# implementation (which would report the assignment backwards).
+#
+# NOTE: giving every rank the same full list (CUDA_VISIBLE_DEVICES=0,1,...)
+# degenerates the map to identity and does NOT exercise this code path — see
+# the topology caveat in pinsight-eval code-memory/matrix_castro_eval.md.
+NGPU=$(nvidia-smi -L 2>/dev/null | grep -c '^GPU ')
+if ! command -v mpirun >/dev/null 2>&1; then
+    echo "  [SKIP] mpirun not found — needs >= 2 ranks"
+elif [ "${NGPU:-0}" -lt 2 ]; then
+    echo "  [SKIP] found ${NGPU:-0} GPU(s) — the ordinal->physical map is the"
+    echo "         identity with one GPU, so this arm cannot distinguish a fix"
+    echo "         from the bug it fixes"
+else
+    NDEV=$NGPU; [ "$NDEV" -gt 4 ] && NDEV=4   # keep the arm short on fat nodes
+    MAPFILE=$(mktemp /tmp/devid_map.XXXX.txt); : > "$MAPFILE"
+    WRAP=$(mktemp /tmp/devid_wrap.XXXX.sh)
+    cat > "$WRAP" <<'WRAPEOF'
+#!/bin/bash
+# One distinct physical GPU per local rank, reversed: rank r -> GPU N-1-r.
+r=${OMPI_COMM_WORLD_LOCAL_RANK:-0}
+n=${OMPI_COMM_WORLD_LOCAL_SIZE:-1}
+export CUDA_VISIBLE_DEVICES=$(( n - 1 - r ))
+echo "$$ $CUDA_VISIBLE_DEVICES" >> "$MAPFILE"   # pid -> expected physical devId
+exec "$@"
+WRAPEOF
+    chmod +x "$WRAP"
+
+    mkcfg on
+    lttng destroy -a >/dev/null 2>&1
+    rm -rf "$OUT"
+    lttng create act-cuda --output="$OUT" >/dev/null
+    lttng enable-event -u 'cupti_pinsight_lttng_ust:*' >/dev/null
+    lttng add-context -u -t vpid >/dev/null 2>&1
+    lttng start >/dev/null
+    mpirun -np "$NDEV" --oversubscribe \
+        -x LD_PRELOAD="$PINSIGHT_LIB" -x PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
+        -x LD_LIBRARY_PATH -x PINSIGHT_DEBUG_ACTIVITY -x MAPFILE="$MAPFILE" \
+        "$WRAP" "$BIN" 12 60 >/dev/null 2>"$OUT".applog
+    lttng stop >/dev/null; lttng destroy >/dev/null 2>&1
+
+    # distinct devIds seen on a given event
+    devids() { "$BT" "$OUT" 2>/dev/null | grep "$1" \
+                 | grep -o 'devId = [0-9]*' | sort -u | wc -l; }
+    # "<vpid> <devId>" pairs actually traced for a given event
+    pairs()  { "$BT" "$OUT" 2>/dev/null | grep "$1" \
+                 | grep -oE 'vpid = [0-9]+|devId = [0-9]+' | paste - - \
+                 | sed 's/[^0-9]\+/ /g' | awk '{print $1" "$2}' | sort -u; }
+
+    # Guard against a vacuous pass: the per-rank loop below iterates over
+    # $MAPFILE, so an empty/short map would silently "pass" every check.
+    check "wrapper recorded $NDEV rank->GPU assignments" "$(grep -c . "$MAPFILE")" "$NDEV"
+
+    hv=$(vpids cudaKernelLaunch_begin)
+    check "all $NDEV ranks emit host launches"        "$hv" "$NDEV"
+    check "$NDEV distinct devIds on host launches"    "$(devids cudaKernelLaunch_begin)" "$NDEV"
+    check "$NDEV distinct devIds on activity records" "$(devids cudaKernelActivity)"     "$NDEV"
+
+    # Exact per-rank match: traced devId == the physical GPU that rank was given.
+    for ev in cudaKernelLaunch_begin cudaKernelActivity; do
+        bad=0
+        while read -r pid want; do
+            [ -n "$pid" ] || continue
+            got=$(pairs "$ev" | awk -v p="$pid" '$1==p {print $2}')
+            [ "$got" = "$want" ] || { bad=$((bad+1))
+                echo "      pid $pid: traced devId '$got', assigned GPU '$want'"; }
+        done < "$MAPFILE"
+        check "$ev devId == assigned physical GPU" "$bad" 0
+    done
+    rm -f "$MAPFILE" "$WRAP"
+fi
+
+echo "== A6: device_activity = rotate_per_node -> turns taken, no scheduler needed =="
+# Phase 2 (commit c205961), first NVIDIA coverage.  The collector is
+# (mono_ms / period) % ranks_per_node == local_rank, so over a run spanning
+# several periods EVERY local rank must take a turn, and the total activity
+# count must be a fraction of the host launches (only one rank collects at a
+# time) rather than equal to it.
+#
+# Deliberately run with NO scheduler env: topology comes from the launcher's
+# own local-size variable (OMPI_COMM_WORLD_LOCAL_SIZE / MPI_LOCALNRANKS) via
+# pinsight_ranks_per_node().  This arm is the regression guard for that — with
+# only SLURM_NTASKS_PER_NODE consulted, a plain-mpirun run has unknown topology
+# and silently degrades to leader_per_node, which shows up here as exactly one
+# collector instead of $NRANKS.
+#
+# Rotation selects a RANK, not a device, so one GPU is sufficient.
+ROT_MS=500
+ROT_ITERS=40; ROT_SLEEP=100    # ~4 s of work == ~8 rotation periods
+if ! command -v mpirun >/dev/null 2>&1; then
+    echo "  [SKIP] mpirun not found — needs >= 2 ranks"
+else
+    ( unset SLURM_NTASKS_PER_NODE SLURM_LOCALID; \
+      run_arm "rotate_per_node:$ROT_MS" "$NRANKS" "$ROT_ITERS" "$ROT_SLEEP" )
+    la=$(count cudaKernelLaunch_begin); ac=$(count cudaKernelActivity)
+    hv=$(vpids cudaKernelLaunch_begin); av=$(vpids cudaKernelActivity)
+    check   "all $NRANKS ranks emit host launches"   "$hv" "$NRANKS"
+    check   "every rank took a collection turn"      "$av" "$NRANKS"
+    checkgt "rotation produced records"              "$ac" 0
+    # One collector at a time: activity must be a fraction of total launches,
+    # not all of them (which is what device_activity=on would give).
+    if [ "$ac" -lt "$la" ]; then
+        echo "  [PASS] only one rank collects at a time ($ac activity < $la launches)"
+    else
+        echo "  [FAIL] expected activity < launches, got $ac vs $la"; fails=$((fails+1))
+    fi
+    # Balance: no rank may hog the rotation (guards a stuck/degenerate clock).
+    hog=$("$BT" "$OUT" 2>/dev/null | grep cudaKernelActivity \
+            | grep -o 'vpid = [0-9]*' | sort | uniq -c | sort -rn \
+            | awk -v t="$ac" 'NR==1 && t>0 {printf "%d", $1*100/t}')
+    if [ -n "$hog" ] && [ "$hog" -le 80 ]; then
+        echo "  [PASS] rotation balanced (busiest rank ${hog}% of records)"
+    else
+        echo "  [FAIL] rotation skewed: busiest rank ${hog:-?}% of $ac records"
+        fails=$((fails+1))
+    fi
 fi
 
 rm -f "$CFG"
