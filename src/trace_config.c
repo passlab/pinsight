@@ -945,15 +945,55 @@ int pinsight_get_nodepolicy_index(int domain_index, const char *key) {
 typedef enum { NODE_UNKNOWN = -1, NODE_NONLEADER = 0, NODE_LEADER = 1 }
     node_leader_status_t;
 
-static int local_rank_from_env(void) {
-  static const char *vars[] = {"FLUX_TASK_LOCAL_ID", "SLURM_LOCALID",
-                               "OMPI_COMM_WORLD_LOCAL_RANK", "MPI_LOCALRANKID",
-                               NULL};
-  for (int i = 0; vars[i]; i++) {
-    const char *v = getenv(vars[i]);
-    if (v && *v) return atoi(v);
+/* Node-topology environment, one row per launcher, in probe order.
+ *
+ * The two columns are counterparts and are consumed as a pair by the
+ * rotate_per_node policies ((t/period) % ranks_per_node == local_rank), so keep
+ * them together: adding a launcher means filling in BOTH cells, and a missing
+ * cell is visible here rather than as a silently degraded policy.  That is how
+ * the local-size column came to be missing entirely — local rank was read from
+ * four launchers while local size was read only from Slurm, so a plain `mpirun`
+ * run knew its rank but not the size and rotate_per_node quietly fell back to
+ * leader_per_node.
+ *
+ * size == NULL means "this launcher's local-size variable is not known/verified"
+ * (Flux: FLUX_TASK_LOCAL_ID exists, its size counterpart was not verified on
+ * hardware, so Flux relies on the MPI-published value filled in at MPI_Init). */
+static const struct {
+  const char *rank;
+  const char *size;
+} launcher_topology_env[] = {
+    {"FLUX_TASK_LOCAL_ID", NULL},
+    {"SLURM_LOCALID", "SLURM_NTASKS_PER_NODE"},
+    {"OMPI_COMM_WORLD_LOCAL_RANK", "OMPI_COMM_WORLD_LOCAL_SIZE"},
+    {"MPI_LOCALRANKID", "MPI_LOCALNRANKS"},
+};
+#define N_LAUNCHER_ENV                                                         \
+  (int)(sizeof(launcher_topology_env) / sizeof(launcher_topology_env[0]))
+
+/* First variable in the column that is set and parses to >= min_valid; -1 if
+ * none.  atoi() stops at '(', which handles Slurm's "4(x16)" form.  Values
+ * below min_valid are skipped rather than returned, so one launcher's bogus
+ * entry does not mask a good value from the next (local rank: min 0, since
+ * rank 0 is valid; local size: min 1, since a zero-size node is not). */
+static int topology_from_env(int want_size, int min_valid) {
+  for (int i = 0; i < N_LAUNCHER_ENV; i++) {
+    const char *name =
+        want_size ? launcher_topology_env[i].size : launcher_topology_env[i].rank;
+    if (!name)
+      continue;
+    const char *v = getenv(name);
+    if (!v || !*v)
+      continue;
+    int n = atoi(v);
+    if (n >= min_valid)
+      return n;
   }
   return -1;
+}
+
+static int local_rank_from_env(void) {
+  return topology_from_env(/*want_size=*/0, /*min_valid=*/0);
 }
 
 /* Public accessors (Phase 2 rotate needs these; leader election uses the same
@@ -965,14 +1005,13 @@ int pinsight_local_rank(void) {
   return pinsight_mpi_local_rank; /* -1 if unknown */
 }
 
+/* NOTE: the env/MPI precedence here is the OPPOSITE of pinsight_local_rank()
+ * above (env first, MPI second).  Left as-is deliberately for now -- see the
+ * discussion of mixed-source pairs in the rotate policies -- but the two should
+ * be reconciled; they are consumed together. */
 int pinsight_ranks_per_node(void) {
   if (pinsight_mpi_ranks_per_node > 0) return pinsight_mpi_ranks_per_node;
-  const char *v = getenv("SLURM_NTASKS_PER_NODE");
-  if (v && *v) {
-    int n = atoi(v); /* handles "4" and the "4(x16)" form (atoi stops at '(') */
-    if (n > 0) return n;
-  }
-  return -1;
+  return topology_from_env(/*want_size=*/1, /*min_valid=*/1);
 }
 
 /* §4.3 chain: launcher env -> local-rank env -> MPI local rank -> UNKNOWN. */
