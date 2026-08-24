@@ -9,6 +9,11 @@
 #include <unistd.h>
 
 __thread pinsight_thread_data_t pinsight_thread_data;
+/* Referenced by every domain's tracepoints (CUDA, Python, MPI, enter/exit),
+ * so it must live here in the always-compiled core, not in ompt_callback.c —
+ * a PINSIGHT_OPENMP=FALSE build otherwise ships an unresolved symbol that
+ * kills LD_PRELOAD at load time. */
+__thread int global_thread_num = 0;
 
 /**
  * Fire auto-trigger mode changes when a lexgion reaches max_num_traces.

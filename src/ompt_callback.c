@@ -64,7 +64,8 @@ __thread unsigned int task_record_id = -1;
  * callback_work begin. */
 __thread lexgion_t *enclosing_work_lgp = NULL;
 
-__thread int global_thread_num = 0;
+/* global_thread_num is defined in pinsight.c (core) — non-OpenMP domains
+ * reference it too. */
 __thread int omp_team_num = 0;
 __thread int omp_thread_num = 0;
 __thread int omp_device_num = 0;
