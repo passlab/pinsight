@@ -64,6 +64,36 @@ lttng-sessiond --daemonize >/dev/null 2>&1; sleep 0.3
 
 mkcfg() { printf '[CUDA.default]\n    trace_mode = TRACING\n    device_activity = %s\n' "$1" > "$CFG"; }
 
+# mpirun flavor: Open MPI wants --oversubscribe and -x NAME=VALUE; MPICH/Hydra
+# rejects both (its mpiexec aborts on --oversubscribe, so the multi-rank arms
+# would report zero events for the wrong reason) and takes -genv NAME VALUE
+# instead.  Neither approach preloads pinsight into mpirun itself — only the
+# ranks get LD_PRELOAD.
+MPI_FLAVOR=other
+if command -v mpirun >/dev/null 2>&1 && \
+   mpirun --version 2>&1 | grep -qiE 'open(-| )?mpi|open-?rte'; then
+    MPI_FLAVOR=openmpi
+fi
+
+# mpi_launch <nranks> <cmd...> — run under mpirun with the pinsight env
+# (LD_PRELOAD, PINSIGHT_TRACE_CONFIG_FILE, and the optional vars when set)
+# forwarded to every rank in the launcher's own dialect.
+mpi_launch() {
+    local n="$1"; shift
+    local -a envs=(LD_PRELOAD "$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE "$CFG")
+    [ -n "${LD_LIBRARY_PATH:-}" ]         && envs+=(LD_LIBRARY_PATH "$LD_LIBRARY_PATH")
+    [ -n "${PINSIGHT_DEBUG_ACTIVITY:-}" ] && envs+=(PINSIGHT_DEBUG_ACTIVITY "$PINSIGHT_DEBUG_ACTIVITY")
+    [ -n "${MAPFILE:-}" ]                 && envs+=(MAPFILE "$MAPFILE")
+    local -a flags=(); local i
+    if [ "$MPI_FLAVOR" = openmpi ]; then
+        for ((i=0; i<${#envs[@]}; i+=2)); do flags+=(-x "${envs[i]}=${envs[i+1]}"); done
+        mpirun -np "$n" --oversubscribe "${flags[@]}" "$@"
+    else
+        for ((i=0; i<${#envs[@]}; i+=2)); do flags+=(-genv "${envs[i]}" "${envs[i+1]}"); done
+        mpirun -np "$n" "${flags[@]}" "$@"
+    fi
+}
+
 # run <policy> <nranks> [iters] [sleep_ms] -> populates $OUT, echoes nothing
 run_arm() {
     local policy="$1" nranks="$2" iters="${3:-12}" sleep_ms="${4:-60}"
@@ -75,10 +105,7 @@ run_arm() {
     lttng add-context -u -t vpid >/dev/null 2>&1
     lttng start >/dev/null
     if [ "$nranks" -gt 1 ]; then
-        mpirun -np "$nranks" --oversubscribe \
-            -x LD_PRELOAD="$PINSIGHT_LIB" -x PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
-            -x LD_LIBRARY_PATH -x PINSIGHT_DEBUG_ACTIVITY \
-            "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
+        mpi_launch "$nranks" "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
     else
         env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
             "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
@@ -164,8 +191,9 @@ else
     cat > "$WRAP" <<'WRAPEOF'
 #!/bin/bash
 # One distinct physical GPU per local rank, reversed: rank r -> GPU N-1-r.
-r=${OMPI_COMM_WORLD_LOCAL_RANK:-0}
-n=${OMPI_COMM_WORLD_LOCAL_SIZE:-1}
+# Open MPI and MPICH/Hydra publish local rank/size under different names.
+r=${OMPI_COMM_WORLD_LOCAL_RANK:-${MPI_LOCALRANKID:-0}}
+n=${OMPI_COMM_WORLD_LOCAL_SIZE:-${MPI_LOCALNRANKS:-1}}
 export CUDA_VISIBLE_DEVICES=$(( n - 1 - r ))
 echo "$$ $CUDA_VISIBLE_DEVICES" >> "$MAPFILE"   # pid -> expected physical devId
 exec "$@"
@@ -179,10 +207,7 @@ WRAPEOF
     lttng enable-event -u 'cupti_pinsight_lttng_ust:*' >/dev/null
     lttng add-context -u -t vpid >/dev/null 2>&1
     lttng start >/dev/null
-    mpirun -np "$NDEV" --oversubscribe \
-        -x LD_PRELOAD="$PINSIGHT_LIB" -x PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
-        -x LD_LIBRARY_PATH -x PINSIGHT_DEBUG_ACTIVITY -x MAPFILE="$MAPFILE" \
-        "$WRAP" "$BIN" 12 60 >/dev/null 2>"$OUT".applog
+    mpi_launch "$NDEV" "$WRAP" "$BIN" 12 60 >/dev/null 2>"$OUT".applog
     lttng stop >/dev/null; lttng destroy >/dev/null 2>&1
 
     # distinct devIds seen on a given event
