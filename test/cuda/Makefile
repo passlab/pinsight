@@ -2,7 +2,10 @@
 #
 # Defaults target a distro CUDA install (nvcc + CUPTI in the system prefix).
 # Override CUDA_PATH / CUPTI_LIB_DIR for a /usr/local/cuda-style toolkit.
-CUDA_PATH     ?= $(shell dirname $(shell dirname $(shell which nvcc)))
+# When nvcc is not in PATH (common with /usr/local/cuda installs), fall back
+# to the /usr/local/cuda symlink rather than letting dirname error on "".
+NVCC_IN_PATH  := $(shell command -v nvcc 2>/dev/null)
+CUDA_PATH     ?= $(if $(NVCC_IN_PATH),$(shell dirname $(shell dirname $(NVCC_IN_PATH))),/usr/local/cuda)
 CUDA_ARCH     ?= 75
 # CUDA 13 moved CUPTI out of extras/CUPTI/lib64 into the targets/ tree; probe
 # both, or an otherwise-fine toolkit yields an empty CUPTI_LIB_DIR (which
