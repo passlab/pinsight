@@ -573,6 +573,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     if (cbInfo->callbackSite == CUPTI_API_ENTER) {
       lexgion_record_t *record =
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_KERNEL_LAUNCH, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       /* Name resolution: cbInfo->symbolName is the kernel name (e.g. "vectorAdd").
@@ -632,7 +634,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              kernelName, &ctxStreamId, &dim);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         uint64_t timeStamp = cuda_fast_timestamp();
         lttng_ust_tracepoint(cupti_pinsight_lttng_ust, cudaKernelLaunch_end,
@@ -654,6 +656,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
     if (cbInfo->callbackSite == CUPTI_API_ENTER) {
       lexgion_record_t *record = lexgion_begin(CUDA_LEXGION, event_id, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       /* Name resolution: use CUDA event name from domain_info_table for
@@ -684,7 +688,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              src, count, kind);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         int return_val = *((int *)cbInfo->functionReturnValue);
         const char *funName = cbInfo->functionName;
@@ -709,6 +713,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
       int event_id = CUDA_EVENT_MEMCPY_ASYNC;
 
       lexgion_record_t *record = lexgion_begin(CUDA_LEXGION, event_id, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -743,7 +749,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              dst, src, count, kind, &ctxStreamId);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         int return_val = *((int *)cbInfo->functionReturnValue);
         const char *funName = cbInfo->functionName;
@@ -767,6 +773,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     if (cbInfo->callbackSite == CUPTI_API_ENTER) {
       lexgion_record_t *record =
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_MALLOC, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -792,7 +800,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              correlationId, timeStamp, codeptr, funName, size);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         /* At EXIT the device address has been written into *devPtr */
         void *dev_ptr = p->devPtr ? *(p->devPtr) : NULL;
@@ -816,6 +824,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     if (cbInfo->callbackSite == CUPTI_API_ENTER) {
       lexgion_record_t *record =
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_FREE, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -842,7 +852,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              dev_ptr);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         int return_val = *((int *)cbInfo->functionReturnValue);
         uint64_t timeStamp = cuda_fast_timestamp();
@@ -863,6 +873,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
     if (cbInfo->callbackSite == CUPTI_API_ENTER) {
       lexgion_record_t *record =
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_DEVICE_SYNCHRONIZE, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -887,7 +899,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              devId, correlationId, timeStamp, codeptr, funName);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         int return_val = *((int *)cbInfo->functionReturnValue);
         uint64_t timeStamp = cuda_fast_timestamp();
@@ -917,6 +929,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
       lexgion_record_t *record =
           lexgion_begin(CUDA_LEXGION, CUDA_EVENT_STREAM_SYNCHRONIZE, codeptr);
+      if (record == NULL) /* lexgion-table overflow: skip this region */
+        return;
       lexgion_t *lgp = record->lgp;
 
       if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -942,7 +956,7 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
                              &ctxStreamId);
       }
     } else if (cbInfo->callbackSite == CUPTI_API_EXIT) {
-      lexgion_t *lgp = lexgion_end(NULL);
+      lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
       if (lgp && PINSIGHT_SHOULD_TRACE(CUDA_domain_index) && lgp->trace_bit) {
         int return_val = *((int *)cbInfo->functionReturnValue);
         uint64_t timeStamp = cuda_fast_timestamp();

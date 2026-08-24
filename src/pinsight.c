@@ -135,7 +135,18 @@ pinsight_thread_data_t *init_thread_data(int _thread_num) {
 lexgion_record_t *push_lexgion(lexgion_t *lgp, unsigned int record_id) {
   int top = pinsight_thread_data.stack_top + 1;
   if (top == MAX_LEXGION_STACK_DEPTH) {
-    fprintf(stderr, "thread %d lexgion stack overflow\n", global_thread_num);
+    /* warn once per thread: this fires per skipped push and deep Python
+     * call chains would otherwise flood stderr (and the flood itself is a
+     * bigger perturbation than the skipped records) */
+    static __thread int stack_overflow_warned = 0;
+    if (!stack_overflow_warned) {
+      stack_overflow_warned = 1;
+      fprintf(stderr,
+              "PInsight WARNING: thread %d lexgion stack overflow (depth %d); "
+              "deeper nested regions on this thread are not tracked. Rebuild "
+              "with -DMAX_LEXGION_STACK_DEPTH=<n> if deeper nesting matters.\n",
+              global_thread_num, MAX_LEXGION_STACK_DEPTH);
+    }
     return NULL;
   }
   lexgion_record_t *record = &pinsight_thread_data.lexgion_stack[top];
@@ -209,18 +220,30 @@ static lexgion_t *find_lexgion(int class, int type, const void *codeptr_ra,
  *
  */
 lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
-  if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
-    fprintf(stderr,
-            "FATAL: Max number of lexgions (%d) allowed in the source code "
-            "reached, cannot continue\n",
-            MAX_NUM_LEXGIONS);
-    return NULL;
-  }
-
   int index;
 
   lexgion_t *lgp = find_lexgion(class, type, codeptr_ra, &index);
   if (lgp == NULL) {
+    if (pinsight_thread_data.num_lexgions == MAX_NUM_LEXGIONS) {
+      /* Table full and this is a NEW lexgion: warn once per thread and make
+       * the caller skip this region. The cap must only gate new entries —
+       * known lexgions (found above) keep resolving, so one domain flooding
+       * the table (e.g. Python tracing a large application) does not take
+       * down the other domains. Callers must tolerate NULL, and their
+       * region-end paths must use lexgion_end_match() so a skipped begin
+       * never unbalances the record stack. */
+      static __thread int lexgion_overflow_warned = 0;
+      if (!lexgion_overflow_warned) {
+        lexgion_overflow_warned = 1;
+        fprintf(stderr,
+                "PInsight WARNING: thread %d reached the max number of "
+                "lexgions (%d); further new lexgions on this thread are not "
+                "tracked. Rebuild with -DMAX_NUM_LEXGIONS=<n> or restrict "
+                "traced regions (named lexgions / event filters).\n",
+                global_thread_num, MAX_NUM_LEXGIONS);
+      }
+      return NULL;
+    }
     index = pinsight_thread_data.num_lexgions;
     lgp = &pinsight_thread_data.lexgions[index];
     pinsight_thread_data.num_lexgions++;
@@ -260,6 +283,32 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
  */
 lexgion_t *lexgion_end(unsigned int *record_id) {
   return pop_lexgion(record_id);
+}
+
+/**
+ * Unwinding end: pop records down to and including the topmost record whose
+ * lexgion belongs to codeptr_ra; pop NOTHING if no record on the stack
+ * matches. Callers whose begin/end pairing is not guaranteed use this
+ * instead of lexgion_end():
+ *   - a begin may have been skipped (lexgion-table overflow returns NULL),
+ *     in which case the unmatched end must not pop an enclosing record;
+ *   - a begin may never see its end (Python PY_YIELD / exception unwind
+ *     leave records behind), in which case the next enclosing end must
+ *     sweep the stale records away or the stack fills up.
+ * Records above the match are stale by construction (their frames are gone).
+ */
+lexgion_t *lexgion_end_match(const void *codeptr_ra, unsigned int *record_id) {
+  lexgion_record_t *record = pinsight_thread_data.current_record;
+  while (record != NULL &&
+         (record->lgp == NULL || record->lgp->codeptr_ra != codeptr_ra))
+    record = record->parent;
+  if (record == NULL)
+    return NULL; /* no matching begin on the stack: pop nothing */
+  lexgion_record_t *stop = record->parent;
+  lexgion_t *lgp = NULL;
+  while (pinsight_thread_data.current_record != stop)
+    lgp = pop_lexgion(record_id);
+  return lgp; /* the matching lexgion (last one popped) */
 }
 
 /**

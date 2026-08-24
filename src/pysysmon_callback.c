@@ -205,13 +205,15 @@ static PyObject *on_py_return(PyObject *self, PyObject *const *args,
           domain_default_trace_config[Python_domain_index].mode))
     Py_RETURN_NONE;
 
-  /* Pop the lexgion stack */
-  lexgion_t *lgp = lexgion_end(NULL);
+  /* Pop only our own record: the matching on_py_start may have skipped its
+   * push on lexgion-table overflow, in which case the top record belongs to
+   * an enclosing frame and must stay. */
+  PyObject *code = args[0];
+  lexgion_t *lgp = lexgion_end_match((const void *)code, NULL);
   if (!lgp)
     Py_RETURN_NONE;
 
   if (PINSIGHT_SHOULD_TRACE(Python_domain_index) && lgp->trace_bit) {
-    PyObject *code = args[0];
     CodeInfo info;
     extract_code_info(code, &info);
     unsigned long code_id = (unsigned long)code;

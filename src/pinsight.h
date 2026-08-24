@@ -153,7 +153,12 @@ extern domain_trace_config_t domain_default_trace_config[];
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have
  * recursive such as in OpenMP tasking */
+#ifndef MAX_LEXGION_STACK_DEPTH /* overridable: cc -DMAX_LEXGION_STACK_DEPTH=<n>.
+                                 * 16 suits OpenMP/MPI/CUDA nesting; Python
+                                 * tracing needs the real interpreter call
+                                 * depth (default recursion limit 1000). */
 #define MAX_LEXGION_STACK_DEPTH 16
+#endif
 /**
  * the thread-local object that store data for each thread
  */
@@ -268,6 +273,8 @@ extern pinsight_thread_data_t *init_thread_data(int _thread_num);
 extern lexgion_record_t *push_lexgion(lexgion_t *lexgion,
                                       unsigned int record_id);
 extern lexgion_t *pop_lexgion(unsigned int *record_id);
+extern lexgion_t *lexgion_end_match(const void *codeptr_ra,
+                                    unsigned int *record_id);
 extern lexgion_record_t *top_lexgion();
 extern lexgion_record_t *top_lexgion_type(int class, int type);
 extern lexgion_record_t *lexgion_begin(int class, int type,

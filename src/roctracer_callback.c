@@ -433,6 +433,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, HIP_EVENT_KERNEL_LAUNCH, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -465,7 +467,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      &dim);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 uint64_t ts = hip_fast_timestamp();
                 lttng_ust_tracepoint(roctracer_pinsight_lttng_ust,
@@ -490,6 +492,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, event_id, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -519,7 +523,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      dst, src, count, kind);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
@@ -543,6 +547,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, event_id, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -572,7 +578,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      dst, src, count, kind);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
@@ -594,6 +600,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, HIP_EVENT_MALLOC, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -620,7 +628,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      codeptr, lgp->name, size);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 /* At EXIT the device address has been written into *ptr */
                 void *dev_ptr = api_data->args.hipMalloc.ptr
@@ -645,6 +653,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, HIP_EVENT_FREE, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -671,7 +681,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      codeptr, lgp->name, dev_ptr);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
@@ -693,6 +703,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, HIP_EVENT_DEVICE_SYNCHRONIZE, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -718,7 +730,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      codeptr, lgp->name);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();
@@ -740,6 +752,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
         if (api_data->phase == ACTIVITY_API_PHASE_ENTER) {
             lexgion_record_t *record =
                 lexgion_begin(ROCL_LEXGION, HIP_EVENT_STREAM_SYNCHRONIZE, codeptr);
+            if (record == NULL) /* lexgion-table overflow: skip this region */
+                return;
             lexgion_t *lgp = record->lgp;
 
             if (lgp->name_resolved_gen != trace_config_change_counter) {
@@ -769,7 +783,7 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                                      codeptr, lgp->name, streamId);
             }
         } else if (api_data->phase == ACTIVITY_API_PHASE_EXIT) {
-            lexgion_t *lgp = lexgion_end(NULL);
+            lexgion_t *lgp = lexgion_end_match(codeptr, NULL);
             if (lgp && PINSIGHT_SHOULD_TRACE(HIP_domain_index) && lgp->trace_bit) {
                 int rv      = 0; /* hip_api_data_t has no retval field */
                 uint64_t ts = hip_fast_timestamp();

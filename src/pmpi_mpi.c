@@ -177,11 +177,12 @@ int MPI_get_rank(void) {
     mpi_codeptr = __builtin_return_address(0);                                 \
     lexgion_record_t *_record =                                                \
         lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);           \
-    lgp = _record->lgp;                                                        \
+    /* NULL on lexgion-table overflow: lgp stays NULL, epilogue skips */       \
+    lgp = _record ? _record->lgp : NULL;                                       \
     /* Name resolution for named lexgion config matching. Runs once per        \
      * unique call site per reload cycle. MPI event names are static strings   \
      * in domain_info_table — zero allocation. */                              \
-    if (lgp->name_resolved_gen != trace_config_change_counter) {              \
+    if (lgp && lgp->name_resolved_gen != trace_config_change_counter) {       \
       lgp->name = domain_info_table[MPI_domain_index]                         \
                       .event_table[lgp->type].name;                           \
       lgp->filename_hint = NULL;                                               \
@@ -201,7 +202,7 @@ int MPI_get_rank(void) {
 
 #define PMPI_CALL_EPILOGUE(MPI_FUNC, ...)                                      \
   if (lgp) {                                                                   \
-    lexgion_end(NULL);                                                         \
+    lexgion_end_match(mpi_codeptr, NULL);                                      \
     lgp->end_codeptr_ra = mpi_codeptr;                                         \
     if (PINSIGHT_SHOULD_TRACE(MPI_domain_index) && lgp->trace_bit) {           \
       lttng_ust_tracepoint(pmpi_pinsight_lttng_ust, MPI_FUNC##_end,            \

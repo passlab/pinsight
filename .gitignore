@@ -140,3 +140,4 @@ build-matrix/
 trace-compass-server/
 test/rocm/cyclic_traces*/
 test/rocm/*.applog
+build-ml/
