@@ -6,7 +6,7 @@ This document covers how to configure PInsight's Python tracing domain
 (`pysysmon_pinsight_lttng_ust`) using the standard PInsight config file and
 environment variables.
 
-For the general config file format, see [PINSIGHT_TRACE_CONFIG_FORMAT.md](PINSIGHT_TRACE_CONFIG_FORMAT.md).
+For the general config file format, see [trace_config_format.md](trace_config_format.md).
 For Python tracing implementation details, see [python_tracing_implementation.md](python_tracing_implementation.md).
 
 ---
@@ -32,14 +32,26 @@ export PINSIGHT_TRACE_PYTHON=TRACING
 export PINSIGHT_TRACE_PYTHON=MONITORING
 ```
 
-#### Rate-based sampling (applies to all Python lexgions)
+#### Sampling instrument (statistical stack sampling)
+
+```bash
+# Enable Python stack sampling at 100 Hz (interval in microseconds; 0 = disabled)
+export PINSIGHT_SAMPLING_PYTHON=10000
+```
+
+The sampling instrument is independent of `trace_mode` (two-instrument
+rule): `PINSIGHT_TRACE_PYTHON=OFF` + `PINSIGHT_SAMPLING_PYTHON=10000` is
+the pure-sampler configuration. Env values apply at startup (after the
+config file); a SIGUSR1 file reload supersedes them.
+
+#### Rate-based tracing window (applies to all Python lexgions)
 
 ```bash
 # Skip first 10 calls per function, then trace 1-in-50, stop after 100 traces
-export PINSIGHT_TRACE_RATE=10:100:50
+export PINSIGHT_WINDOW=10:100:50
 
 # Trace first 100 calls per function, then switch Python to MONITORING
-export PINSIGHT_TRACE_RATE=0:100:1:Python:MONITORING
+export PINSIGHT_WINDOW=0:100:1:Python:MONITORING
 ```
 
 ### 1.2 Domain-Wide Mode and Punit Scope
@@ -47,20 +59,20 @@ export PINSIGHT_TRACE_RATE=0:100:1:Python:MONITORING
 Control the Python domain globally and restrict which Python threads are traced:
 
 ```ini
-[Python.default]
+[Python.tracing]
     trace_mode = TRACING
     Python.thread = (0-3)     # only trace Python threads 0, 1, 2, 3
 ```
 
 ```ini
 # Disable all Python tracing at runtime (send kill -USR1 <pid> after writing this)
-[Python.default]
+[Python.tracing]
     trace_mode = OFF
 ```
 
 ```ini
 # Near-zero overhead — callbacks fire but return immediately; recoverable via SIGUSR1
-[Python.default]
+[Python.tracing]
     trace_mode = STANDBY
 ```
 
@@ -69,7 +81,7 @@ Control the Python domain globally and restrict which Python threads are traced:
 Choose which event categories to trace:
 
 ```ini
-[Python.default]
+[Python.tracing]
     pysysmon_py_start  = on    # Python function entry (default: on)
     pysysmon_py_return = on    # Python function exit  (default: on)
     pysysmon_c_start   = off   # C extension call begin (turn off to reduce volume)
@@ -80,7 +92,7 @@ Choose which event categories to trace:
 **Common pattern** — Python functions only, no C bridge noise:
 
 ```ini
-[Python.default]
+[Python.tracing]
     pysysmon_c_start  = off
     pysysmon_c_return = off
 ```
@@ -88,7 +100,7 @@ Choose which event categories to trace:
 **C extension calls only** — useful for tracing numpy/scipy overhead without Python call stack noise:
 
 ```ini
-[Python.default]
+[Python.tracing]
     pysysmon_py_start  = off
     pysysmon_py_return = off
     pysysmon_c_start   = on
@@ -102,16 +114,16 @@ Trace only specific Python threads (thread IDs are assigned 0-N by
 
 ```ini
 # Trace only the main thread (thread 0) and the first worker (thread 1)
-[Python.thread(0-1)]: Python.default
+[Python.thread(0-1)]: Python.tracing
 ```
 
 ```ini
 # Trace all threads except thread 0 (main thread — often just coordination code)
-[Python.thread(1-255)]: Python.default
+[Python.thread(1-255)]: Python.tracing
 ```
 
 ```ini
-# Remove thread-specific config (threads fall back to Python.default)
+# Remove thread-specific config (threads fall back to Python.tracing)
 [REMOVE Python.thread(0-1)]
 ```
 
@@ -182,7 +194,7 @@ All of the above can be changed while the application is running:
 
 # 1. Edit the config file
 cat > pinsight_trace_config.txt << 'EOF'
-[Python.default]
+[Python.tracing]
     trace_mode = STANDBY
 
 [Lexgion(Python).default]
@@ -203,27 +215,27 @@ Mixed Python + OpenMP application. Trace Python main thread only, with rate
 limiting; keep OpenMP at full tracing:
 
 ```ini
-[Python.default]
+[Python.tracing]
     trace_mode    = TRACING
     Python.thread = (0)         # main thread only
 
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode       = TRACING
     OpenMP.thread    = (0-15)
 
-[Python.default]
+[Python.tracing]
     pysysmon_py_start  = on
     pysysmon_py_return = on
     pysysmon_c_start   = off    # skip C bridges to reduce volume
     pysysmon_c_return  = off
 
-[Lexgion(Python).default]: Python.default
+[Lexgion(Python).default]: Python.tracing
     trace_starts_at = 0
     max_num_traces  = 100
     tracing_rate    = 5
     trace_mode_after = Python:MONITORING
 
-[Lexgion(OpenMP).default]: OpenMP.default
+[Lexgion(OpenMP).default]: OpenMP.tracing
     max_num_traces  = 200
     tracing_rate    = 1
 ```
@@ -269,14 +281,14 @@ Inheritance and rate control work the same as address-based lexgions:
 
 ```ini
 # Rate limit the hot solver function
-[Lexgion(Python:solver.compute)]: Python.default
+[Lexgion(Python:solver.compute)]: Python.tracing
     trace_starts_at  = 0
     max_num_traces   = 50
     tracing_rate     = 1
     trace_mode_after = Python:MONITORING
 
 # Stop tracing a noisy utility function entirely
-[Lexgion(Python:utils.log_debug)]: Python.default
+[Lexgion(Python:utils.log_debug)]: Python.tracing
     max_num_traces = 0
 ```
 
@@ -328,14 +340,14 @@ retains ownership.
 
 ```ini
 # ── Domain event defaults ────────────────────────────────────────────────
-[Python.default]
+[Python.tracing]
     pysysmon_py_start  = on
     pysysmon_py_return = on
     pysysmon_c_start   = off   # disable C bridge by default
     pysysmon_c_return  = off
 
 # ── Lexgion defaults ─────────────────────────────────────────────────────
-[Lexgion(Python).default]: Python.default
+[Lexgion(Python).default]: Python.tracing
     trace_starts_at = 0
     max_num_traces  = 50
     tracing_rate    = 1
@@ -344,22 +356,22 @@ retains ownership.
 # ── Named function overrides ─────────────────────────────────────────────
 
 # Hot solver — full C bridge tracing, high rate limit
-[Lexgion(Python:Solver.run)]: Python.default
+[Lexgion(Python:Solver.run)]: Python.tracing
     pysysmon_c_start  = on
     pysysmon_c_return = on
     max_num_traces    = 200
     tracing_rate      = 1
 
 # Initialization — trace only once
-[Lexgion(Python:Solver.setup)]: Python.default
+[Lexgion(Python:Solver.setup)]: Python.tracing
     max_num_traces = 1
 
 # Suppress a noisy helper
-[Lexgion(Python:utils.log_debug)]: Python.default
+[Lexgion(Python:utils.log_debug)]: Python.tracing
     max_num_traces = 0
 
 # Two functions with same settings, disambiguated by filename
-[Lexgion(Python:solver_a.py:compute, Python:solver_b.py:compute)]: Python.default
+[Lexgion(Python:solver_a.py:compute, Python:solver_b.py:compute)]: Python.tracing
     max_num_traces = 100
     tracing_rate   = 5
 ```
@@ -383,11 +395,11 @@ to a named or default lexgion config section:
 ### 3.1 Syntax
 
 ```ini
-[Lexgion(Python:funcname)] : Python.default : Python.thread(N-M)
+[Lexgion(Python:funcname)] : Python.tracing : Python.thread(N-M)
     max_num_traces = K
 ```
 
-The `: Python.default` inherits domain event defaults. The `: Python.thread(N-M)`
+The `: Python.tracing` inherits domain event defaults. The `: Python.thread(N-M)`
 restricts this config entry to Python threads whose `pysysmon_get_thread_id()`
 returns a value in the range `[N, M]`.
 
@@ -403,11 +415,11 @@ Thread IDs are assigned sequentially at first callback:
     max_num_traces = 0
 
 # Trace "worker" function only on threads 1 and 2 (max 8 traces each)
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-2)
     max_num_traces = 8
 
 # Trace "main_work" function only on the main thread (thread 0)
-[Lexgion(Python:main_work)] : Python.default : Python.thread(0)
+[Lexgion(Python:main_work)] : Python.tracing : Python.thread(0)
     max_num_traces = 5
 ```
 
@@ -416,7 +428,7 @@ Thread IDs are assigned sequentially at first callback:
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(3-4)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(3-4)
     max_num_traces = 6
 ```
 
@@ -425,7 +437,7 @@ Thread IDs are assigned sequentially at first callback:
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-4)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-4)
     max_num_traces = 5
 ```
 
@@ -449,12 +461,12 @@ Named lexgion config, thread filter, rate control, and auto-trigger all compose:
     max_num_traces = 0      # suppress all functions by default
 
 # Worker traced only on threads 1-2, max 7 each, auto-drop after
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-2)
     max_num_traces   = 7
     trace_mode_after = Python:MONITORING
 
 # Main thread work, limit 5 traces, then INTROSPECT
-[Lexgion(Python:main_work)] : Python.default : Python.thread(0)
+[Lexgion(Python:main_work)] : Python.tracing : Python.thread(0)
     max_num_traces   = 5
     trace_mode_after = INTROSPECT:30:analyze.sh:TRACING
 ```

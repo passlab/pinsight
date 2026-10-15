@@ -14,7 +14,8 @@ PInsight is a lightweight, dynamic tracing and in-situ performance analysis fram
 - **Multi-domain tracing** — Unified tracing of OpenMP ([OMPT][ompt]), MPI ([PMPI][pmpi]), CUDA ([CUPTI][cupti]), AMD HIP/ROCm ([ROCTracer][roctracer]), and Python ([`sys.monitoring`][sysmon]) events on a single LTTng timeline
 - **Asynchronous trace collection** — LTTng UST ring buffers decouple trace emission from disk I/O; near-zero overhead when no session is active
 - **4-mode trace hierarchy** — OFF → STANDBY → MONITORING → TRACING, each adding exactly one layer of cost
-- **Rate-limited tracing** — Per-region sampling (trace N-of-M executions) to reduce redundant data by orders of magnitude
+- **Statistical sampling (second instrument)** — Per-domain periodic stack sampling, independent of the trace-mode ladder (`[Domain.sampling] interval_us` or `PINSIGHT_SAMPLING_<DOMAIN>`); Python interpreter stacks today, more domains planned. Run PInsight as a pure sampler with `trace_mode = OFF` + a sampling interval
+- **Rate-limited tracing** — Per-region rate control (trace N-of-M executions) to reduce redundant data by orders of magnitude
 - **Automatic mode switching** — Transition domains to lower-overhead modes after sufficient traces are collected
 - **In-situ introspection (INTROSPECT)** — Automatically rotate traces, launch an analysis script, pause execution, and resume with optimized configuration — all without human intervention
 - **Cyclic introspection** — Repeat the trace→analyze→tune cycle throughout a long-running application via generation-based counter reset

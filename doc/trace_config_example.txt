@@ -1,5 +1,5 @@
 # Domain-wide settings (trace mode, punit scope) and default event configuration
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode = TRACING
     OpenMP.team = (0-4)
     OpenMP.thread = (0, 15)
@@ -7,32 +7,32 @@
 	omp_task_create = off
 	omp_task_schedule = off
 
-[MPI.default]
+[MPI.tracing]
     trace_mode = TRACING
     MPI.rank = (0-3)
 
-[CUDA.default]
+[CUDA.tracing]
     trace_mode = TRACING
 	CUDA.device = (0-3)
 	CUDA_kernel_launch  = on
 	CUDA_memcpy = on
 
-[Lexgion.default]: OpenMP.default, MPI.default
+[Lexgion.default]: OpenMP.tracing, MPI.tracing
 	trace_starts_at = 0
 	max_num_traces = 200
 	tracing_rate = 1 
 
-[OpenMP.thread(0-3)]: OpenMP.default: MPI.rank(0), CUDA.device(0)
+[OpenMP.thread(0-3)]: OpenMP.tracing: MPI.rank(0), CUDA.device(0)
 
-[OpenMP.thread(4, 6, 8-12, 14-16, 20-22)]: OpenMP.default: MPI.rank(0), CUDA.device(0)
+[OpenMP.thread(4, 6, 8-12, 14-16, 20-22)]: OpenMP.tracing: MPI.rank(0), CUDA.device(0)
 
-[OpenMP.team(0-4), OpenMP.thread(0-15)]: OpenMP.default: MPI.rank(0), CUDA.device(0)
+[OpenMP.team(0-4), OpenMP.thread(0-15)]: OpenMP.tracing: MPI.rank(0), CUDA.device(0)
     
-[OpenMP.device(0)]: OpenMP.default
+[OpenMP.device(0)]: OpenMP.tracing
 
-[MPI.rank(0)]: MPI.default
+[MPI.rank(0)]: MPI.tracing
 
-[CUDA.device(0)]: CUDA.default
+[CUDA.device(0)]: CUDA.tracing
 
 # defining OpenMP lexgion default trace config
 [Lexgion(OpenMP).default]
@@ -45,7 +45,7 @@
 	tracing_rate = 1
 
 # defining a specific lexgion trace config
-[Lexgion(0x4010bd)]: Lexgion.default, OpenMP.default, MPI.default: MPI.rank(0), CUDA.device(0)
+[Lexgion(0x4010bd)]: OpenMP.tracing, MPI.tracing: MPI.rank(0), CUDA.device(0)
 	trace_starts_at = 20
 	max_num_traces = 200
 	tracing_rate = 10

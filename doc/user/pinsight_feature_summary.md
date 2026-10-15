@@ -79,7 +79,7 @@ Configuration is organized from coarsest to finest:
 
 | Scope | Controls | Example |
 |-------|----------|---------|
-| **Domain (default)** | Mode (OFF/MONITORING/TRACING), punit range, event enable/disable defaults | `[OpenMP.default]` |
+| **Domain (default)** | Mode (OFF/MONITORING/TRACING), punit range, event enable/disable defaults | `[OpenMP.tracing]` |
 | **Domain (punit)** | Per-punit-set event overrides | `[OpenMP.thread(0-3)]` |
 | **Lexgion (default)** | Global rate defaults | `[Lexgion.default]` |
 | **Lexgion (domain-default)** | Per-domain lexgion defaults | `[Lexgion(OpenMP).default]` |
@@ -87,13 +87,13 @@ Configuration is organized from coarsest to finest:
 
 ### 4.2 Configuration Sources
 
-1. **Environment variables** — Domain modes (`PINSIGHT_TRACE_OPENMP=OFF`), rate sampling (`PINSIGHT_TRACE_RATE=0:100:1`), energy/backtrace toggles
+1. **Environment variables** — Domain modes (`PINSIGHT_TRACE_OPENMP=OFF`), rate sampling (`PINSIGHT_WINDOW=0:100:1`), energy/backtrace toggles
 2. **Config file** — Enhanced INI format with SET/RESET/REMOVE actions, inheritance, and punit constraints
 
 ### 4.3 Config File Features
 - **3-action model**: SET (merge), RESET (revert to defaults), REMOVE (delete config)
-- **Inheritance**: Lexgion sections can inherit events from domain defaults (`[Lexgion(0x400500)]: OpenMP.default, MPI.default`)
-- **Punit constraints**: Cross-domain punit filtering (`[OpenMP.thread(0-3)]: OpenMP.default: MPI.rank(0), CUDA.device(0)`)
+- **Inheritance**: Lexgion sections can inherit events from domain defaults (`[Lexgion(0x400500)]: OpenMP.tracing, MPI.tracing`)
+- **Punit constraints**: Cross-domain punit filtering (`[OpenMP.thread(0-3)]: OpenMP.tracing: MPI.rank(0), CUDA.device(0)`)
 - **Multi-address lexgions**: `[Lexgion(0x400500, 0x400600, 0x400700)]`
 - **Wildcard removal**: `[REMOVE OpenMP.thread(*)]`
 
@@ -149,7 +149,7 @@ When `max_num_traces` is reached, domains can be automatically switched to a low
     trace_mode_after = OpenMP:MONITORING, MPI:OFF    # per-domain
 ```
 
-Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:1:MONITORING`
+Also configurable via env var: `PINSIGHT_WINDOW=0:100:1:MONITORING`
 
 ### INTROSPECT Action
 
@@ -176,7 +176,7 @@ When INTROSPECT fires:
 
 The script can analyze traces and send `SIGUSR1` back to resume the app early with optimized settings.
 
-Also configurable via env var: `PINSIGHT_TRACE_RATE=0:100:10:INTROSPECT:60:analyze_traces.sh:TRACING`
+Also configurable via env var: `PINSIGHT_WINDOW=0:100:10:INTROSPECT:60:analyze_traces.sh:TRACING`
 
 ## 8. Runtime Reconfiguration (SIGUSR1)
 
