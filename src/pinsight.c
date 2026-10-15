@@ -46,17 +46,17 @@ void pinsight_fire_window_end(lexgion_trace_config_t *tc) {
    * (e.g. disable callbacks for zero-overhead MONITORING). */
   if (!ma->introspect) {
     for (int d = 0; d < MAX_NUM_DOMAINS; d++) {
-      pinsight_domain_mode_t new_mode = ma->mode[d];
-      if (new_mode == PINSIGHT_DOMAIN_NONE) continue;
-      if (!domain_default_trace_config[d].mode_change_fired &&
-          new_mode != (pinsight_domain_mode_t)domain_default_trace_config[d].mode) {
-        domain_default_trace_config[d].last_mode =
-            (pinsight_domain_mode_t)domain_default_trace_config[d].mode;
-        __atomic_store_n(&domain_default_trace_config[d].mode, new_mode,
+      domain_trace_mode_t new_mode = ma->mode[d];
+      if (new_mode == PINSIGHT_TRACE_MODE_NONE) continue;
+      if (!domain_trace_config[d].mode_change_fired &&
+          new_mode != (domain_trace_mode_t)domain_trace_config[d].mode) {
+        domain_trace_config[d].last_mode =
+            (domain_trace_mode_t)domain_trace_config[d].mode;
+        __atomic_store_n(&domain_trace_config[d].mode, new_mode,
                          __ATOMIC_SEQ_CST);
-        domain_default_trace_config[d].mode_change_fired = 1;
+        domain_trace_config[d].mode_change_fired = 1;
         fprintf(stderr, "PInsight: Auto-trigger (immediate): %s mode -> %s\n",
-                domain_info_table[d].name, pinsight_mode_str(new_mode));
+                domain_info_table[d].name, pinsight_trace_mode_str(new_mode));
       }
     }
   }
@@ -257,7 +257,7 @@ lexgion_record_t *lexgion_begin(int class, int type, const void *codeptr_ra) {
     lgp->num_exes_after_last_trace = 0;
     lgp->trace_config =
         NULL; /* resolved lazily by lexgion_set_top_trace_bit_domain_event */
-    lgp->trace_config_change_counter =
+    lgp->config_change_counter =
         -1; /* force mismatch to trigger config resolution */
     lgp->name_resolved_gen =
         (unsigned int)-1; /* force name resolution on first callback */
@@ -358,7 +358,7 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
   /* Re-resolve config if not yet set or if a reconfig has occurred since last
    * resolution */
   if (trace_config == NULL ||
-      lgp->trace_config_change_counter != trace_config_change_counter) {
+      lgp->config_change_counter != config_change_counter) {
     trace_config = NULL;
 
     /* 1. Search the lexgion_trace_config table by lgp->codeptr_ra */
@@ -404,7 +404,7 @@ int lexgion_set_top_trace_bit_domain_event(lexgion_t *lgp, int domain,
 
     /* Cache the resolved config and current generation */
     lgp->trace_config = trace_config;
-    lgp->trace_config_change_counter = trace_config_change_counter;
+    lgp->config_change_counter = config_change_counter;
   }
 
   /* Check whether the current domain event is enabled for tracing */
@@ -457,7 +457,7 @@ lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
   /* Re-resolve config if not yet set or if a reconfig has occurred since last
    * resolution */
   if (trace_config == NULL ||
-      lgp->trace_config_change_counter != trace_config_change_counter) {
+      lgp->config_change_counter != config_change_counter) {
     trace_config = NULL;
 
     /* 1. Search the lexgion_trace_config table by lgp->codeptr_ra */
@@ -501,7 +501,7 @@ lexgion_trace_config_t *lexgion_set_trace_config(lexgion_t *lgp, int domain) {
 
     /* Cache the resolved config and current generation */
     lgp->trace_config = trace_config;
-    lgp->trace_config_change_counter = trace_config_change_counter;
+    lgp->config_change_counter = config_change_counter;
   }
   return trace_config;
 }

@@ -95,7 +95,7 @@ test: vecadd_pinsight $(PINSIGHT_LIB)
 	lttng add-context --userspace --type=vpid
 	lttng start
 	LD_LIBRARY_PATH=$(LTTNG_RUN_PATH)$(CUPTI_LIB_DIR):$$LD_LIBRARY_PATH \
-	PINSIGHT_TRACE_CONFIG_FILE=$(CURDIR)/CUDA_trace_config.install \
+	PINSIGHT_CONFIG_FILE=$(CURDIR)/CUDA_trace_config.install \
 	LD_PRELOAD=$(PINSIGHT_LIB) \
 	    ./vecadd_pinsight 5
 	lttng stop

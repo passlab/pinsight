@@ -71,7 +71,7 @@ void enter_pinsight_func() {
 #endif
   /* Parse config first so energy `measure` (and domain node-policies) are known
    * before energy init / the activity pool decide who measures. */
-  initial_setup_trace_config();
+  initial_setup_config();
 
 #ifdef PINSIGHT_ENERGY
   /* Arm energy (backend init + baseline energy_enter, span 0) if [Energy]

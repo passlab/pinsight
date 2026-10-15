@@ -11,7 +11,7 @@
  *
  * Each callback integrates with PInsight's master infrastructure:
  *   - pinsight_check_pause()  for INTROSPECT cooperative pause
- *   - PINSIGHT_DOMAIN_ACTIVE() for 4-mode domain check
+ *   - DOMAIN_TRACE_ACTIVE() for 4-mode domain check
  *   - lexgion_begin/end       for lexgion LRU cache + stack
  *   - lexgion_set_top_trace_bit_domain_event() for rate control
  *   - lexgion_post_trace_update() for auto-trigger mode changes
@@ -24,8 +24,15 @@
 
 #include "pinsight.h"
 #include "pinsight_control_thread.h"
+#include "pinsight_sampler.h"
 #include "trace_config.h"
 #include "trace_domain_Python.h"
+
+/* pysysmon_sampler.c (S1): thread registration table + probe lifecycle */
+extern void pysysmon_sampler_register_thread(PyThreadState *ts, int py_tid,
+                                             int gtid);
+extern int pysysmon_sampler_start(void);
+extern void pysysmon_sampler_stop(void);
 
 /* pysysmon_thread_id is defined in pysysmon_globals.c (part of libpinsight.so).
  * Accessed directly here for tracepoint field emission. */
@@ -64,6 +71,10 @@ static inline void pysysmon_ensure_thread_init(void) {
                                  __ATOMIC_RELAXED);
     init_thread_data(tid);
     pysysmon_get_thread_id(); /* also assign domain-specific ID */
+    /* D3: register (tstate -> ids) so the sampler probe can label this
+     * thread's stack samples (callback context: GIL held). */
+    pysysmon_sampler_register_thread(PyThreadState_Get(), pysysmon_thread_id,
+                                     tid);
     pysysmon_tls_inited = 1;
   }
 }
@@ -132,8 +143,8 @@ static PyObject *on_py_start(PyObject *self, PyObject *const *args,
   pinsight_check_pause();
 
   /* 2. Fast-path domain mode check (~2ns volatile read) */
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[Python_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[Python_domain_index].mode))
     Py_RETURN_NONE;
 
   /* 3. Thread init (once per thread) */
@@ -155,7 +166,7 @@ static PyObject *on_py_start(PyObject *self, PyObject *const *args,
    * PyObject_GetAttrString returns a new reference; Py_XDECREF on it is safe
    * because the code object retains its own reference to co_qualname/co_filename,
    * keeping the internal UTF-8 buffer valid for the code object's lifetime. */
-  if (lgp->name_resolved_gen != trace_config_change_counter) {
+  if (lgp->name_resolved_gen != config_change_counter) {
     PyObject *qn = PyObject_GetAttrString(code, "co_qualname");
     PyObject *fn = PyObject_GetAttrString(code, "co_filename");
     lgp->name = qn ? PyUnicode_AsUTF8(qn) : NULL;
@@ -166,8 +177,8 @@ static PyObject *on_py_start(PyObject *self, PyObject *const *args,
     }
     Py_XDECREF(qn);
     Py_XDECREF(fn);
-    lgp->name_resolved_gen = trace_config_change_counter;
-    lgp->trace_config_change_counter = (unsigned int)-1; /* force config re-resolve */
+    lgp->name_resolved_gen = config_change_counter;
+    lgp->config_change_counter = (unsigned int)-1; /* force config re-resolve */
   }
 
   /* 7. Rate control + config resolution (TRACING mode only) */
@@ -201,8 +212,8 @@ static PyObject *on_py_return(PyObject *self, PyObject *const *args,
                               Py_ssize_t nargs) {
   if (nargs < 2)
     Py_RETURN_NONE;
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[Python_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[Python_domain_index].mode))
     Py_RETURN_NONE;
 
   /* Pop only our own record: the matching on_py_start may have skipped its
@@ -243,8 +254,8 @@ static PyObject *on_c_start(PyObject *self, PyObject *const *args,
                          Py_ssize_t nargs) {
   if (nargs < 3)
     Py_RETURN_NONE;
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[Python_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[Python_domain_index].mode))
     Py_RETURN_NONE;
 
   PyObject *callable = args[2];
@@ -287,8 +298,8 @@ static PyObject *on_c_return(PyObject *self, PyObject *const *args,
                              Py_ssize_t nargs) {
   if (nargs < 3)
     Py_RETURN_NONE;
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[Python_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[Python_domain_index].mode))
     Py_RETURN_NONE;
 
   PyObject *callable = args[2];
@@ -325,7 +336,7 @@ static PyObject *on_c_return(PyObject *self, PyObject *const *args,
  * set_trace_mode() — called by the launcher after all sys.monitoring
  *   callbacks are registered (imports complete).  Restores the Python
  *   domain to whatever mode the user configured via config file or env
- *   (saved in last_mode by initial_setup_trace_config()).  If no
+ *   (saved in last_mode by initial_setup_config()).  If no
  *   explicit config was given (last_mode == NONE or STANDBY), defaults
  *   to TRACING.  This is the correct place to open the tracing window
  *   because no lexgion cache slots are wasted on stdlib imports.
@@ -336,23 +347,66 @@ static PyObject *on_c_return(PyObject *self, PyObject *const *args,
  * ================================================================ */
 static PyObject *set_trace_mode(PyObject *self, PyObject *args) {
   /* last_mode holds the config/env-resolved mode saved by
-   * initial_setup_trace_config().  Because starting_mode is TRACING,
+   * initial_setup_config().  Because starting_mode is TRACING,
    * the default (no config, no env) is TRACING; any user-set value
    * (OFF, STANDBY, MONITORING, TRACING) is reflected directly. */
-  pinsight_domain_mode_t target =
-      domain_default_trace_config[Python_domain_index].last_mode;
-  __atomic_store_n(&domain_default_trace_config[Python_domain_index].mode,
+  domain_trace_mode_t target =
+      domain_trace_config[Python_domain_index].last_mode;
+  __atomic_store_n(&domain_trace_config[Python_domain_index].mode,
                    target, __ATOMIC_SEQ_CST);
+  pinsight_sampler_kick(); /* infra_min_trace_mode probes may (un)park */
   return PyLong_FromLong((long)target);
 }
 
 static PyObject *reset_trace_mode(PyObject *self, PyObject *args) {
   /* Save current mode so set_trace_mode() can restore it if called again. */
-  domain_default_trace_config[Python_domain_index].last_mode =
-      domain_default_trace_config[Python_domain_index].mode;
-  __atomic_store_n(&domain_default_trace_config[Python_domain_index].mode,
-                   PINSIGHT_DOMAIN_STANDBY, __ATOMIC_SEQ_CST);
+  domain_trace_config[Python_domain_index].last_mode =
+      domain_trace_config[Python_domain_index].mode;
+  __atomic_store_n(&domain_trace_config[Python_domain_index].mode,
+                   PINSIGHT_TRACE_MODE_STANDBY, __ATOMIC_SEQ_CST);
+  pinsight_sampler_kick();
   Py_RETURN_NONE;
+}
+
+/* ================================================================
+ * Sampler lifecycle + config introspection (S1)
+ * ================================================================ */
+static PyObject *start_sampler(PyObject *self, PyObject *args) {
+  /* Registers the Python stack probe with the framework (bookkeeping only;
+   * a thread spawns lazily when interval_us > 0 — possibly later, via
+   * SIGUSR1/window reload). Idempotent. */
+  if (pysysmon_sampler_start() != 0) {
+    PyErr_SetString(PyExc_RuntimeError, "PInsight sampler start failed");
+    return NULL;
+  }
+  Py_RETURN_NONE;
+}
+
+static PyObject *stop_sampler(PyObject *self, PyObject *args) {
+  /* Joins the sampler thread if it was the last probe — MUST run before
+   * interpreter finalization (the probe uses PyGILState_Ensure). */
+  Py_BEGIN_ALLOW_THREADS /* the probe may be blocked in PyGILState_Ensure —
+                          * release the GIL so it can finish its tick and
+                          * the framework can join without deadlocking */
+  pysysmon_sampler_stop();
+  Py_END_ALLOW_THREADS
+  Py_RETURN_NONE;
+}
+
+static PyObject *get_config(PyObject *self, PyObject *args) {
+  /* (intended_trace_mode, sampling_interval_us) for the launcher to drive
+   * the two instruments independently (decoupling, REV 10): callbacks are
+   * worth registering only when the intended mode is above OFF; the
+   * sampler is worth starting always (lazy + hot-reloadable). During
+   * startup the intended mode sits in last_mode (initial_setup saved it
+   * and held the domain in STANDBY). */
+  domain_trace_mode_t intended =
+      domain_trace_config[Python_domain_index].last_mode;
+  if (intended == PINSIGHT_TRACE_MODE_NONE)
+    intended = domain_trace_config[Python_domain_index].mode;
+  unsigned int interval =
+      domain_sampling_config[Python_domain_index].interval_us;
+  return Py_BuildValue("(iI)", (int)intended, interval);
 }
 
 /* ================================================================
@@ -372,6 +426,14 @@ static PyMethodDef pysysmon_methods[] = {
      "returns the mode applied as an integer"},
     {"reset_trace_mode", (PyCFunction)reset_trace_mode, METH_NOARGS,
      "Switch Python domain back to STANDBY"},
+    {"start_sampler", (PyCFunction)start_sampler, METH_NOARGS,
+     "Register the Python stack probe with the sampler framework "
+     "(lazy: thread spawns only when [Python.sampling] interval_us > 0)"},
+    {"stop_sampler", (PyCFunction)stop_sampler, METH_NOARGS,
+     "Unregister the Python stack probe and join its sampler thread; "
+     "call before interpreter teardown"},
+    {"get_config", (PyCFunction)get_config, METH_NOARGS,
+     "Return (intended_trace_mode, sampling_interval_us) for the launcher"},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef pysysmon_module = {

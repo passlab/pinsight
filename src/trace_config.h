@@ -167,22 +167,28 @@ typedef struct punit_trace_config {
 } punit_trace_config_t;
 
 /**
- * Domain operating modes for fine-grained overhead control.
+ * Domain tracing operating modes for fine-grained overhead control.
+ *
+ * The mode ladder governs the EVENT tracing path (push instrumentation) only.
+ * The SAMPLE path (pull: periodic probes) is an independent instrument
+ * controlled per domain by [Domain.sampling] interval_us — see
+ * domain_sampling_config_t below; neither instrument gates the other.
  *
  * OFF:        Permanent teardown — callbacks deregistered/finalized,
  *             zero per-event overhead, irreversible.
  * STANDBY:    Callback-ready but immediate return — near-zero overhead,
  *             reversible. Tool infrastructure stays alive.
- * MONITORING: LRU lookup + count only — no config resolution, no LTTng.
+ * MONITORING: LRU lookup + count only — no config resolution, no LTTng
+ *             event emission (sample records are independent of modes).
  * TRACING:    Full tracing with LTTng output (default).
  */
 typedef enum {
-  PINSIGHT_DOMAIN_NONE = 0, /* No mode specified (only for window_end_action) */
-  PINSIGHT_DOMAIN_OFF = 1,  /* Permanent teardown */
-  PINSIGHT_DOMAIN_STANDBY = 2,    /* Callback-ready, immediate return */
-  PINSIGHT_DOMAIN_MONITORING = 3, /* LRU lookup + count, no LTTng */
-  PINSIGHT_DOMAIN_TRACING = 4,    /* Full tracing (default) */
-} pinsight_domain_mode_t;
+  PINSIGHT_TRACE_MODE_NONE = 0, /* No mode specified (only for window_end_action) */
+  PINSIGHT_TRACE_MODE_OFF = 1,  /* Permanent teardown */
+  PINSIGHT_TRACE_MODE_STANDBY = 2,    /* Callback-ready, immediate return */
+  PINSIGHT_TRACE_MODE_MONITORING = 3, /* LRU lookup + count, no LTTng */
+  PINSIGHT_TRACE_MODE_TRACING = 4,    /* Full tracing (default) */
+} domain_trace_mode_t;
 
 /* Node-policy — WHICH ranks perform a per-node capability measurement of the node
  * (HIP/CUDA GPU-activity pool, energy). Resolved once per run (at startup;
@@ -202,37 +208,68 @@ typedef struct {
 } pinsight_nodepolicy_val_t;
 
 /* True if domain is active (MONITORING or TRACING — does lexgion work) */
-#define PINSIGHT_DOMAIN_ACTIVE(mode) ((mode) >= PINSIGHT_DOMAIN_MONITORING)
+#define DOMAIN_TRACE_ACTIVE(mode) ((mode) >= PINSIGHT_TRACE_MODE_MONITORING)
 /* True if domain should emit LTTng tracepoints */
 #define PINSIGHT_SHOULD_TRACE(domain)                                          \
-  (domain_default_trace_config[domain].mode == PINSIGHT_DOMAIN_TRACING)
+  (domain_trace_config[domain].mode == PINSIGHT_TRACE_MODE_TRACING)
 /* True if tool is alive (STANDBY, MONITORING, or TRACING — can be activated) */
-#define PINSIGHT_DOMAIN_ALIVE(mode) ((mode) >= PINSIGHT_DOMAIN_STANDBY)
+#define DOMAIN_TRACE_ALIVE(mode) ((mode) >= PINSIGHT_TRACE_MODE_STANDBY)
 
 /* Convert mode enum to string — eliminates scattered ternary chains */
-static inline const char *pinsight_mode_str(pinsight_domain_mode_t mode) {
+static inline const char *pinsight_trace_mode_str(domain_trace_mode_t mode) {
   switch (mode) {
-  case PINSIGHT_DOMAIN_OFF:
+  case PINSIGHT_TRACE_MODE_OFF:
     return "OFF";
-  case PINSIGHT_DOMAIN_STANDBY:
+  case PINSIGHT_TRACE_MODE_STANDBY:
     return "STANDBY";
-  case PINSIGHT_DOMAIN_MONITORING:
+  case PINSIGHT_TRACE_MODE_MONITORING:
     return "MONITORING";
-  case PINSIGHT_DOMAIN_TRACING:
+  case PINSIGHT_TRACE_MODE_TRACING:
     return "TRACING";
   default:
     return "NONE";
   }
 }
 
+/* ---- Sampling instrument config — [Domain.sampling] sections -------------
+ * (sampler_impl_plan.md S1a; hybrid design REV 10/12.) One per domain,
+ * independent of the trace-mode ladder above. All keys parse from S1;
+ * `output` and `overhead_budget` are stored but inactive until A1/O4.
+ * `sampler_thread` and `process_fraction` are LATCHED at probe start —
+ * not hot-reloadable; a reload that changes them warns and keeps the
+ * running values. */
+typedef enum {
+  PINSIGHT_SAMPLING_OUTPUT_RECORD = 0, /* emit sample records (default) */
+  PINSIGHT_SAMPLING_OUTPUT_PROFILE = 1, /* A1: in-memory aggregation */
+  PINSIGHT_SAMPLING_OUTPUT_BOTH = 2,
+} domain_sampling_output_t;
+
+typedef struct pinsight_sampling_config {
+  volatile unsigned int interval_us; /* THE switch: 0 = disabled (default) */
+  int sampler_thread_own;            /* 0 = shared (default), 1 = own */
+  volatile unsigned int max_depth;   /* stack-walk cap, default 128 */
+  volatile float overhead_budget_pct; /* 0 = unset; O4 control loop */
+  volatile int output;               /* domain_sampling_output_t */
+  float process_fraction;            /* (0,1], default 1.0; one draw at start */
+} domain_sampling_config_t;
+extern domain_sampling_config_t domain_sampling_config[MAX_NUM_DOMAINS];
+extern void domain_sampling_config_seed_defaults(void);
+#define PINSIGHT_SAMPLING_DEFAULT_MAX_DEPTH 128
+
+/* Reserved gtid block for PInsight-internal threads (thread-numbering D3,
+ * 2026-08-31): never assigned to app threads, never renumbered by any
+ * domain init path. 5000 = control thread (future wiring), 5001+ = sampler
+ * threads. */
+#define PINSIGHT_UTILITY_GTID_BASE 5000
+
 /**
- * The default domain trace config that specifies the events on/off for the
+ * The domain trace config that specifies the events on/off for the
  * domain
  */
 typedef struct domain_trace_config { // The trace config for a domain
-  volatile pinsight_domain_mode_t
+  volatile domain_trace_mode_t
       mode; // Domain operating mode (OFF/STANDBY/MONITORING/TRACING)
-  volatile pinsight_domain_mode_t
+  volatile domain_trace_mode_t
       last_mode; // Previous mode (for transition detection, zero-init = NONE)
   volatile unsigned long int
       events; // The default event config for the domain, initially copied from
@@ -240,10 +277,10 @@ typedef struct domain_trace_config { // The trace config for a domain
   volatile int mode_change_fired; // Once-per-domain latch: set when end_action
                                   // fires, reset on config reload
   // Parsed node-policy values, indexed the same as domain_info.nodepolicy_keys[].
-  // Set from [Domain.default]; defaults copied from the DSL-declared defaults.
+  // Set from [Domain.tracing]; defaults copied from the DSL-declared defaults.
   volatile pinsight_nodepolicy_val_t nodepolicy[MAX_NUM_NODEPOLICY_KEYS];
 } domain_trace_config_t;
-extern domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
+extern domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
 extern punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
 
 /* Count-trigger policy that ends a TRACING window via max_num_traces.
@@ -262,12 +299,12 @@ typedef enum window_end_trigger {
  * Unified window_end_action action: handles both regular mode switching
  * (e.g. MONITORING, OpenMP:OFF) and INTROSPECT with timeout/script.
  *
- * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect ==
- * 0. For INTROSPECT:     introspect == 1, introspect_pause_duration/introspect_script
+ * For non-INTROSPECT: mode[] specifies per-domain target modes, introspect == 0
+ * For INTROSPECT:     introspect == 1, introspect_pause_duration/introspect_script
  * set, mode[] specifies per-domain resume modes after introspection.
  */
 typedef struct window_end_action {
-  pinsight_domain_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
+  domain_trace_mode_t mode[MAX_NUM_DOMAINS]; // target mode per domain
                                                 // (NONE = no change)
   int introspect;              // 1 = introspect before switching modes
   int introspect_pause_duration;      // >0: pause N seconds, 0: no pause, <0: wait
@@ -288,6 +325,12 @@ typedef struct window_end_action {
   // (that is the point: host-on / activity-off per window).
   pinsight_nodepolicy_val_t np_target[MAX_NUM_DOMAINS];
   unsigned char np_set[MAX_NUM_DOMAINS];
+  // Sampler plan B.4: per-domain sampling-interval target at window end
+  // ("Python:sampling=1000"; numeric only, 0 disables — no "off" keyword).
+  // sampling_set[d]=1 → write sampling_target[d] into the domain's
+  // [Domain.sampling] interval_us and kick the sampler framework.
+  unsigned int sampling_target[MAX_NUM_DOMAINS];
+  unsigned char sampling_set[MAX_NUM_DOMAINS];
 } window_end_action_t;
 
 /**
@@ -341,10 +384,10 @@ extern lexgion_trace_config_t *lexgion_domain_default_trace_config;
 extern lexgion_trace_config_t *lexgion_trace_config;
 extern int num_lexgion_trace_configs;
 extern unsigned int
-    trace_config_change_counter; /* bumped on every reconfig to invalidate
+    config_change_counter; /* bumped on every reconfig to invalidate
                                 cached trace_config in lexgions */
-extern void pinsight_load_trace_config(char *filepath);
-void parse_trace_config_file(char *filename);
+extern void pinsight_load_config(char *filepath);
+void parse_config_file(char *filename);
 extern int find_domain_index(const char *name);
 
 // Unified parser for window_end_action values:
@@ -384,7 +427,7 @@ typedef struct domain_info {
   unsigned long int
       eventInstallStatus; // For setting whether the event is enabled or not
 
-  pinsight_domain_mode_t starting_mode;
+  domain_trace_mode_t starting_mode;
   struct punit {
     char name[16];
     unsigned int low; // should be 0
@@ -412,15 +455,15 @@ extern struct domain_info domain_info_table[MAX_NUM_DOMAINS];
 // Serialization functions
 extern void dsl_print_domain_info(struct domain_info *d);
 extern void print_domain_info(FILE *out);
-extern void print_domain_trace_config(FILE *out);
+extern void print_domain_config(FILE *out);
 extern void print_lexgion_trace_config(FILE *out);
-extern void pinsight_load_trace_config(char *filepath);
+extern void pinsight_load_config(char *filepath);
 extern void pinsight_invalidate_config_mtime(void);
 
 // ---- Effective-config dump cache (WS1 manifest — ws1_manifest_design.md §2.8)
 // Round-trippable in-memory dump of the EFFECTIVE config (domain config + app
 // knobs; NOT the file bytes) and its FNV-1a 64 hash. Refreshed automatically
-// at the end of EVERY pinsight_load_trace_config (initial load and reloads).
+// at the end of EVERY pinsight_load_config (initial load and reloads).
 // SWMR: the buffer belongs to the load callers (constructor, control thread);
 // any thread may read the hash via the atomic getter (relaxed — a plain mov).
 extern void pinsight_config_dump_refresh(void);

@@ -85,6 +85,49 @@ LTTNG_UST_TRACEPOINT_EVENT(pysysmon_pinsight_lttng_ust, c_call_end,
     )
 )
 
+/* ---- Sampling instrument (S1, sampler_impl_plan.md) ---------------------
+ * Emitted by the Python stack probe running on a framework sampler thread —
+ * NOT by sys.monitoring callbacks. Sample records are independent of the
+ * trace-mode ladder (hybrid design REV 10). */
+
+/* Once per newly-seen code object: interns code_id → name (S2 replaces the
+ * dedup set with the core code table; the event stays). */
+LTTNG_UST_TRACEPOINT_EVENT(pysysmon_pinsight_lttng_ust, code_manifest,
+    LTTNG_UST_TP_ARGS(
+        unsigned long, code_id,
+        const char *, qualname,
+        const char *, filename,
+        int, lineno
+    ),
+    LTTNG_UST_TP_FIELDS(
+        lttng_ust_field_integer_hex(unsigned long, code_id, code_id)
+        lttng_ust_field_string(qualname, qualname)
+        lttng_ust_field_string(filename, filename)
+        lttng_ust_field_integer(int, lineno, lineno)
+    )
+)
+
+/* One per sampled thread per tick: the interpreter stack as code_id[]
+ * (leaf-first). python_thread_id = -1 for threads never seen by a callback
+ * (join on tstate). truncated = walk hit max_depth. S2 swaps the array for
+ * a CCT leaf id (accepted pre-release format churn, D2). */
+LTTNG_UST_TRACEPOINT_EVENT(pysysmon_pinsight_lttng_ust, stack_sample,
+    LTTNG_UST_TP_ARGS(
+        int, python_thread_id,
+        unsigned long, tstate,
+        unsigned int, depth,
+        int, truncated,
+        unsigned long *, code_ids
+    ),
+    LTTNG_UST_TP_FIELDS(
+        lttng_ust_field_integer(int, python_thread_id, python_thread_id)
+        lttng_ust_field_integer_hex(unsigned long, tstate, tstate)
+        lttng_ust_field_integer(int, truncated, truncated)
+        lttng_ust_field_sequence(unsigned long, code_ids, code_ids,
+                                 unsigned int, depth)
+    )
+)
+
 #ifdef __cplusplus
 }
 #endif

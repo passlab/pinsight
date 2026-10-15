@@ -1,4 +1,4 @@
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode = TRACING
     OpenMP.team = (0, 255)
     OpenMP.thread = (0, 255)

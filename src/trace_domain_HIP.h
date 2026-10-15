@@ -185,8 +185,8 @@ static inline struct domain_info *register_HIP_trace_domain(void) {
 #undef TRACE_IMPL_DOMAIN_BEGIN
 
   HIP_domain_info = &domain_info_table[HIP_domain_index];
-  HIP_domain_info->starting_mode = PINSIGHT_DOMAIN_TRACING;
-  HIP_trace_config = &domain_default_trace_config[HIP_domain_index];
+  HIP_domain_info->starting_mode = PINSIGHT_TRACE_MODE_TRACING;
+  HIP_trace_config = &domain_trace_config[HIP_domain_index];
   return HIP_domain_info;
 }
 

@@ -27,7 +27,7 @@ export LD_LIBRARY_PATH=$LTTNG_HOME/lib:$ROCM_PATH/lib:${LD_LIBRARY_PATH:-}
 
 [ -x "$BIN" ] || { echo "build first:  make looping_pinsight"; exit 1; }
 [ -e "$PINSIGHT_LIB" ] || { echo "missing $PINSIGHT_LIB (build with PINSIGHT_HIP=TRUE)"; exit 1; }
-mkcfg() { printf '[HIP.default]\n    trace_mode = %s\n' "$1" > "$CFG"; }
+mkcfg() { printf '[HIP.tracing]\n    trace_mode = %s\n' "$1" > "$CFG"; }
 
 mkcfg TRACING
 lttng destroy -a >/dev/null 2>&1
@@ -37,7 +37,7 @@ lttng enable-event -u 'roctracer_pinsight_lttng_ust:*' >/dev/null
 lttng start >/dev/null
 
 # 90 iters x 120 ms ~ 11 s ; switch every 3 s.  Run DIRECTLY (see GOTCHA).
-env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE="$CFG" "$BIN" 90 120 \
+env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_CONFIG_FILE="$CFG" "$BIN" 90 120 \
     >/dev/null 2>"$OUT".applog &
 APP=$!
 echo "looping_pinsight pid=$APP, cycling HIP mode every 3s:"

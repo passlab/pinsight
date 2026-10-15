@@ -2,7 +2,7 @@
 # device_activity node-policy gate test for the CUDA/CUPTI domain.
 #
 # This is the automated form of the hand-run matrix smoke (job 288097) that
-# HW-validated the NVIDIA gate: it asserts that `[CUDA.default] device_activity`
+# HW-validated the NVIDIA gate: it asserts that `[CUDA.tracing] device_activity`
 # controls ONLY the CUPTI activity collection, never host-side CUDA tracing.
 #
 # Arms:
@@ -62,7 +62,7 @@ BT=$(command -v babeltrace2 || command -v babeltrace) || {
 fails=0
 lttng-sessiond --daemonize >/dev/null 2>&1; sleep 0.3
 
-mkcfg() { printf '[CUDA.default]\n    trace_mode = TRACING\n    device_activity = %s\n' "$1" > "$CFG"; }
+mkcfg() { printf '[CUDA.tracing]\n    trace_mode = TRACING\n    device_activity = %s\n' "$1" > "$CFG"; }
 
 # mpirun flavor: Open MPI wants --oversubscribe and -x NAME=VALUE; MPICH/Hydra
 # rejects both (its mpiexec aborts on --oversubscribe, so the multi-rank arms
@@ -76,11 +76,11 @@ if command -v mpirun >/dev/null 2>&1 && \
 fi
 
 # mpi_launch <nranks> <cmd...> — run under mpirun with the pinsight env
-# (LD_PRELOAD, PINSIGHT_TRACE_CONFIG_FILE, and the optional vars when set)
+# (LD_PRELOAD, PINSIGHT_CONFIG_FILE, and the optional vars when set)
 # forwarded to every rank in the launcher's own dialect.
 mpi_launch() {
     local n="$1"; shift
-    local -a envs=(LD_PRELOAD "$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE "$CFG")
+    local -a envs=(LD_PRELOAD "$PINSIGHT_LIB" PINSIGHT_CONFIG_FILE "$CFG")
     [ -n "${LD_LIBRARY_PATH:-}" ]         && envs+=(LD_LIBRARY_PATH "$LD_LIBRARY_PATH")
     [ -n "${PINSIGHT_DEBUG_ACTIVITY:-}" ] && envs+=(PINSIGHT_DEBUG_ACTIVITY "$PINSIGHT_DEBUG_ACTIVITY")
     [ -n "${MAPFILE:-}" ]                 && envs+=(MAPFILE "$MAPFILE")
@@ -107,7 +107,7 @@ run_arm() {
     if [ "$nranks" -gt 1 ]; then
         mpi_launch "$nranks" "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
     else
-        env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE="$CFG" \
+        env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_CONFIG_FILE="$CFG" \
             "$BIN" "$iters" "$sleep_ms" >/dev/null 2>"$OUT".applog
     fi
     lttng stop >/dev/null; lttng destroy >/dev/null 2>&1

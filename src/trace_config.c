@@ -40,7 +40,24 @@
 __attribute__((used)) static char pinsight_layout_pad_cfg[PINSIGHT_LAYOUT_PAD] = {1};
 #endif
 struct domain_info domain_info_table[MAX_NUM_DOMAINS];
-domain_trace_config_t domain_default_trace_config[MAX_NUM_DOMAINS];
+domain_trace_config_t domain_trace_config[MAX_NUM_DOMAINS];
+domain_sampling_config_t domain_sampling_config[MAX_NUM_DOMAINS];
+
+/* Seed [Domain.sampling] defaults for all domains ([Domain.sampling]
+ * parsing overrides them). interval 0 = sampling disabled — opt-in by
+ * design (hybrid design REV 10: a nonzero compiled default would make
+ * default STANDBY runs sample). Called from initial_setup_config
+ * and from test harnesses that bypass it. */
+void domain_sampling_config_seed_defaults(void) {
+  for (int i = 0; i < MAX_NUM_DOMAINS; i++) {
+    domain_sampling_config[i].interval_us = 0;
+    domain_sampling_config[i].sampler_thread_own = 0;
+    domain_sampling_config[i].max_depth = PINSIGHT_SAMPLING_DEFAULT_MAX_DEPTH;
+    domain_sampling_config[i].overhead_budget_pct = 0.0f;
+    domain_sampling_config[i].output = PINSIGHT_SAMPLING_OUTPUT_RECORD;
+    domain_sampling_config[i].process_fraction = 1.0f;
+  }
+}
 punit_trace_config_t *domain_punit_trace_config[MAX_NUM_DOMAINS];
 int num_domain = 0;
 
@@ -53,7 +70,7 @@ lexgion_trace_config_t *lexgion_domain_default_trace_config =
 lexgion_trace_config_t *lexgion_trace_config =
     &all_lexgion_trace_config[1 + MAX_NUM_DOMAINS];
 int num_lexgion_trace_configs = 0;
-unsigned int trace_config_change_counter = 0;
+unsigned int config_change_counter = 0;
 
 #ifdef PINSIGHT_CUDA
 static inline int pinsight_cuda_runtime_available(void);
@@ -118,7 +135,7 @@ lexgion_trace_config_t *retrieve_lexgion_trace_config(const void *codeptr) {
   return NULL;
 }
 
-void setup_trace_config_env() {
+void setup_config_env() {
   // 1. Override Domain Defaults
   for (int i = 0; i < num_domain; i++) {
     char env_var[256];
@@ -135,33 +152,50 @@ void setup_trace_config_env() {
     if (val) {
       if (strcasecmp(val, "OFF") == 0 || strcasecmp(val, "FALSE") == 0 ||
           strcmp(val, "0") == 0) {
-        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_OFF;
+        domain_trace_config[i].mode = PINSIGHT_TRACE_MODE_OFF;
       } else if (strcasecmp(val, "STANDBY") == 0) {
-        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_STANDBY;
+        domain_trace_config[i].mode = PINSIGHT_TRACE_MODE_STANDBY;
       } else if (strcasecmp(val, "MONITORING") == 0 ||
                  strcasecmp(val, "MONITOR") == 0) {
-        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_MONITORING;
+        domain_trace_config[i].mode = PINSIGHT_TRACE_MODE_MONITORING;
       } else {
         /* ON, TRACING, TRUE, 1, or any unrecognized → full tracing */
-        domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_TRACING;
+        domain_trace_config[i].mode = PINSIGHT_TRACE_MODE_TRACING;
       }
     }
   }
 
+  // 1b. Sampling instrument: PINSIGHT_SAMPLING_<DOMAIN> = <interval_us>
+  // (0 = disabled). Counterpart of PINSIGHT_TRACE_<DOMAIN> for the sample
+  // path — env-only deployments can enable sampling without a config file.
+  for (int i = 0; i < num_domain; i++) {
+    char senv_var[256];
+    struct domain_info *sd = &domain_info_table[i];
+    snprintf(senv_var, sizeof(senv_var), "PINSIGHT_SAMPLING_%s", sd->name);
+    for (int j = 18; senv_var[j]; j++) /* "PINSIGHT_SAMPLING_" = 18 chars */
+      senv_var[j] = toupper((unsigned char)senv_var[j]);
+    char *sval = getenv(senv_var);
+    if (sval) {
+      long v = atol(sval);
+      if (v < 0) {
+        fprintf(stderr, "PInsight Warning: %s='%s' invalid — sampling "
+                        "disabled (0)\n", senv_var, sval);
+        v = 0;
+      }
+      domain_sampling_config[i].interval_us = (unsigned int)v;
+    }
+  }
+
   // 2. Override Lexgion Window
-  // PINSIGHT_TRACE_WINDOW=start:max:rate:window_timeout[:end_action_string]
+  // PINSIGHT_WINDOW=start:max:rate:window_timeout[:end_action_string]
   //   window_timeout = wall-clock seconds ending the window (0 = disabled)
   // end_action_string can be:
   //   MONITORING | OpenMP:MONITORING | OpenMP:MONITORING,MPI:OFF
-  //   INTROSPECT:60:script.sh[:TRACING]
-  // PINSIGHT_TRACE_RATE is retained as a DEPRECATED ALIAS (same grammar).
-  char *win_env = getenv("PINSIGHT_TRACE_WINDOW");
-  if (!win_env) {
-    win_env = getenv("PINSIGHT_TRACE_RATE"); /* deprecated alias */
-    if (win_env)
-      fprintf(stderr, "PInsight WARNING: PINSIGHT_TRACE_RATE is deprecated; "
-                      "use PINSIGHT_TRACE_WINDOW (same grammar)\n");
-  }
+  //   INTROSPECT:60:script.sh[:TRACING] | Python:sampling=1000
+  // (the window is a cross-instrument concept — its action may flip
+  // sampling — hence no TRACE word; renamed from PINSIGHT_TRACE_WINDOW,
+  // all aliases removed 2026-10-14.)
+  char *win_env = getenv("PINSIGHT_WINDOW");
   if (win_env) {
     // Parse first 4 numeric fields separated by ':'
     int start = 0, max = 0, rate = 0, window = 0;
@@ -192,7 +226,7 @@ void setup_trace_config_env() {
 
 static time_t last_config_mtime = 0;
 
-/* Force the next pinsight_load_trace_config call to re-parse even if mtime is
+/* Force the next pinsight_load_config call to re-parse even if mtime is
  * unchanged (e.g. SIGUSR1-triggered reload where file was overwritten in-place
  * within the same second). */
 void pinsight_invalidate_config_mtime(void) {
@@ -203,9 +237,11 @@ void pinsight_invalidate_config_mtime(void) {
  * pinsight_control_thread.c. The control thread now handles all
  * config reloading and mode switching centrally. */
 
-void pinsight_load_trace_config(char *filepath) {
+void pinsight_load_config(char *filepath) {
   if (!filepath) {
-    filepath = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+    /* PINSIGHT_CONFIG_FILE: the file configures BOTH instruments
+     * (PINSIGHT_TRACE_CONFIG_FILE alias removed 2026-10-14). */
+    filepath = getenv("PINSIGHT_CONFIG_FILE");
   }
 
   // Fallback: check default config file in current working directory
@@ -233,13 +269,13 @@ void pinsight_load_trace_config(char *filepath) {
     /* Invalidate named lexgion configs before re-parsing. Named entries have
      * name[0]!='\0' and codeptr==NULL. Marking them removed here ensures stale
      * bindings are not used after reload. The name_resolved_gen mismatch caused
-     * by trace_config_change_counter++ below drives each callback to re-set
+     * by config_change_counter++ below drives each callback to re-set
      * lgp->name, which then re-matches against the freshly parsed named entries. */
     for (int i = 0; i < num_lexgion_trace_configs; i++) {
       if (lexgion_trace_config[i].name[0])
         lexgion_trace_config[i].removed = 1;
     }
-    parse_trace_config_file(filepath);
+    parse_config_file(filepath);
 
     // Fill domain defaults: combine global lexgion default (rate triple) with
     // each domain's default event config for domains not explicitly configured
@@ -257,10 +293,10 @@ void pinsight_load_trace_config(char *filepath) {
       dlg->codeptr = (void *)(uintptr_t)(i + 1);
       // Merge this domain's default event config
       dlg->domain_events[i].set = 1;
-      dlg->domain_events[i].events = domain_default_trace_config[i].events;
+      dlg->domain_events[i].events = domain_trace_config[i].events;
     }
 
-    trace_config_change_counter++; // Bump counter so threads re-resolve
+    config_change_counter++; // Bump counter so threads re-resolve
                                    // cached trace_config pointers
   }
 
@@ -284,7 +320,7 @@ void pinsight_config_dump_refresh(void) {
   FILE *f = open_memstream(&buf, &len);
   if (!f)
     return;
-  print_domain_trace_config(f);
+  print_domain_config(f);
   pinsight_print_knob_config(f);
   fclose(f);
   if (!buf)
@@ -308,7 +344,7 @@ const char *pinsight_config_dump_get(size_t *lenp) {
   return config_dump_buf;
 }
 
-void initial_setup_trace_config() {
+void initial_setup_config() {
 #ifdef PINSIGHT_OPENMP
   register_OpenMP_trace_domain();
   // OpenMP support is initialized by ompt_start_tool() callback that is
@@ -335,19 +371,20 @@ void initial_setup_trace_config() {
   // domain_info_table that has the installed events and starting mode
   int i;
   for (i = 0; i < num_domain; i++) {
-    domain_default_trace_config[i].events =
+    domain_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
-    domain_default_trace_config[i].mode_change_fired = 0;
-    domain_default_trace_config[i].mode = domain_info_table[i].starting_mode;
-    domain_default_trace_config[i].last_mode = PINSIGHT_DOMAIN_NONE;
-    // Seed node-policy values from the DSL-declared defaults ([Domain.default]
+    domain_trace_config[i].mode_change_fired = 0;
+    domain_trace_config[i].mode = domain_info_table[i].starting_mode;
+    domain_trace_config[i].last_mode = PINSIGHT_TRACE_MODE_NONE;
+    // Seed node-policy values from the DSL-declared defaults ([Domain.tracing]
     // parsing overrides them).
     for (int k = 0; k < domain_info_table[i].num_nodepolicy_keys; k++) {
-      domain_default_trace_config[i].nodepolicy[k].policy =
+      domain_trace_config[i].nodepolicy[k].policy =
           domain_info_table[i].nodepolicy_keys[k].dflt;
-      domain_default_trace_config[i].nodepolicy[k].param = 0;
+      domain_trace_config[i].nodepolicy[k].param = 0;
     }
   }
+  domain_sampling_config_seed_defaults();
 
   // Initialize the default lexgion trace config
   lexgion_default_trace_config->codeptr = NULL;
@@ -370,8 +407,8 @@ void initial_setup_trace_config() {
         NULL; // NULL for empty config
   }
 
-  pinsight_load_trace_config(NULL);
-  setup_trace_config_env();
+  pinsight_load_config(NULL);
+  setup_config_env();
 
   /* Never-fires guard: the 'all' count policy fires only once every region this
    * thread has seen has capped; if a region is rare/never re-reached the TRACING
@@ -393,10 +430,10 @@ void initial_setup_trace_config() {
    * The launcher calls _pinsight_python.set_trace_mode() after all callbacks
    * are registered (imports complete) to restore the intended mode.
    * This prevents stdlib imports from consuming per-thread lexgion cache slots. */
-  domain_default_trace_config[Python_domain_index].last_mode =
-      domain_default_trace_config[Python_domain_index].mode;
-  domain_default_trace_config[Python_domain_index].mode =
-      PINSIGHT_DOMAIN_STANDBY;
+  domain_trace_config[Python_domain_index].last_mode =
+      domain_trace_config[Python_domain_index].mode;
+  domain_trace_config[Python_domain_index].mode =
+      PINSIGHT_TRACE_MODE_STANDBY;
 #endif
 
   /* Signal handler is now installed by pinsight_control_thread_start()
@@ -408,7 +445,7 @@ void initial_setup_trace_config() {
     struct domain_info *d = &domain_info_table[di];
     dsl_print_domain_info(d);
   }
-  print_domain_trace_config(stdout);
+  print_domain_config(stdout);
   print_lexgion_trace_config(stdout);
   pinsight_print_knob_config(stdout);
 #endif
@@ -480,7 +517,7 @@ void dsl_print_domain_info(struct domain_info *d) {
   }
 
   /* [Domain.default] section: trace_mode and punit ranges */
-  const char *mode_str = pinsight_mode_str(d->starting_mode);
+  const char *mode_str = pinsight_trace_mode_str(d->starting_mode);
   fprintf(fp, "[%s.default]\n", d->name);
   fprintf(fp, "    trace_mode = %s\n", mode_str);
   for (int i = 0; i < d->num_punits; ++i) {
@@ -489,11 +526,12 @@ void dsl_print_domain_info(struct domain_info *d) {
   }
   fprintf(fp, "\n");
 
-  /* [Domain(subdomain).default] sections: events with on/off status */
+  /* [Domain(subdomain).tracing] sections: events with on/off status
+   * (informational — the parser does not consume subdomain sections) */
   for (int s = 0; s < d->num_subdomains; ++s) {
     struct subdomain *sub = &d->subdomains[s];
 
-    fprintf(fp, "[%s(%s).default]\n", d->name, sub->name);
+    fprintf(fp, "[%s(%s).tracing]\n", d->name, sub->name);
 
     for (int eid = 0; eid < d->event_id_upper; ++eid) {
       struct event *ev = &d->event_table[eid];
@@ -556,21 +594,23 @@ static void print_punit_set_filtered(FILE *out, domain_punit_set_t *set_array,
   }
 }
 
-void print_domain_trace_config(FILE *out) {
+void print_domain_config(FILE *out) {
   if (!out)
     return;
 
   for (int i = 0; i < num_domain; i++) {
     struct domain_info *d = &domain_info_table[i];
-    const char *mode_str = pinsight_mode_str(domain_default_trace_config[i].mode);
-    fprintf(out, "[%s.default]\n", d->name);
+    const char *mode_str = pinsight_trace_mode_str(domain_trace_config[i].mode);
+    /* canonical section name is [Domain.tracing]; ".default" is a permanent
+     * parser alias (sampler plan B.5). */
+    fprintf(out, "[%s.tracing]\n", d->name);
     fprintf(out, "    trace_mode = %s\n", mode_str);
     for (int p = 0; p < d->num_punits; p++) {
       struct punit *pu = &d->punits[p];
       fprintf(out, "    %s.%s = (%u, %u)\n", d->name, pu->name, pu->low,
               pu->high);
     }
-    unsigned long current_events = domain_default_trace_config[i].events;
+    unsigned long current_events = domain_trace_config[i].events;
     for (int k = 0; k < d->num_events; k++) {
       if (strlen(d->event_table[k].name) == 0)
         continue;
@@ -579,6 +619,25 @@ void print_domain_trace_config(FILE *out) {
       int on = (current_events >> k) & 1;
       fprintf(out, "    %s = %s\n", d->event_table[k].name, on ? "on" : "off");
     }
+    fprintf(out, "\n");
+
+    /* [Domain.sampling] — the sampling instrument (independent of modes).
+     * Always emitted so the WS1 config hash captures sampling settings. */
+    domain_sampling_config_t *sc = &domain_sampling_config[i];
+    fprintf(out, "[%s.sampling]\n", d->name);
+    fprintf(out, "    interval_us = %u\n", sc->interval_us);
+    fprintf(out, "    sampler_thread = %s\n",
+            sc->sampler_thread_own ? "own" : "shared");
+    fprintf(out, "    max_depth = %u\n", sc->max_depth);
+    if (sc->overhead_budget_pct > 0.0f)
+      fprintf(out, "    overhead_budget = %g%%\n",
+              (double)sc->overhead_budget_pct);
+    fprintf(out, "    output = %s\n",
+            sc->output == PINSIGHT_SAMPLING_OUTPUT_PROFILE  ? "profile"
+            : sc->output == PINSIGHT_SAMPLING_OUTPUT_BOTH   ? "both"
+                                                            : "record");
+    if (sc->process_fraction < 1.0f)
+      fprintf(out, "    process_fraction = %g\n", (double)sc->process_fraction);
     fprintf(out, "\n");
 
     punit_trace_config_t *curr = domain_punit_trace_config[i];
@@ -591,7 +650,7 @@ void print_domain_trace_config(FILE *out) {
       fprintf(out, "]");
 
       // Part 2: : Inheritance (Always matches domain default for Domain config)
-      fprintf(out, ": %s.default", d->name);
+      fprintf(out, ": %s.tracing", d->name);
 
       // Part 3: : PunitSet (Other domains)
       first = 0;
@@ -653,14 +712,14 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
       // Print resume mode (use first domain's mode as representative)
       int has_resume = 0;
       for (int d = 0; d < num_domain; d++) {
-        if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
+        if (ma->mode[d] != PINSIGHT_TRACE_MODE_NONE) {
           has_resume = 1;
           break;
         }
       }
       if (has_resume) {
         // Check if all domains have the same resume mode
-        pinsight_domain_mode_t common = ma->mode[0];
+        domain_trace_mode_t common = ma->mode[0];
         int all_same = 1;
         for (int d = 1; d < num_domain; d++) {
           if (ma->mode[d] != common) {
@@ -668,8 +727,8 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
             break;
           }
         }
-        if (all_same && common != PINSIGHT_DOMAIN_NONE) {
-          const char *mode_str = pinsight_mode_str(common);
+        if (all_same && common != PINSIGHT_TRACE_MODE_NONE) {
+          const char *mode_str = pinsight_trace_mode_str(common);
           fprintf(out, ":%s", mode_str);
         }
       }
@@ -677,7 +736,7 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
     } else {
       int has_end_action = 0;
       for (int d = 0; d < num_domain; d++) {
-        if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
+        if (ma->mode[d] != PINSIGHT_TRACE_MODE_NONE) {
           has_end_action = 1;
           break;
         }
@@ -686,8 +745,8 @@ static void print_single_lexgion_config(FILE *out, lexgion_trace_config_t *lg,
         fprintf(out, "    window_end_action =");
         int first = 1;
         for (int d = 0; d < num_domain; d++) {
-          if (ma->mode[d] != PINSIGHT_DOMAIN_NONE) {
-            const char *mode_str = pinsight_mode_str(ma->mode[d]);
+          if (ma->mode[d] != PINSIGHT_TRACE_MODE_NONE) {
+            const char *mode_str = pinsight_trace_mode_str(ma->mode[d]);
             if (!first)
               fprintf(out, ",");
             fprintf(out, " %s:%s", domain_info_table[d].name, mode_str);

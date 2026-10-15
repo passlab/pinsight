@@ -118,7 +118,7 @@ typedef struct lexgion {
   unsigned int num_exes_after_last_trace; /* counter to control the sampling
                                              based on trace rate */
   lexgion_trace_config_t *trace_config;
-  unsigned int trace_config_change_counter; /* change counter when trace_config
+  unsigned int config_change_counter; /* change counter when trace_config
                                                was resolved */
   unsigned int trace_bit; // bit to indicate whether to trace or not
 
@@ -131,7 +131,7 @@ typedef struct lexgion {
    * NULL for domains that do not support named matching (e.g. OpenMP). */
   const char *name;
   const char *filename_hint; /* optional: source file basename */
-  unsigned int name_resolved_gen; /* trace_config_change_counter value when
+  unsigned int name_resolved_gen; /* config_change_counter value when
                                    * name was last set; init = (unsigned int)-1
                                    * to force resolution on first callback */
 } lexgion_t;
@@ -149,7 +149,7 @@ typedef struct lexgion_record_t {
                                     * runtime stack) */
 } lexgion_record_t;
 
-extern domain_trace_config_t domain_default_trace_config[];
+extern domain_trace_config_t domain_trace_config[];
 
 /* the max depth of nested lexgion, 16 should be enough if we do not have
  * recursive such as in OpenMP tasking */
@@ -165,6 +165,9 @@ extern domain_trace_config_t domain_default_trace_config[];
 typedef struct pinsight_thread_data {
   int initialized; // flag to indicate whether the thread data is initialized or
                    // not
+  int utility_thread; /* 1 = PInsight-internal thread (control/sampler; gtid
+                       * from the reserved 5000+ block) — domain init paths
+                       * must never renumber it (thread-numbering D3) */
   int initial_parallel_task_initialized_flag; // flag to indicate whether the
                                               // initial parallel region and
                                               // task are initialized or not,
@@ -294,7 +297,7 @@ retrieve_lexgion_trace_config(const void *codeptr);
 // read env or config file at runtime to allow for user to provide new config
 // for tracing
 extern void lexgion_trace_reconfig();
-extern void initial_setup_trace_config();
+extern void initial_setup_config();
 
 #ifdef __cplusplus
 };

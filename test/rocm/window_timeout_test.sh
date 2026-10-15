@@ -37,7 +37,7 @@ WINDOW=${WINDOW:-3}        # end the TRACING window after 3 wall seconds
 
 # TRACING now, but bounded: end the window after $WINDOW s, then HIP -> MONITORING.
 cat > "$CFG" <<EOF
-[HIP.default]
+[HIP.tracing]
     trace_mode = TRACING
 [Lexgion.default]
     window_timeout = $WINDOW
@@ -51,7 +51,7 @@ lttng enable-event -u 'roctracer_pinsight_lttng_ust:*' >/dev/null
 lttng start >/dev/null
 
 echo "Running $BIN $ITERS $MS with window_timeout=${WINDOW}s -> HIP:MONITORING"
-env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE="$CFG" "$BIN" "$ITERS" "$MS" \
+env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_CONFIG_FILE="$CFG" "$BIN" "$ITERS" "$MS" \
     >/dev/null 2>"$OUT".applog &
 APP=$!
 wait $APP; rc=$?

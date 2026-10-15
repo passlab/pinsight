@@ -29,8 +29,9 @@ get_or_create_punit_config(int domain_idx, BitSet *punit_mask, int punit_kind,
 // State variables for parsing context of the four kinds of sections
 typedef enum {
   SECTION_NONE,
-  SECTION_DOMAIN_DEFAULT,
-  SECTION_DOMAIN_PUNIT,
+  SECTION_DOMAIN_TRACING,
+  SECTION_DOMAIN_SAMPLING, /* [Domain.sampling] — the sampling instrument */
+  SECTION_DOMAIN_TRACING_PUNIT,
   SECTION_LEXGION_ADDRESS_NAME,
   SECTION_LEXGION_DEFAULT,
   SECTION_LEXGION_DOMAIN_DEFAULT,
@@ -61,14 +62,14 @@ static int num_current_lexgion_configs = 0;
 
 // --- Utility Functions ---
 
-static pinsight_domain_mode_t parse_mode_value(const char *val) {
+static domain_trace_mode_t parse_trace_mode_value(const char *val) {
   if (strcasecmp(val, "OFF") == 0)
-    return PINSIGHT_DOMAIN_OFF;
+    return PINSIGHT_TRACE_MODE_OFF;
   if (strcasecmp(val, "STANDBY") == 0)
-    return PINSIGHT_DOMAIN_STANDBY;
+    return PINSIGHT_TRACE_MODE_STANDBY;
   if (strcasecmp(val, "MONITORING") == 0 || strcasecmp(val, "MONITOR") == 0)
-    return PINSIGHT_DOMAIN_MONITORING;
-  return PINSIGHT_DOMAIN_TRACING;
+    return PINSIGHT_TRACE_MODE_MONITORING;
+  return PINSIGHT_TRACE_MODE_TRACING;
 }
 
 /**
@@ -83,7 +84,7 @@ static pinsight_domain_mode_t parse_mode_value(const char *val) {
  *   "INTROSPECT:60:script.sh:OpenMP:STANDBY,CUDA:TRACE" -> introspect=1, per-domain resume
  *   "INTROSPECT:0:-"                                -> introspect indefinitely, no script
  *
- * Unspecified domains remain PINSIGHT_DOMAIN_NONE. The consumer is responsible
+ * Unspecified domains remain PINSIGHT_TRACE_MODE_NONE. The consumer is responsible
  * for applying a default policy (e.g., MONITORING) when mode[d] == NONE.
  *
  * Returns 0 on success, -1 on error.
@@ -161,8 +162,25 @@ int parse_window_end_action(const char *val, window_end_action_t *out) {
                               "device_activity key (window_end_action)\n",
                       domain_name);
             }
+          } else if (strncasecmp(ms, "sampling=", 9) == 0) {
+            /* Sampler plan B.4: numeric interval_us ONLY (0 disables).
+             * Deliberately no "sampling=off" keyword — OFF is a trace_mode
+             * word; two different "off" semantics in one action string
+             * would mislead. */
+            const char *num = ms + 9;
+            char *endp;
+            long v = strtol(num, &endp, 10);
+            if (endp == num || *endp != '\0' || v < 0) {
+              fprintf(stderr,
+                      "PInsight config: invalid sampling target '%s' in "
+                      "window_end_action (numeric interval_us only; 0 "
+                      "disables)\n", ms);
+            } else {
+              out->sampling_target[d_idx] = (unsigned int)v;
+              out->sampling_set[d_idx] = 1;
+            }
           } else {
-            out->mode[d_idx] = parse_mode_value(ms);
+            out->mode[d_idx] = parse_trace_mode_value(ms);
           }
         } else {
           fprintf(stderr, "PInsight config: unknown domain '%s' in "
@@ -173,7 +191,7 @@ int parse_window_end_action(const char *val, window_end_action_t *out) {
         char *end = trimmed + strlen(trimmed) - 1;
         while (end > trimmed && *end == ' ') *end-- = '\0';
 
-        pinsight_domain_mode_t m = parse_mode_value(trimmed);
+        domain_trace_mode_t m = parse_trace_mode_value(trimmed);
         for (int i = 0; i < num_domain; i++)
           out->mode[i] = m;
       }
@@ -184,13 +202,13 @@ int parse_window_end_action(const char *val, window_end_action_t *out) {
   /* Contradictory combo: an activity target only matters in TRACING; pairing it
    * with a mode change away from TRACING for the same domain is moot. */
   for (int d = 0; d < num_domain; d++) {
-    if (out->np_set[d] && out->mode[d] != PINSIGHT_DOMAIN_NONE &&
-        out->mode[d] != PINSIGHT_DOMAIN_TRACING) {
+    if (out->np_set[d] && out->mode[d] != PINSIGHT_TRACE_MODE_NONE &&
+        out->mode[d] != PINSIGHT_TRACE_MODE_TRACING) {
       fprintf(stderr,
               "PInsight config Warning: window_end_action sets both %s mode=%s "
               "and device_activity — the activity target has no effect outside "
               "TRACING\n",
-              domain_info_table[d].name, pinsight_mode_str(out->mode[d]));
+              domain_info_table[d].name, pinsight_trace_mode_str(out->mode[d]));
     }
   }
 
@@ -219,7 +237,7 @@ static int parse_range_list(const char *str, BitSet *mask) {
 
 // --- Parsing Logic ---
 
-void parse_trace_config_file(char *filename) {
+void parse_config_file(char *filename) {
   FILE *fp = fopen(filename, "r");
   if (!fp) {
     fprintf(stderr, "PInSight: Could not open trace configuration file %s.\n",
@@ -269,13 +287,19 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config,
                              char *inheritance_str);
 static int parse_punit_set_string(char *spec_str,
                                   domain_punit_set_t *set_array);
-static void reset_domain_default_config(int domain_idx);
+static void reset_domain_trace_config(int domain_idx);
+static void reset_domain_sampling_config(int domain_idx);
 static void reset_lexgion_config(lexgion_trace_config_t *lg);
 static punit_trace_config_t *
 find_exact_punit_config(int domain_idx, domain_punit_set_t *target_set);
 
 // Example section: [ACTION Target] : Inheritance : PunitSet
 // Target: Lexgion(...) or Domain.PunitKind(Set)
+static int target_has_suffix(const char *t, const char *suf) {
+  size_t lt = strlen(t), ls = strlen(suf);
+  return lt > ls && strcmp(t + lt - ls, suf) == 0;
+}
+
 static int parse_section_header(char *line) {
   // 1. Locate closing bracket ']'
   char *close_bracket = strchr(line, ']');
@@ -355,12 +379,12 @@ static int parse_section_header(char *line) {
             // Initialize from Lexgion.default + Domain.default so user
             // key-values apply on top of the correct base.  Also marks
             // codeptr non-NULL so the fill loop in
-            // pinsight_load_trace_config() skips this entry.
+            // pinsight_load_config() skips this entry.
             *lg = *lexgion_default_trace_config;
             lg->codeptr = (void *)(uintptr_t)(d_idx + 2);
             lg->domain_events[d_idx].set = 1;
             lg->domain_events[d_idx].events =
-                domain_default_trace_config[d_idx].events;
+                domain_trace_config[d_idx].events;
           }
         } else {
           /* Lexgion(0x...) or Lexgion(Name) or Lexgion(Domain:name, ...).
@@ -527,9 +551,51 @@ static int parse_section_header(char *line) {
   else if (strcmp(target, "Manifest") == 0) {
     current_section_type = SECTION_MANIFEST;
   }
-  // Case 2b: Domain.default
-  else if (strstr(target, ".default")) {
-    current_section_type = SECTION_DOMAIN_DEFAULT;
+  // Case 2b0: [Domain.sampling] — per-domain sampling-instrument section
+  // (sampler plan S1a/B.5). Independent of the trace-mode ladder; never an
+  // inheritance base for Lexgion sections.
+  else if (target_has_suffix(target, ".sampling")) {
+    char *dot = strrchr(target, '.');
+    *dot = '\0';
+    int idx = find_domain_index(target);
+    if (idx < 0) {
+      fprintf(stderr,
+              "PInsight Warning: unknown domain '%s' in [%s.sampling]. "
+              "Ignoring section.\n", target, target);
+      current_section_type = SECTION_NONE;
+      return 0;
+    }
+    current_domain_idx = idx;
+    if (action == ACTION_REMOVE) {
+      fprintf(stderr, "PInsight Warning: REMOVE is not valid for "
+                      "Domain.sampling. Use RESET instead. Ignoring.\n");
+      current_section_type = SECTION_NONE;
+      return 0;
+    }
+    if (action == ACTION_RESET) {
+      reset_domain_sampling_config(idx);
+      current_section_type = SECTION_NONE;
+      return 0;
+    }
+    current_section_type = SECTION_DOMAIN_SAMPLING;
+  }
+  // Case 2b-reject: [*.default] domain sections REMOVED 2026-10-14 (no
+  // alias) — canonical is [Domain.tracing]. Explicit error so old config
+  // files fail loudly with guidance, not silently.
+  // (Lexgion.default / Lexgion(Domain).default were consumed by Case 1
+  // above — those names are kept: tracing-only, scope-marker 'default'.)
+  else if (target_has_suffix(target, ".default")) {
+    fprintf(stderr,
+            "PInsight ERROR: section [%s] — '.default' domain sections were "
+            "removed; use [<Domain>.tracing] (event path) or "
+            "[<Domain>.sampling] (sample path). Ignoring section.\n",
+            target);
+    current_section_type = SECTION_NONE;
+    return 0;
+  }
+  // Case 2b: Domain.tracing (the event-path/tracing-instrument section)
+  else if (target_has_suffix(target, ".tracing")) {
+    current_section_type = SECTION_DOMAIN_TRACING;
     is_default_section = 1;
     char *dot = strchr(target, '.');
     if (dot) {
@@ -541,14 +607,14 @@ static int parse_section_header(char *line) {
         // Validate action
         if (action == ACTION_REMOVE) {
           fprintf(stderr, "PInsight Warning: REMOVE is not valid for "
-                          "Domain.default. Use RESET instead. Ignoring.\n");
+                          "Domain.tracing. Use RESET instead. Ignoring.\n");
           current_section_type = SECTION_NONE;
           return 0;
         }
 
         // RESET: revert to system install defaults (no body)
         if (action == ACTION_RESET) {
-          reset_domain_default_config(idx);
+          reset_domain_trace_config(idx);
           current_section_type = SECTION_NONE; // No body for RESET
           return 0;
         }
@@ -559,7 +625,7 @@ static int parse_section_header(char *line) {
   }
   // Case 3: Domain.punit specification
   else {
-    current_section_type = SECTION_DOMAIN_PUNIT;
+    current_section_type = SECTION_DOMAIN_TRACING_PUNIT;
 
     // Validate action: RESET not valid for punit sections
     if (action == ACTION_RESET) {
@@ -706,12 +772,13 @@ static int parse_section_header(char *line) {
           // Apply Inheritance (Part 2)
           if (parts[0]) {
             char *inh_str = parts[0];
-            char *d_dot = strstr(inh_str, ".default");
+            char *d_dot = strstr(inh_str, ".tracing"); /* canonical only:
+              the '.default' section alias does not apply to inheritance */
             if (d_dot) {
               *d_dot = '\0';
               int parent_idx = find_domain_index(inh_str);
               if (parent_idx >= 0)
-                config->events = domain_default_trace_config[parent_idx].events;
+                config->events = domain_trace_config[parent_idx].events;
             }
           }
 
@@ -844,9 +911,81 @@ static void parse_key_value(char *line) {
         *dot = '.'; // restore
       }
     }
-  } else if (((current_section_type == SECTION_DOMAIN_DEFAULT &&
+  } else if (current_section_type == SECTION_DOMAIN_SAMPLING &&
+             current_domain_idx >= 0) {
+    /* --- [Domain.sampling] key-value parsing (sampler plan S1a) ---
+     * ALL keys parse from S1 (parse-day-one policy); inactive ones warn
+     * once. interval_us/max_depth are hot-reloadable volatiles;
+     * sampler_thread/process_fraction are latched at probe start (the
+     * framework warns if a reload changes them while live). */
+    domain_sampling_config_t *sc = &domain_sampling_config[current_domain_idx];
+    static int warned_budget = 0, warned_output = 0;
+    if (strcmp(key, "interval_us") == 0) {
+      long v = atol(val);
+      if (v < 0) {
+        fprintf(stderr, "PInsight Warning: negative interval_us '%s' — "
+                        "using 0 (sampling disabled)\n", val);
+        v = 0;
+      }
+      sc->interval_us = (unsigned int)v;
+    } else if (strcmp(key, "sampler_thread") == 0) {
+      if (strcasecmp(val, "own") == 0)
+        sc->sampler_thread_own = 1;
+      else if (strcasecmp(val, "shared") == 0)
+        sc->sampler_thread_own = 0;
+      else
+        fprintf(stderr, "PInsight Warning: sampler_thread must be "
+                        "'shared' or 'own', got '%s'. Ignoring.\n", val);
+    } else if (strcmp(key, "max_depth") == 0) {
+      long v = atol(val);
+      if (v <= 0) {
+        fprintf(stderr, "PInsight Warning: invalid max_depth '%s' — using "
+                        "default %d\n", val, PINSIGHT_SAMPLING_DEFAULT_MAX_DEPTH);
+        v = PINSIGHT_SAMPLING_DEFAULT_MAX_DEPTH;
+      }
+      sc->max_depth = (unsigned int)v;
+    } else if (strcmp(key, "overhead_budget") == 0) {
+      sc->overhead_budget_pct = (float)atof(val); /* '%' suffix stops atof */
+      if (!warned_budget) {
+        fprintf(stderr, "PInsight: overhead_budget parsed but not yet "
+                        "active (lands with overhead-self-estimation O4)\n");
+        warned_budget = 1;
+      }
+    } else if (strcmp(key, "output") == 0) {
+      if (strcasecmp(val, "record") == 0)
+        sc->output = PINSIGHT_SAMPLING_OUTPUT_RECORD;
+      else if (strcasecmp(val, "profile") == 0)
+        sc->output = PINSIGHT_SAMPLING_OUTPUT_PROFILE;
+      else if (strcasecmp(val, "both") == 0)
+        sc->output = PINSIGHT_SAMPLING_OUTPUT_BOTH;
+      else
+        fprintf(stderr, "PInsight Warning: output must be record|profile|"
+                        "both, got '%s'. Ignoring.\n", val);
+      if (sc->output != PINSIGHT_SAMPLING_OUTPUT_RECORD && !warned_output) {
+        fprintf(stderr, "PInsight: sampling output=profile parsed but not "
+                        "yet active (lands with A1); emitting sample "
+                        "records\n");
+        warned_output = 1;
+      }
+    } else if (strcmp(key, "process_fraction") == 0) {
+      float f = (float)atof(val);
+      if (f <= 0.0f || f > 1.0f) {
+        fprintf(stderr, "PInsight Warning: process_fraction must be in "
+                        "(0,1], got '%s'. Using 1.0.\n", val);
+        f = 1.0f;
+      }
+      sc->process_fraction = f;
+    } else if (strcmp(key, "clock") == 0) {
+      fprintf(stderr, "PInsight Warning: sampling 'clock' is not supported "
+                      "yet (G4, [Host.sampling] only). Ignoring.\n");
+    } else {
+      fprintf(stderr, "PInsight Warning: unknown [%s.sampling] key '%s'. "
+                      "Ignoring.\n",
+              domain_info_table[current_domain_idx].name, key);
+    }
+  } else if (((current_section_type == SECTION_DOMAIN_TRACING &&
                current_domain_idx >= 0) ||
-              (current_section_type == SECTION_DOMAIN_PUNIT &&
+              (current_section_type == SECTION_DOMAIN_TRACING_PUNIT &&
                current_punit_config)) &&
              current_domain_idx >= 0) {
     // --- Domain.default and Domain.punit key-value parsing ---
@@ -856,21 +995,21 @@ static void parse_key_value(char *line) {
     // trace_mode: domain-wide operating mode — [Domain.default] only
     // (a punit subset cannot have its own mode).
     if (strcmp(key, "trace_mode") == 0) {
-      if (current_section_type != SECTION_DOMAIN_DEFAULT) {
+      if (current_section_type != SECTION_DOMAIN_TRACING) {
         fprintf(stderr,
                 "PInsight Warning: trace_mode is domain-wide and only valid "
                 "in [%s.default]. Ignoring.\n",
                 d->name);
       } else {
-        pinsight_domain_mode_t old_mode =
-            domain_default_trace_config[current_domain_idx].mode;
-        pinsight_domain_mode_t new_mode = parse_mode_value(val);
-        domain_default_trace_config[current_domain_idx].last_mode = old_mode;
-        domain_default_trace_config[current_domain_idx].mode = new_mode;
+        domain_trace_mode_t old_mode =
+            domain_trace_config[current_domain_idx].mode;
+        domain_trace_mode_t new_mode = parse_trace_mode_value(val);
+        domain_trace_config[current_domain_idx].last_mode = old_mode;
+        domain_trace_config[current_domain_idx].mode = new_mode;
         /* Re-arm auto-trigger only when mode actually changed and
          * old mode is not OFF (OFF is permanent, irreversible). */
-        if (new_mode != old_mode && old_mode != PINSIGHT_DOMAIN_OFF)
-          domain_default_trace_config[current_domain_idx].mode_change_fired = 0;
+        if (new_mode != old_mode && old_mode != PINSIGHT_TRACE_MODE_OFF)
+          domain_trace_config[current_domain_idx].mode_change_fired = 0;
       }
       d = NULL; // handled; skip event lookup below
     }
@@ -878,7 +1017,7 @@ static void parse_key_value(char *line) {
     // Domain.PunitKind = (Range) punit scope, e.g. OpenMP.thread = (0-64) —
     // [Domain.default] only. Event names contain no dots, so a dotted key
     // here is unambiguously a punit-range key.
-    if (d && current_section_type == SECTION_DOMAIN_DEFAULT &&
+    if (d && current_section_type == SECTION_DOMAIN_TRACING &&
         strchr(key, '.')) {
       char *dot = strchr(key, '.');
       *dot = '\0';
@@ -915,12 +1054,12 @@ static void parse_key_value(char *line) {
     // Node-policy key (e.g. HIP/CUDA "device_activity") — [Domain.default] only.
     // Only HIP/CUDA declare such keys via TRACE_NODEPOLICY, so this is a no-op
     // (npidx<0) for other domains, enforcing the "HIP/CUDA + energy only" scope.
-    if (d && current_section_type == SECTION_DOMAIN_DEFAULT) {
+    if (d && current_section_type == SECTION_DOMAIN_TRACING) {
       int npidx = pinsight_get_nodepolicy_index(current_domain_idx, key);
       if (npidx >= 0) {
         pinsight_nodepolicy_val_t nv = pinsight_parse_nodepolicy(
             val, d->nodepolicy_keys[npidx].dflt);
-        domain_default_trace_config[current_domain_idx].nodepolicy[npidx] = nv;
+        domain_trace_config[current_domain_idx].nodepolicy[npidx] = nv;
         d = NULL; // handled as nodepolicy; skip event lookup below
       }
     }
@@ -947,12 +1086,12 @@ static void parse_key_value(char *line) {
 
       // Update the appropriate bitmask
       volatile unsigned long *events_ptr;
-      if (current_section_type == SECTION_DOMAIN_PUNIT) {
+      if (current_section_type == SECTION_DOMAIN_TRACING_PUNIT) {
         volatile punit_trace_config_t *pcfg =
             (volatile punit_trace_config_t *)current_punit_config;
         events_ptr = &pcfg->events;
       } else {
-        events_ptr = &domain_default_trace_config[current_domain_idx].events;
+        events_ptr = &domain_trace_config[current_domain_idx].events;
       }
 
       if (enable)
@@ -1003,18 +1142,33 @@ static void parse_key_value(char *line) {
 
 // --- Helper Implementations ---
 
-static void reset_domain_default_config(int domain_idx) {
+/* [RESET Domain.sampling]: revert the SAMPLING instrument's config to
+ * compiled defaults (sampler_thread/process_fraction are latched at probe
+ * start — the framework warns and keeps the running values if live). */
+static void reset_domain_sampling_config(int domain_idx) {
+  domain_sampling_config_t *sc = &domain_sampling_config[domain_idx];
+  sc->interval_us = 0;
+  sc->max_depth = PINSIGHT_SAMPLING_DEFAULT_MAX_DEPTH;
+  sc->overhead_budget_pct = 0.0f;
+  sc->output = PINSIGHT_SAMPLING_OUTPUT_RECORD;
+  sc->sampler_thread_own = 0;
+  sc->process_fraction = 1.0f;
+}
+
+/* [RESET Domain.tracing]: revert the TRACING instrument's config to
+ * install defaults. Does NOT touch [Domain.sampling] state. */
+static void reset_domain_trace_config(int domain_idx) {
   if (domain_idx < 0 || domain_idx >= num_domain)
     return;
 
   // Reset events to installed defaults
-  domain_default_trace_config[domain_idx].events =
+  domain_trace_config[domain_idx].events =
       domain_info_table[domain_idx].eventInstallStatus;
-  domain_default_trace_config[domain_idx].last_mode =
-      domain_default_trace_config[domain_idx].mode;
-  domain_default_trace_config[domain_idx].mode =
+  domain_trace_config[domain_idx].last_mode =
+      domain_trace_config[domain_idx].mode;
+  domain_trace_config[domain_idx].mode =
       domain_info_table[domain_idx].starting_mode;
-  domain_default_trace_config[domain_idx].mode_change_fired = 0;
+  domain_trace_config[domain_idx].mode_change_fired = 0;
 }
 
 static void reset_lexgion_config(lexgion_trace_config_t *lg) {
@@ -1218,10 +1372,11 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config,
       token = strtok(NULL, ",");
       continue;
     }
-    if (strcmp(dot + 1, "default") != 0) {
+    if (strcmp(dot + 1, "tracing") != 0) {
       fprintf(stderr,
-              "PInsight Warning: Invalid inheritance '%s'; "
-              "only Domain.default is supported. Ignoring.\n",
+              "PInsight Warning: Invalid inheritance '%s'; only "
+              "Domain.tracing is accepted (the '.default' SECTION alias "
+              "does not apply to inheritance references). Ignoring.\n",
               name);
       token = strtok(NULL, ",");
       continue;
@@ -1239,7 +1394,7 @@ static int apply_inheritance(lexgion_trace_config_t *lg_config,
     lg_config->domain_punits[idx].set = 1;
     lg_config->domain_events[idx].set = 1;
     lg_config->domain_events[idx].events =
-        domain_default_trace_config[idx].events;
+        domain_trace_config[idx].events;
     token = strtok(NULL, ",");
   }
   free(copy);

@@ -253,14 +253,14 @@ static inline uint64_t hip_mono_ms(void) {
 /* Live per-rank collect decision:
  *   (trace_mode == TRACING) AND (device_activity selects this rank NOW). */
 static int hip_should_collect_now(void) {
-    if (domain_default_trace_config[HIP_domain_index].mode !=
-        PINSIGHT_DOMAIN_TRACING)
+    if (domain_trace_config[HIP_domain_index].mode !=
+        PINSIGHT_TRACE_MODE_TRACING)
         return 0; /* master gate: activity capture only in TRACING */
     int idx = hip_nodepolicy_idx();
     if (idx < 0)
         return 0;
     pinsight_nodepolicy_val_t v =
-        domain_default_trace_config[HIP_domain_index].nodepolicy[idx];
+        domain_trace_config[HIP_domain_index].nodepolicy[idx];
     switch (v.policy) {
     case PINSIGHT_NODEPOLICY_OFF:
         return 0;
@@ -296,14 +296,14 @@ static int hip_should_collect_now(void) {
 /* Rotate period for the control thread's boundary wake: >0 (ms) iff the live
  * policy is rotate and the domain is TRACING with known topology; else 0. */
 int pinsight_control_hip_rotate_period_ms(void) {
-    if (domain_default_trace_config[HIP_domain_index].mode !=
-        PINSIGHT_DOMAIN_TRACING)
+    if (domain_trace_config[HIP_domain_index].mode !=
+        PINSIGHT_TRACE_MODE_TRACING)
         return 0;
     int idx = hip_nodepolicy_idx();
     if (idx < 0)
         return 0;
     pinsight_nodepolicy_val_t v =
-        domain_default_trace_config[HIP_domain_index].nodepolicy[idx];
+        domain_trace_config[HIP_domain_index].nodepolicy[idx];
     pinsight_nodepolicy_t m = hip_method_pinned ? hip_pinned_method : v.policy;
     if (m != PINSIGHT_NODEPOLICY_ROTATE_PER_NODE)
         return 0;
@@ -381,8 +381,8 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
     pinsight_check_pause();
 
     /* 2. Domain mode check */
-    if (!PINSIGHT_DOMAIN_ACTIVE(
-            domain_default_trace_config[HIP_domain_index].mode))
+    if (!DOMAIN_TRACE_ACTIVE(
+            domain_trace_config[HIP_domain_index].mode))
         return;
 
     /* 3. Fast reject (defense-in-depth): registration is per-op, so only
@@ -437,11 +437,11 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name             = kernelName ? kernelName : "";
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index)) {
@@ -496,12 +496,12 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name = domain_info_table[HIP_domain_index]
                                 .event_table[event_id].name;
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
@@ -551,12 +551,12 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name = domain_info_table[HIP_domain_index]
                                 .event_table[event_id].name;
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
@@ -604,12 +604,12 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name = domain_info_table[HIP_domain_index]
                                 .event_table[HIP_EVENT_MALLOC].name;
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
@@ -657,12 +657,12 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name = domain_info_table[HIP_domain_index]
                                 .event_table[HIP_EVENT_FREE].name;
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
@@ -707,12 +707,12 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name = domain_info_table[HIP_domain_index]
                                 .event_table[HIP_EVENT_DEVICE_SYNCHRONIZE].name;
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
@@ -756,12 +756,12 @@ static void hip_api_callback(uint32_t domain, uint32_t cid,
                 return;
             lexgion_t *lgp = record->lgp;
 
-            if (lgp->name_resolved_gen != trace_config_change_counter) {
+            if (lgp->name_resolved_gen != config_change_counter) {
                 lgp->name = domain_info_table[HIP_domain_index]
                                 .event_table[HIP_EVENT_STREAM_SYNCHRONIZE].name;
                 lgp->filename_hint    = NULL;
-                lgp->name_resolved_gen = trace_config_change_counter;
-                lgp->trace_config_change_counter = (unsigned int)-1;
+                lgp->name_resolved_gen = config_change_counter;
+                lgp->config_change_counter = (unsigned int)-1;
             }
 
             if (PINSIGHT_SHOULD_TRACE(HIP_domain_index))
@@ -885,10 +885,10 @@ void pinsight_control_hip_apply_mode(void) {
     if (hip_permanently_off)
         return;
 
-    pinsight_domain_mode_t mode =
-        domain_default_trace_config[HIP_domain_index].mode;
-    pinsight_domain_mode_t last =
-        domain_default_trace_config[HIP_domain_index].last_mode;
+    domain_trace_mode_t mode =
+        domain_trace_config[HIP_domain_index].mode;
+    domain_trace_mode_t last =
+        domain_trace_config[HIP_domain_index].last_mode;
 
     if (mode == last)
         return;
@@ -897,15 +897,15 @@ void pinsight_control_hip_apply_mode(void) {
      * the gate reads the already-committed new mode). */
     pinsight_control_hip_apply_collect_state();
 
-    if (mode == PINSIGHT_DOMAIN_OFF || mode == PINSIGHT_DOMAIN_STANDBY) {
-        if (PINSIGHT_DOMAIN_ACTIVE(last))
+    if (mode == PINSIGHT_TRACE_MODE_OFF || mode == PINSIGHT_TRACE_MODE_STANDBY) {
+        if (DOMAIN_TRACE_ACTIVE(last))
             hip_api_callbacks_disable();
         /* STANDBY→OFF or STANDBY→STANDBY: nothing to do */
-        if (mode == PINSIGHT_DOMAIN_OFF) {
+        if (mode == PINSIGHT_TRACE_MODE_OFF) {
             hip_permanently_off = 1;
             fprintf(stderr, "PInsight: HIP domain permanently OFF\n");
         }
-    } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
+    } else if (!DOMAIN_TRACE_ACTIVE(last)) {
         /* STANDBY → MONITORING/TRACING: enable the host API callbacks. */
         hip_api_callbacks_enable();
     }
@@ -917,16 +917,16 @@ void pinsight_control_hip_apply_mode(void) {
  * ================================================================ */
 
 void LTTNG_ROCTRACER_Init(void) {
-    pinsight_domain_mode_t mode =
-        domain_default_trace_config[HIP_domain_index].mode;
+    domain_trace_mode_t mode =
+        domain_trace_config[HIP_domain_index].mode;
 
-    if (mode == PINSIGHT_DOMAIN_OFF) {
+    if (mode == PINSIGHT_TRACE_MODE_OFF) {
         hip_permanently_off = 1;
         fprintf(stderr, "PInsight: HIP domain starting OFF\n");
     } else {
         /* Clock calibration is deferred to the first callback (roctracer
          * timestamp + LTTng provider are not ready at constructor time). */
-        if (PINSIGHT_DOMAIN_ACTIVE(mode)) {
+        if (DOMAIN_TRACE_ACTIVE(mode)) {
             hip_api_callbacks_enable();
             /* Activity pool + collection: the live gate opens/enables iff
              * TRACING and this rank is the selected collector (device_activity
@@ -937,7 +937,7 @@ void LTTNG_ROCTRACER_Init(void) {
         }
         /* STANDBY: callback and pool stay unregistered until first active transition */
     }
-    domain_default_trace_config[HIP_domain_index].last_mode = mode;
+    domain_trace_config[HIP_domain_index].last_mode = mode;
 }
 
 void LTTNG_ROCTRACER_Fini(void) {

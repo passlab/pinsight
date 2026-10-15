@@ -154,7 +154,7 @@ done:
 
 /* The effective-config dump cache (hash + buffer) is owned by
  * trace_config.c — refreshed automatically at the end of every
- * pinsight_load_trace_config; this file only reads the atomic hash
+ * pinsight_load_config; this file only reads the atomic hash
  * (pinsight_config_hash_get) per burst. Design §2.8. */
 
 void pinsight_manifest_set_run_id(const char *id) {

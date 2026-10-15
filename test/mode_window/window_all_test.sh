@@ -25,13 +25,13 @@ fails=0
 [ -e "$PINSIGHT_LIB" ] || { echo "missing $PINSIGHT_LIB (build with PINSIGHT_OPENMP=TRUE)"; exit 1; }
 $CLANG -fopenmp -g "$(dirname "$0")/mode_test.c" -o "$BIN" -lm || { echo "compile failed"; exit 1; }
 
-run(){ env LD_PRELOAD="$PRE" PINSIGHT_TRACE_CONFIG_FILE="$CFG" "$BIN" "$@" 2>&1; }
+run(){ env LD_PRELOAD="$PRE" PINSIGHT_CONFIG_FILE="$CFG" "$BIN" "$@" 2>&1; }
 # iteration after which the synchronous immediate (count) auto-trigger printed
 fired_iter(){ echo "$1" | awk '/Auto-trigger \(immediate\)/{print p; exit} /iter [0-9]+ done/{p=$2}'; }
 check(){ if [ "$2" = "$3" ]; then echo "  [PASS] $1 ($2)"; else echo "  [FAIL] $1: got '$2' expected '$3'"; fails=$((fails+1)); fi; }
 
 cfg_count(){ cat > "$CFG" <<EOF
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode = TRACING
 [Lexgion.default]
     max_num_traces = 3
@@ -56,7 +56,7 @@ check "exactly one switch" "$(echo "$o"|grep -c 'OpenMP mode -> MONITORING')" "1
 
 echo "== T3: window_timeout standalone (no count cap) ends the window by time =="
 cat > "$CFG" <<EOF
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode = TRACING
 [Lexgion.default]
     window_timeout = 2
@@ -69,7 +69,7 @@ check "exactly one switch"          "$(echo "$o"|grep -c 'OpenMP mode -> MONITOR
 
 echo "== T4: 'all' backstop — slow region NEVER caps, window_timeout closes it =="
 cat > "$CFG" <<EOF
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode = TRACING
 [Lexgion.default]
     max_num_traces = 3
@@ -83,7 +83,7 @@ check "window_timeout backstop fired"  "$(echo "$o"|grep -c 'window_timeout (')"
 
 echo "== T5: count wins the race -> timer must NO-OP (no double fire) =="
 cat > "$CFG" <<EOF
-[OpenMP.default]
+[OpenMP.tracing]
     trace_mode = TRACING
 [Lexgion.default]
     max_num_traces = 3

@@ -16,6 +16,7 @@
 #include "pinsight_control_thread.h"
 #include "manifest.h"
 #include "pinsight.h"
+#include "pinsight_sampler.h"
 #include "pinsight_config.h"
 #include "trace_config.h"
 #ifdef PINSIGHT_ENERGY
@@ -85,10 +86,10 @@ static window_end_action_t *window_timer_ma = NULL; /* action fired on ETIMEDOUT
 static int window_already_ended(window_end_action_t *ma) {
     int has_target = 0;
     for (int d = 0; d < num_domain; d++) {
-        if (ma->mode[d] == PINSIGHT_DOMAIN_NONE)
+        if (ma->mode[d] == PINSIGHT_TRACE_MODE_NONE)
             continue;
         has_target = 1;
-        if (!domain_default_trace_config[d].mode_change_fired)
+        if (!domain_trace_config[d].mode_change_fired)
             return 0; /* a targeted domain has not switched yet */
     }
     return has_target;
@@ -111,7 +112,7 @@ static int manifest_periodic_wanted(void) {
   if (energy_measure_policy != PINSIGHT_NODEPOLICY_OFF)
     return 1;
   for (int d = 0; d < num_domain; d++)
-    if (domain_default_trace_config[d].mode != PINSIGHT_DOMAIN_OFF)
+    if (domain_trace_config[d].mode != PINSIGHT_TRACE_MODE_OFF)
       return 1;
   return 0;
 }
@@ -173,7 +174,7 @@ static void control_execute_introspect(window_end_action_t *ma) {
         /* Build argv for: bash <script> <chunk_path> <pid_str> <config> */
         char pid_str[32];
         snprintf(pid_str, sizeof(pid_str), "%d", getpid());
-        char *config_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+        char *config_file = getenv("PINSIGHT_CONFIG_FILE");
         if (!config_file) config_file = "pinsight_trace_config.txt";
 
         char *argv[] = {
@@ -429,7 +430,7 @@ static void *pinsight_control_loop(void *arg) {
             /* Force re-parse even if mtime is unchanged (file may have been
              * overwritten in-place within the same second). */
             pinsight_invalidate_config_mtime();
-            pinsight_load_trace_config(NULL);
+            pinsight_load_config(NULL);
             /* Re-arm the window timer: a reload may add, extend, or clear
              * window_timeout. Restarts the deadline from now. */
             window_timer_arm_from_default();
@@ -464,21 +465,21 @@ static void *pinsight_control_loop(void *arg) {
             /* Apply end_action modes */
             int cyclic_resume = 0; /* detect TRACING resume for counter reset */
             for (int d = 0; d < num_domain; d++) {
-                pinsight_domain_mode_t new_mode = ma->mode[d];
+                domain_trace_mode_t new_mode = ma->mode[d];
                 /* NONE = user didn't specify → keep current mode */
-                if (new_mode == PINSIGHT_DOMAIN_NONE)
+                if (new_mode == PINSIGHT_TRACE_MODE_NONE)
                     continue;
-                if (!domain_default_trace_config[d].mode_change_fired &&
-                    new_mode != domain_default_trace_config[d].mode) {
-                    domain_default_trace_config[d].last_mode =
-                        domain_default_trace_config[d].mode;
-                    domain_default_trace_config[d].mode = new_mode;
-                    domain_default_trace_config[d].mode_change_fired = 1;
+                if (!domain_trace_config[d].mode_change_fired &&
+                    new_mode != domain_trace_config[d].mode) {
+                    domain_trace_config[d].last_mode =
+                        domain_trace_config[d].mode;
+                    domain_trace_config[d].mode = new_mode;
+                    domain_trace_config[d].mode_change_fired = 1;
                     fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
                             domain_info_table[d].name,
-                            pinsight_mode_str(new_mode));
+                            pinsight_trace_mode_str(new_mode));
                 }
-                if (new_mode == PINSIGHT_DOMAIN_TRACING)
+                if (new_mode == PINSIGHT_TRACE_MODE_TRACING)
                     cyclic_resume = 1;
             }
 
@@ -492,12 +493,25 @@ static void *pinsight_control_loop(void *arg) {
                 int npidx = pinsight_get_nodepolicy_index(d, "device_activity");
                 if (npidx < 0)
                     continue;
-                domain_default_trace_config[d].nodepolicy[npidx] =
+                domain_trace_config[d].nodepolicy[npidx] =
                     ma->np_target[d];
                 fprintf(stderr,
                         "PInsight: Auto-trigger: %s device_activity -> %s\n",
                         domain_info_table[d].name,
                         pinsight_nodepolicy_str(ma->np_target[d].policy));
+            }
+
+            /* Sampler plan B.4: apply per-domain sampling-interval targets
+             * ("Python:sampling=1000"). Writes the hot-reloadable volatile;
+             * the pinsight_sampler_kick() below makes parked/running sampler
+             * threads pick it up (lazy-spawn included). */
+            for (int d = 0; d < num_domain; d++) {
+                if (!ma->sampling_set[d])
+                    continue;
+                domain_sampling_config[d].interval_us = ma->sampling_target[d];
+                fprintf(stderr,
+                        "PInsight: Auto-trigger: %s sampling interval_us -> %u\n",
+                        domain_info_table[d].name, ma->sampling_target[d]);
             }
 
             /* Cyclic INTROSPECT: if any domain resumes to TRACING,
@@ -511,7 +525,7 @@ static void *pinsight_control_loop(void *arg) {
              * spaced cycles even when lexgions have different call rates. */
             if (cyclic_resume) {
                 for (int d = 0; d < num_domain; d++) {
-                    domain_default_trace_config[d].mode_change_fired = 0;
+                    domain_trace_config[d].mode_change_fired = 0;
                 }
                 __atomic_store_n(&ma->fired, 0, __ATOMIC_SEQ_CST);
                 ma->generation++;  /* all lexgions will see new gen and reset */
@@ -530,6 +544,12 @@ static void *pinsight_control_loop(void *arg) {
                       PINSIGHT_WAKEUP_MODE_CHANGE |
                       PINSIGHT_WAKEUP_INTROSPECT)) {
             control_apply_all_modes();
+
+            /* Conductor duty (sampler plan S1a): wake/lazy-spawn sampler
+             * threads so hot-reloaded intervals, mode changes affecting
+             * infra_min_trace_mode probes, and window sampling targets all take
+             * effect now rather than at the next tick. */
+            pinsight_sampler_kick();
 
             /* 5. WS1 Step 3: manifest transition burst + timer re-evaluation.
              * Config and/or modes changed — the burst re-stamps the new epoch

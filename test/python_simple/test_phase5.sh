@@ -1,7 +1,7 @@
 #!/bin/bash
 # Phase 5 — Thread/Punit Filtering for Python tracing.
 #
-# Verifies that [Lexgion(Python:funcname)] : Python.default : Python.thread(N)
+# Verifies that [Lexgion(Python:funcname)] : Python.tracing : Python.thread(N)
 # config entries restrict tracing to the specified thread IDs, that non-matching
 # threads are suppressed, and that function_begin/end counts are paired.
 #
@@ -117,15 +117,15 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-2)
     max_num_traces = 8
 
-[Lexgion(Python:main_work)] : Python.default : Python.thread(0)
+[Lexgion(Python:main_work)] : Python.tracing : Python.thread(0)
     max_num_traces = 5
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_thread_filter.py" $N $NWORKERS
 session_stop
 WORKER=$(count_begin "worker")
@@ -155,12 +155,12 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(3-4)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(3-4)
     max_num_traces = 6
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_thread_filter.py" $N $NWORKERS
 session_stop
 WORKER=$(count_begin "worker")
@@ -187,12 +187,12 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-2)
     max_num_traces = 9
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_thread_filter.py" $N $NWORKERS
 session_stop
 BEGIN=$(count_begin "worker")
@@ -215,15 +215,15 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-2)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-2)
     max_num_traces = 7
 
-[Lexgion(Python:main_work)] : Python.default : Python.thread(0)
+[Lexgion(Python:main_work)] : Python.tracing : Python.thread(0)
     max_num_traces = 5
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_thread_filter.py" $N $NWORKERS
 session_stop
 WORKER=$(count_begin "worker")
@@ -245,12 +245,12 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 [Lexgion(Python).default]
     max_num_traces = 0
 
-[Lexgion(Python:worker)] : Python.default : Python.thread(1-4)
+[Lexgion(Python:worker)] : Python.tracing : Python.thread(1-4)
     max_num_traces = 5
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_thread_filter.py" $N $NWORKERS
 session_stop
 WORKER=$(count_begin "worker")

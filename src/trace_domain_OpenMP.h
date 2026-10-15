@@ -147,8 +147,8 @@ static inline struct domain_info *register_OpenMP_trace_domain(void) {
 
   /* Return pointer to this domain */
   OpenMP_domain_info = &domain_info_table[OpenMP_domain_index];
-  OpenMP_domain_info->starting_mode = PINSIGHT_DOMAIN_TRACING;
-  OpenMP_trace_config = &domain_default_trace_config[OpenMP_domain_index];
+  OpenMP_domain_info->starting_mode = PINSIGHT_TRACE_MODE_TRACING;
+  OpenMP_trace_config = &domain_trace_config[OpenMP_domain_index];
   return OpenMP_domain_info;
 }
 

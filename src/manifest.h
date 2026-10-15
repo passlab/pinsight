@@ -25,7 +25,7 @@ void pinsight_manifest_emit(const char *reason);
 
 /* Note: the effective-config dump cache (buffer + atomic hash) lives in
  * trace_config.{h,c} (pinsight_config_dump_refresh / _hash_get / _dump_get),
- * refreshed automatically by every pinsight_load_trace_config; bursts here
+ * refreshed automatically by every pinsight_load_config; bursts here
  * only read the hash. Design §2.8. */
 
 /* Replace the provisional per-process run_id with the experiment-wide one

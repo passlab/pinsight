@@ -55,7 +55,7 @@ BT=$(command -v babeltrace2 || command -v babeltrace) || {
 [ -x "$BIN" ] || { echo "build first:  make looping_pinsight"; exit 1; }
 [ -e "$PINSIGHT_LIB" ] || { echo "missing $PINSIGHT_LIB (build with PINSIGHT_CUDA=TRUE)"; exit 1; }
 # device_activity defaults to off — the cyclic test needs it on to see activity records.
-mkcfg() { printf '[CUDA.default]\n    trace_mode = %s\n    device_activity = on\n' "$1" > "$CFG"; }
+mkcfg() { printf '[CUDA.tracing]\n    trace_mode = %s\n    device_activity = on\n' "$1" > "$CFG"; }
 
 mkcfg TRACING
 lttng-sessiond --daemonize >/dev/null 2>&1; sleep 0.3
@@ -66,7 +66,7 @@ lttng enable-event -u 'cupti_pinsight_lttng_ust:*' >/dev/null
 lttng start >/dev/null
 
 # 90 iters x 120 ms ~ 11 s ; switch every 3 s.  Run DIRECTLY (see GOTCHA).
-env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_TRACE_CONFIG_FILE="$CFG" "$BIN" 90 120 \
+env LD_PRELOAD="$PINSIGHT_LIB" PINSIGHT_CONFIG_FILE="$CFG" "$BIN" 90 120 \
     >/dev/null 2>"$OUT".applog &
 APP=$!
 echo "looping_pinsight pid=$APP, cycling CUDA mode every 3s:"

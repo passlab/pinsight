@@ -103,7 +103,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_named_lexgion.py" $N
 session_stop
 COMPUTE=$(count_begin "compute")
@@ -131,7 +131,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_named_lexgion.py" $N
 session_stop
 RUN=$(count_begin "Solver.run")
@@ -161,7 +161,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_named_lexgion.py" $N
 session_stop
 COMPUTE=$(count_begin "compute")
@@ -216,7 +216,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd /tmp/test_4_4_main.py $N
 session_stop
 # Count by filename appearing in the event output
@@ -250,7 +250,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_named_lexgion.py" $N
 session_stop
 BEGIN=$(count_begin "compute")
@@ -277,7 +277,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_named_lexgion.py" $N
 session_stop
 COMPUTE=$(count_begin "compute")
@@ -324,7 +324,7 @@ for i in range(N):
 PYEOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_phase4_cfg_v1.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_phase4_cfg_v1.txt \
     run_cmd /tmp/test_phase4_reload.py
 COMPUTE=$(session_stop; count_begin "compute")
 session_destroy

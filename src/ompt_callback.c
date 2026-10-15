@@ -414,8 +414,8 @@ void on_ompt_callback_parallel_begin(
    * reconfig checks needed here — mode flags are volatile and read
    * directly by the callbacks. */
 
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[OpenMP_domain_index].mode))
     return;
 
   enclosing_parallel_lexgion_record =
@@ -458,8 +458,8 @@ void on_ompt_callback_parallel_begin(
 void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
                                    ompt_data_t *parent_task, int flag,
                                    const void *codeptr_ra) {
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[OpenMP_domain_index].mode))
     return;
 
   lexgion_t *lgp =
@@ -494,8 +494,8 @@ void on_ompt_callback_parallel_end(ompt_data_t *parallel_data,
   /* Restore enclosing context when bookkeeping is active (MONITORING/TRACING).
    * parent_task->ptr may be NULL during mode switches where implicit_task
    * did not fire for workers in the current region. */
-  if (PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode) &&
+  if (DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[OpenMP_domain_index].mode) &&
       parent_task->ptr != NULL) {
     enclosing_task_lexgion_record = (lexgion_record_t *)parent_task->ptr;
     task_codeptr = enclosing_task_lexgion_record->lgp->codeptr_ra;
@@ -520,8 +520,8 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
                                     unsigned int team_size,
                                     unsigned int thread_num, int flags) {
   pinsight_check_pause(); /* cooperative pause for introspection */
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[OpenMP_domain_index].mode))
     return;
   switch (endpoint) {
   case ompt_scope_begin: {
@@ -612,8 +612,8 @@ void on_ompt_callback_implicit_task(ompt_scope_endpoint_t endpoint,
 void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
                            ompt_data_t *parallel_data, ompt_data_t *task_data,
                            uint64_t count, const void *codeptr_ra) {
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[OpenMP_domain_index].mode))
     return;
   lexgion_record_t *record;
   lexgion_t *lgp;
@@ -712,8 +712,8 @@ void on_ompt_callback_work(ompt_work_t wstype, ompt_scope_endpoint_t endpoint,
 void on_ompt_callback_masked(ompt_scope_endpoint_t endpoint,
                              ompt_data_t *parallel_data, ompt_data_t *task_data,
                              const void *codeptr_ra) {
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[OpenMP_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[OpenMP_domain_index].mode))
     return;
   lexgion_record_t *record;
   lexgion_t *lgp;
@@ -1581,8 +1581,8 @@ static int on_ompt_callback_control_tocol(uint64_t command, uint64_t modifier,
  * thread when a mode change is applied.
  */
 void pinsight_register_openmp_callbacks(void) {
-  pinsight_domain_mode_t mode =
-      domain_default_trace_config[OpenMP_domain_index].mode;
+  domain_trace_mode_t mode =
+      domain_trace_config[OpenMP_domain_index].mode;
   domain_info_t *di = OpenMP_domain_info;
 
   for (int i = 0; i < di->event_id_upper; i++) {
@@ -1593,10 +1593,10 @@ void pinsight_register_openmp_callbacks(void) {
     int is_lifecycle = (ev->native_id == ompt_callback_thread_begin ||
                         ev->native_id == ompt_callback_thread_end);
 
-    if (mode == PINSIGHT_DOMAIN_TRACING) {
+    if (mode == PINSIGHT_TRACE_MODE_TRACING) {
       /* TRACING: register everything */
       ompt_set_callback(ev->native_id, (ompt_callback_t)ev->callback);
-    } else if (mode == PINSIGHT_DOMAIN_MONITORING) {
+    } else if (mode == PINSIGHT_TRACE_MODE_MONITORING) {
       /* MONITORING: keep only thread lifecycle + parallel begin/end. */
       if (is_lifecycle || ev->native_id == ompt_callback_parallel_begin ||
           ev->native_id == ompt_callback_parallel_end) {

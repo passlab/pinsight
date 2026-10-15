@@ -16,16 +16,16 @@ volatile sig_atomic_t mode_change_requested = 0;
 void pinsight_fire_window_end(lexgion_trace_config_t *tc) {
   window_end_action_t *ma = &tc->end_action;
   for (int d = 0; d < num_domain; d++) {
-    pinsight_domain_mode_t new_mode = ma->mode[d];
-    if (new_mode == PINSIGHT_DOMAIN_NONE)
+    domain_trace_mode_t new_mode = ma->mode[d];
+    if (new_mode == PINSIGHT_TRACE_MODE_NONE)
       continue;
-    if (!domain_default_trace_config[d].mode_change_fired) {
-      domain_default_trace_config[d].mode = new_mode;
-      domain_default_trace_config[d].mode_change_fired = 1;
+    if (!domain_trace_config[d].mode_change_fired) {
+      domain_trace_config[d].mode = new_mode;
+      domain_trace_config[d].mode_change_fired = 1;
       fprintf(stderr, "PInsight: Auto-trigger: %s mode -> %s\n",
               domain_info_table[d].name,
-              new_mode == PINSIGHT_DOMAIN_OFF          ? "OFF"
-              : new_mode == PINSIGHT_DOMAIN_MONITORING ? "MONITORING"
+              new_mode == PINSIGHT_TRACE_MODE_OFF          ? "OFF"
+              : new_mode == PINSIGHT_TRACE_MODE_MONITORING ? "MONITORING"
                                                        : "TRACING");
     }
   }
@@ -33,7 +33,7 @@ void pinsight_fire_window_end(lexgion_trace_config_t *tc) {
 }
 
 // Forward declaration for env var test (defined in trace_config.c)
-extern void setup_trace_config_env(void);
+extern void setup_config_env(void);
 
 // --- Stubs for Runtime Functions utilized in Domain DSL ---
 int omp_get_team_num(void) { return 0; }
@@ -134,23 +134,23 @@ void test_parsing() {
   FILE *fp = fopen("trace_config.txt", "a");
   if (fp) {
     fprintf(fp, "\n# Test Lexgion Override\n");
-    fprintf(fp, "[Lexgion(0x500000): OpenMP.default]\n");
+    fprintf(fp, "[Lexgion(0x500000): OpenMP.tracing]\n");
     fprintf(fp, "    OpenMP.omp_task_schedule = off\n");
-    // derived from OpenMP.default which usually has them ON (in header)
-    // but wait, in trace_config_example.txt, [OpenMP.default] sets
+    // derived from OpenMP.tracing which usually has them ON (in header)
+    // but wait, in trace_config_example.txt, [OpenMP.tracing] sets
     // task_create/schedule to OFF? Let's check trace_config_example.txt content
-    // again. If OpenMP.default sets them OFF, inheriting them puts them OFF. So
+    // again. If OpenMP.tracing sets them OFF, inheriting them puts them OFF. So
     // we should turn one ON to verify override.
     fprintf(fp, "    OpenMP.omp_task_create = on\n");
     fclose(fp);
   }
 
   // Run parser (re-read the modified file)
-  parse_trace_config_file("trace_config.txt");
+  parse_config_file("trace_config.txt");
 
   printf("--- Verification Results ---\n");
 
-  // 1. Verify [OpenMP.default]
+  // 1. Verify [OpenMP.tracing]
   // ... (existing checks) ...
   int omp_idx = -1;
   for (int i = 0; i < num_domain; i++)
@@ -158,7 +158,7 @@ void test_parsing() {
       omp_idx = i;
 
   if (omp_idx >= 0) {
-    // ... (existing checks for OpenMP.default)
+    // ... (existing checks for OpenMP.tracing)
     // Find IDs for events by name, because native IDs might differ or be
     // sparse.
     int id_task_create = -1;
@@ -173,21 +173,21 @@ void test_parsing() {
     }
 
     if (id_task_create != -1 && id_task_schedule != -1) {
-      unsigned long events = domain_default_trace_config[omp_idx].events;
+      unsigned long events = domain_trace_config[omp_idx].events;
       int create_on = (events >> id_task_create) & 1;
       int schedule_on = (events >> id_task_schedule) & 1;
 
       // Config example says: omp_task_create = off, omp_task_schedule = off
       if (!create_on && !schedule_on) {
-        printf("[PASS] OpenMP.default: omp_task_create and schedule are OFF\n");
+        printf("[PASS] OpenMP.tracing: omp_task_create and schedule are OFF\n");
       } else {
         printf(
-            "[FAIL] OpenMP.default: create=%d, schedule=%d (Expected OFF/0)\n",
+            "[FAIL] OpenMP.tracing: create=%d, schedule=%d (Expected OFF/0)\n",
             create_on, schedule_on);
       }
 
       // 4. Verify Lexgion(0x500000) for Override
-      // Inherits OpenMP.default (OFF/OFF)
+      // Inherits OpenMP.tracing (OFF/OFF)
       // Overrides: schedule=off (redundant but explicit), task_create=on
       // Expected: create=ON, schedule=OFF
       int found_override_lexgion = 0;
@@ -221,7 +221,7 @@ void test_parsing() {
     printf("[FAIL] OpenMP domain not found.\n");
   }
 
-  // 2. Verify [CUDA.default]
+  // 2. Verify [CUDA.tracing]
   // CUDA_kernel_launch = on, CUDA_memcpy = on
   // In CUDA_domain.h, default status is 0 (OFF).
   int cuda_idx = -1;
@@ -251,15 +251,15 @@ void test_parsing() {
         id_memcpy = k; // Check if it exists
     }
 
-    unsigned long events = domain_default_trace_config[cuda_idx].events;
+    unsigned long events = domain_trace_config[cuda_idx].events;
 
     if (id_kernel != -1) {
       int kernel_on = (events >> id_kernel) & 1;
       if (kernel_on)
-        printf("[PASS] CUDA.default: CUDA_kernel_launch is ON\n");
+        printf("[PASS] CUDA.tracing: CUDA_kernel_launch is ON\n");
       else
         printf(
-            "[FAIL] CUDA.default: CUDA_kernel_launch is OFF (Expected ON)\n");
+            "[FAIL] CUDA.tracing: CUDA_kernel_launch is OFF (Expected ON)\n");
     } else {
       printf("[FAIL] CUDA_kernel_launch event not found.\n");
     }
@@ -267,9 +267,9 @@ void test_parsing() {
     if (id_memcpy != -1) {
       int memcpy_on = (events >> id_memcpy) & 1;
       if (memcpy_on)
-        printf("[PASS] CUDA.default: CUDA_memcpy is ON\n");
+        printf("[PASS] CUDA.tracing: CUDA_memcpy is ON\n");
       else
-        printf("[FAIL] CUDA.default: CUDA_memcpy is OFF\n");
+        printf("[FAIL] CUDA.tracing: CUDA_memcpy is OFF\n");
     } else {
       // Note: If the event name in config doesn't match any event, the parser
       // ignores it (or should warn).
@@ -308,7 +308,7 @@ void test_parsing() {
   // [Lexgion(OpenMP).default] is tested by T3 and T4 in
   // test_actions_and_features() with proper state setup.
 
-  // 4. Verify Complex Header: [OpenMP.thread(0-3): OpenMP.default: MPI.rank(0),
+  // 4. Verify Complex Header: [OpenMP.thread(0-3): OpenMP.tracing: MPI.rank(0),
   // CUDA.device(0)] This should create a punit_trace_config attached to OpenMP
   // domain. We need to find the punit config where domain is OpenMP and thread
   // range is 0-3.
@@ -335,7 +335,7 @@ void test_parsing() {
         BitSet *bs =
             &curr->domain_punits[omp_idx].punit[thread_punit_idx].punit_ids;
         if (bitset_test(bs, 0) && bitset_test(bs, 3) && !bitset_test(bs, 4)) {
-          // Check inheritance? "OpenMP.default" means events should match
+          // Check inheritance? "OpenMP.tracing" means events should match
           // default? Default events are likely all 0 or specific depending on
           // install. Let's passed based on Punit logic success.
           printf("[PASS] Complex Header [OpenMP.thread(0-3)...] parsed "
@@ -354,7 +354,7 @@ void test_parsing() {
 
   // 5. Verify Serialization Output
   printf("\n--- Serialization Output ---\n");
-  print_domain_trace_config(stdout);
+  print_domain_config(stdout);
   print_lexgion_trace_config(stdout);
 
   int found_complex_ranges = 0;
@@ -367,7 +367,7 @@ void test_parsing() {
   // Let's inject a new test config
   FILE *fp2 = fopen("trace_config.txt", "a");
   if (fp2) {
-    fprintf(fp2, "\n[OpenMP.thread(0, 2-3, 5)]: OpenMP.default\n");
+    fprintf(fp2, "\n[OpenMP.thread(0, 2-3, 5)]: OpenMP.tracing\n");
     fclose(fp2);
   }
 
@@ -381,7 +381,7 @@ void test_parsing() {
   }
 
   // Re-parse
-  parse_trace_config_file("trace_config.txt");
+  parse_config_file("trace_config.txt");
 
   // Check 0xABCDEF
   int found_default_valid = 0;
@@ -437,17 +437,17 @@ void test_parsing() {
   }
 
   // --- Positive Test: Implicit Inheritance ---
-  // Create a config file where Lexgion inherits from OpenMP.default without
-  // OpenMP.default being defined in file
+  // Create a config file where Lexgion inherits from OpenMP.tracing without
+  // OpenMP.tracing being defined in file
   FILE *bad_fp = fopen("implicit_inh_config.txt", "w");
   if (bad_fp) {
-    fprintf(bad_fp, "[Lexgion(0x999999)]: OpenMP.default\n");
-    // No [OpenMP.default] section
+    fprintf(bad_fp, "[Lexgion(0x999999)]: OpenMP.tracing\n");
+    // No [OpenMP.tracing] section
     fclose(bad_fp);
   }
 
   printf("\n--- Positive Test: Implicit Inheritance ---\n");
-  parse_trace_config_file("implicit_inh_config.txt");
+  parse_config_file("implicit_inh_config.txt");
 
   // Check if 0x999999 is in list.
   int found_bad = 0;
@@ -514,13 +514,14 @@ void setup_and_test_env() {
          "../doc/trace_config_example.txt trace_config.txt");
   int i;
   for (i = 0; i < num_domain; i++) {
-    domain_default_trace_config[i].events =
+    domain_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
+    if (i == 0) domain_sampling_config_seed_defaults();
     domain_punit_trace_config[i] = NULL;
-    if (domain_default_trace_config[i].events) {
-      domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_TRACING;
+    if (domain_trace_config[i].events) {
+      domain_trace_config[i].mode = PINSIGHT_TRACE_MODE_TRACING;
     } else {
-      domain_default_trace_config[i].mode = PINSIGHT_DOMAIN_OFF;
+      domain_trace_config[i].mode = PINSIGHT_TRACE_MODE_OFF;
     }
   }
 
@@ -530,14 +531,14 @@ void setup_and_test_env() {
   lexgion_default_trace_config->trace_starts_at =
       0; // start tracing from the first execution
   lexgion_default_trace_config->max_num_traces = -1; // unlimited traces
-  char *env_file = getenv("PINSIGHT_TRACE_CONFIG_FILE");
+  char *env_file = getenv("PINSIGHT_CONFIG_FILE");
   if (env_file) {
-    parse_trace_config_file(env_file);
+    parse_config_file(env_file);
   } else {
-    parse_trace_config_file("pinsight_trace_config.txt");
+    parse_config_file("pinsight_trace_config.txt");
   }
 
-  // Call env override manually for testing since initial_setup_trace_config
+  // Call env override manually for testing since initial_setup_config
   // (constructor) ran before we set env vars In real usage, env vars are set
   // before program start. Here we simulate it.
 
@@ -545,12 +546,12 @@ void setup_and_test_env() {
   // 1. Force Disable MPI (assume it was enabled by default or file)
   setenv("PINSIGHT_TRACE_MPI", "FALSE", 1);
   // 2. Set Rate
-  setenv("PINSIGHT_TRACE_RATE", "10:100:5", 1);
+  setenv("PINSIGHT_WINDOW", "10:100:5", 1);
 
   // Call the function we just implemented (it's in another file, need
   // declaration or extern)
-  extern void setup_trace_config_env();
-  setup_trace_config_env();
+  extern void setup_config_env();
+  setup_config_env();
 
   // Verify MPI disabled
   // Find MPI domain index
@@ -561,35 +562,35 @@ void setup_and_test_env() {
   }
 
   if (mpi_idx >= 0) {
-    if (domain_default_trace_config[mpi_idx].mode == PINSIGHT_DOMAIN_OFF)
+    if (domain_trace_config[mpi_idx].mode == PINSIGHT_TRACE_MODE_OFF)
       printf("[PASS] Env Var Disabled MPI (mode=OFF)\n");
     else
       printf("[FAIL] Env Var Failed to Disable MPI (mode=%d)\n",
-             domain_default_trace_config[mpi_idx].mode);
+             domain_trace_config[mpi_idx].mode);
   } else {
     printf("[SKIP] MPI Domain not found for Env Test\n");
   }
 
   // Test MONITORING mode
   setenv("PINSIGHT_TRACE_MPI", "MONITORING", 1);
-  setup_trace_config_env();
+  setup_config_env();
   if (mpi_idx >= 0) {
-    if (domain_default_trace_config[mpi_idx].mode == PINSIGHT_DOMAIN_MONITORING)
+    if (domain_trace_config[mpi_idx].mode == PINSIGHT_TRACE_MODE_MONITORING)
       printf("[PASS] Env Var Set MPI MONITORING\n");
     else
       printf("[FAIL] Env Var Failed to Set MPI MONITORING (mode=%d)\n",
-             domain_default_trace_config[mpi_idx].mode);
+             domain_trace_config[mpi_idx].mode);
   }
 
   // Test TRACING mode (TRUE)
   setenv("PINSIGHT_TRACE_MPI", "TRUE", 1);
-  setup_trace_config_env();
+  setup_config_env();
   if (mpi_idx >= 0) {
-    if (domain_default_trace_config[mpi_idx].mode == PINSIGHT_DOMAIN_TRACING)
+    if (domain_trace_config[mpi_idx].mode == PINSIGHT_TRACE_MODE_TRACING)
       printf("[PASS] Env Var Set MPI TRACING\n");
     else
       printf("[FAIL] Env Var Failed to Set MPI TRACING (mode=%d)\n",
-             domain_default_trace_config[mpi_idx].mode);
+             domain_trace_config[mpi_idx].mode);
   }
 
   // Verify Rate
@@ -607,12 +608,12 @@ void setup_and_test_env() {
   // Test Multiple Punit Target parsing
   printf("\n--- Test: Multiple Punit Target ---\n");
   FILE *fp_multi = fopen("multi_punit.txt", "w");
-  // [SET OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.default
+  // [SET OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.tracing
   fprintf(fp_multi,
-          "[SET OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.default\n");
+          "[SET OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.tracing\n");
   fclose(fp_multi);
 
-  parse_trace_config_file("multi_punit.txt");
+  parse_config_file("multi_punit.txt");
   unlink("multi_punit.txt");
 
   // Verify
@@ -661,12 +662,12 @@ void setup_and_test_env() {
   FILE *fp_multi_repl = fopen("multi_punit_replace.txt", "w");
   // Change thread_begin to OFF (it was ON by default/SET)
   fprintf(fp_multi_repl,
-          "[SET OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.default\n");
+          "[SET OpenMP.team(0-1), OpenMP.thread(2-3)]: OpenMP.tracing\n");
   fprintf(fp_multi_repl, "    omp_thread_begin = off\n");
   fclose(fp_multi_repl);
 
   // Parse SET
-  parse_trace_config_file("multi_punit_replace.txt");
+  parse_config_file("multi_punit_replace.txt");
   unlink("multi_punit_replace.txt");
 
   // Verify Update
@@ -720,14 +721,14 @@ void test_reload() {
   // 1. Initial State: Assume OpenMP is enabled (default)
   // Create config to ensure specific state
   FILE *fp = fopen("reload_config_1.txt", "w");
-  fprintf(fp, "[RESET OpenMP.default]\n");
+  fprintf(fp, "[RESET OpenMP.tracing]\n");
   // RESET has no body — it reverts to install defaults.
   // Punit range is set via Domain.default:
-  fprintf(fp, "[OpenMP.default]\n");
+  fprintf(fp, "[OpenMP.tracing]\n");
   fprintf(fp, "    OpenMP.team = (0-4)\n");
   fclose(fp);
 
-  pinsight_load_trace_config("reload_config_1.txt");
+  pinsight_load_config("reload_config_1.txt");
 
   int omp_idx = -1;
   for (int i = 0; i < num_domain; i++)
@@ -737,16 +738,16 @@ void test_reload() {
   if (omp_idx >= 0) {
     // RESET reverts to install defaults, then SET merges the team range.
     printf("[INFO] Post-RESET+SET OpenMP Events: %lx\n",
-           domain_default_trace_config[omp_idx].events);
+           domain_trace_config[omp_idx].events);
   }
 
   // 2. SET: Add a punit config
   fp = fopen("reload_config_add.txt", "w");
-  fprintf(fp, "[SET OpenMP.thread(0-1)] : OpenMP.default\n");
+  fprintf(fp, "[SET OpenMP.thread(0-1)] : OpenMP.tracing\n");
   fprintf(fp, "    OpenMP.omp_task_create = on\n");
   fclose(fp);
 
-  pinsight_load_trace_config("reload_config_add.txt");
+  pinsight_load_config("reload_config_add.txt");
 
   if (omp_idx >= 0) {
     punit_trace_config_t *curr = domain_punit_trace_config[omp_idx];
@@ -778,7 +779,7 @@ void test_reload() {
                                             // handles hex 0x
   fclose(fp);
 
-  parse_trace_config_file("reload_config_remove.txt");
+  parse_config_file("reload_config_remove.txt");
 
   // Check if removed flag is set
   if (lg->removed == 1) {
@@ -807,7 +808,7 @@ void test_implicit_add() {
     return;
 
   // 1. Set specific event State explicitly (turn OFF everything)
-  domain_default_trace_config[omp_idx].events = 0;
+  domain_trace_config[omp_idx].events = 0;
 
   // 2. Create config with IMPLICIT action (should be SET)
   // Turn ON one event.
@@ -818,16 +819,16 @@ void test_implicit_add() {
   // defaults).
 
   FILE *fp = fopen("implicit_add.txt", "w");
-  fprintf(fp, "[OpenMP.default]\n");
+  fprintf(fp, "[OpenMP.tracing]\n");
   // Find an event name.. "omp_thread_begin"
   fprintf(fp, "    omp_thread_begin = on\n");
   fclose(fp);
 
-  parse_trace_config_file("implicit_add.txt");
+  parse_config_file("implicit_add.txt");
   unlink("implicit_add.txt");
 
   // Verify
-  unsigned long events = domain_default_trace_config[omp_idx].events;
+  unsigned long events = domain_trace_config[omp_idx].events;
 
   // Find index of thread_begin
   int evt_idx = -1;
@@ -867,11 +868,12 @@ void test_actions_and_features() {
 
   // Restore clean state: reset all domain configs to install defaults
   for (int i = 0; i < num_domain; i++) {
-    domain_default_trace_config[i].events =
+    domain_trace_config[i].events =
         domain_info_table[i].eventInstallStatus;
-    domain_default_trace_config[i].mode =
-        (domain_default_trace_config[i].events != 0) ? PINSIGHT_DOMAIN_TRACING
-                                                     : PINSIGHT_DOMAIN_OFF;
+    if (i == 0) domain_sampling_config_seed_defaults();
+    domain_trace_config[i].mode =
+        (domain_trace_config[i].events != 0) ? PINSIGHT_TRACE_MODE_TRACING
+                                                     : PINSIGHT_TRACE_MODE_OFF;
     // Free all punit configs
     punit_trace_config_t *curr = domain_punit_trace_config[i];
     while (curr) {
@@ -907,7 +909,7 @@ void test_actions_and_features() {
     fprintf(fp, "    max_num_traces = 999\n");
     fprintf(fp, "    trace_starts_at = 50\n");
     fclose(fp);
-    parse_trace_config_file("test_reset_lg_default.txt");
+    parse_config_file("test_reset_lg_default.txt");
 
     // Verify it was modified
     if (lexgion_default_trace_config->tracing_rate != 42) {
@@ -919,7 +921,7 @@ void test_actions_and_features() {
     fp = fopen("test_reset_lg_default.txt", "w");
     fprintf(fp, "[RESET Lexgion.default]\n");
     fclose(fp);
-    parse_trace_config_file("test_reset_lg_default.txt");
+    parse_config_file("test_reset_lg_default.txt");
 
     if (lexgion_default_trace_config->tracing_rate == 1 &&
         lexgion_default_trace_config->max_num_traces == -1 &&
@@ -943,12 +945,12 @@ void test_actions_and_features() {
     // First reset Lexgion.default to clear domain events
     FILE *fp = fopen("test_inh_lg_default.txt", "w");
     fprintf(fp, "[RESET Lexgion.default]\n");
-    fprintf(fp, "[Lexgion.default]: OpenMP.default\n");
+    fprintf(fp, "[Lexgion.default]: OpenMP.tracing\n");
     fprintf(fp, "    tracing_rate = 5\n");
     fclose(fp);
-    parse_trace_config_file("test_inh_lg_default.txt");
+    parse_config_file("test_inh_lg_default.txt");
 
-    unsigned long expected_events = domain_default_trace_config[omp_idx].events;
+    unsigned long expected_events = domain_trace_config[omp_idx].events;
     unsigned long actual_events =
         lexgion_default_trace_config->domain_events[omp_idx].events;
     int events_set = lexgion_default_trace_config->domain_events[omp_idx].set;
@@ -979,14 +981,14 @@ void test_actions_and_features() {
     fprintf(fp, "    tracing_rate = 7\n");
     fprintf(fp, "    max_num_traces = 300\n");
     // Now reference Lexgion(OpenMP).default — should eagerly init from
-    // Lexgion.default + OpenMP.default
+    // Lexgion.default + OpenMP.tracing
     fprintf(fp, "[Lexgion(OpenMP).default]\n");
     fprintf(fp, "    trace_starts_at = 10\n");
     fclose(fp);
 
     // Clear the domain default codeptr marker to force re-initialization
     lexgion_domain_default_trace_config[omp_idx].codeptr = NULL;
-    parse_trace_config_file("test_eager_init.txt");
+    parse_config_file("test_eager_init.txt");
 
     lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[omp_idx];
     if (dlg->codeptr != NULL) {
@@ -1007,7 +1009,7 @@ void test_actions_and_features() {
       }
       // Should have OpenMP domain events from eager init
       unsigned long omp_events = dlg->domain_events[omp_idx].events;
-      unsigned long expected = domain_default_trace_config[omp_idx].events;
+      unsigned long expected = domain_trace_config[omp_idx].events;
       if (omp_events != expected) {
         pass = 0;
         printf("[FAIL] T3: OMP events=%lx (expected %lx)\n", omp_events,
@@ -1037,7 +1039,7 @@ void test_actions_and_features() {
     fclose(fp);
     // Reset codeptr to force re-init if needed
     lexgion_domain_default_trace_config[omp_idx].codeptr = NULL;
-    parse_trace_config_file("test_reset_lg_dom.txt");
+    parse_config_file("test_reset_lg_dom.txt");
 
     // Verify modification took effect
     if (lexgion_domain_default_trace_config[omp_idx].tracing_rate != 99) {
@@ -1049,14 +1051,14 @@ void test_actions_and_features() {
     fp = fopen("test_reset_lg_dom.txt", "w");
     fprintf(fp, "[RESET Lexgion(OpenMP).default]\n");
     fclose(fp);
-    parse_trace_config_file("test_reset_lg_dom.txt");
+    parse_config_file("test_reset_lg_dom.txt");
 
     lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[omp_idx];
-    // After RESET, should be Lexgion.default + OpenMP.default
+    // After RESET, should be Lexgion.default + OpenMP.tracing
     int rate = dlg->tracing_rate;
     int lg_rate = lexgion_default_trace_config->tracing_rate;
     unsigned long omp_events = dlg->domain_events[omp_idx].events;
-    unsigned long expected = domain_default_trace_config[omp_idx].events;
+    unsigned long expected = domain_trace_config[omp_idx].events;
 
     if (rate == lg_rate && omp_events == expected) {
       printf("[PASS] T4: RESET Lexgion(OpenMP).default reverted to computed "
@@ -1079,7 +1081,7 @@ void test_actions_and_features() {
     fprintf(fp, "    max_num_traces = 77\n");
     fprintf(fp, "    tracing_rate = 3\n");
     fclose(fp);
-    parse_trace_config_file("test_multi_addr.txt");
+    parse_config_file("test_multi_addr.txt");
 
     int found = 0;
     uint64_t addrs[] = {0xAA0001, 0xAA0002, 0xAA0003};
@@ -1116,7 +1118,7 @@ void test_actions_and_features() {
     FILE *fp = fopen("test_multi_remove.txt", "w");
     fprintf(fp, "[REMOVE Lexgion(0xAA0001, 0xAA0002)]\n");
     fclose(fp);
-    parse_trace_config_file("test_multi_remove.txt");
+    parse_config_file("test_multi_remove.txt");
 
     int removed_count = 0;
     int kept_count = 0;
@@ -1154,7 +1156,7 @@ void test_actions_and_features() {
     fprintf(fp, "[OpenMP.thread(4-7)]\n");
     fprintf(fp, "[OpenMP.team(0-1)]\n");
     fclose(fp);
-    parse_trace_config_file("test_wildcard_remove.txt");
+    parse_config_file("test_wildcard_remove.txt");
 
     // Count thread configs before
     int thread_before = 0;
@@ -1181,7 +1183,7 @@ void test_actions_and_features() {
     fp = fopen("test_wildcard_remove.txt", "w");
     fprintf(fp, "[REMOVE OpenMP.thread(*)]\n");
     fclose(fp);
-    parse_trace_config_file("test_wildcard_remove.txt");
+    parse_config_file("test_wildcard_remove.txt");
 
     // Count thread configs after
     int thread_after = 0;
@@ -1214,27 +1216,27 @@ void test_actions_and_features() {
   {
     // Modify OpenMP events
     FILE *fp = fopen("test_reset_domain.txt", "w");
-    fprintf(fp, "[OpenMP.default]\n");
+    fprintf(fp, "[OpenMP.tracing]\n");
     fprintf(fp, "    omp_thread_begin = off\n");
     fprintf(fp, "    omp_thread_end = off\n");
     fclose(fp);
-    parse_trace_config_file("test_reset_domain.txt");
+    parse_config_file("test_reset_domain.txt");
     unsigned long events_after_modify =
-        domain_default_trace_config[omp_idx].events;
+        domain_trace_config[omp_idx].events;
 
     // Now RESET
     fp = fopen("test_reset_domain.txt", "w");
-    fprintf(fp, "[RESET OpenMP.default]\n");
+    fprintf(fp, "[RESET OpenMP.tracing]\n");
     fclose(fp);
-    parse_trace_config_file("test_reset_domain.txt");
+    parse_config_file("test_reset_domain.txt");
     unsigned long events_after_reset =
-        domain_default_trace_config[omp_idx].events;
+        domain_trace_config[omp_idx].events;
     unsigned long install_defaults =
         domain_info_table[omp_idx].eventInstallStatus;
 
     if (events_after_reset == install_defaults) {
       printf(
-          "[PASS] T8: RESET OpenMP.default restored install defaults (%lx)\n",
+          "[PASS] T8: RESET OpenMP.tracing restored install defaults (%lx)\n",
           events_after_reset);
     } else {
       printf(
@@ -1250,20 +1252,20 @@ void test_actions_and_features() {
   printf("\n  -- Test 9: Invalid action-target warnings --\n");
   {
     // REMOVE on Domain.default should warn and be ignored
-    unsigned long events_before = domain_default_trace_config[omp_idx].events;
+    unsigned long events_before = domain_trace_config[omp_idx].events;
 
     FILE *fp = fopen("test_invalid_actions.txt", "w");
-    fprintf(fp, "[REMOVE OpenMP.default]\n");
+    fprintf(fp, "[REMOVE OpenMP.tracing]\n");
     fclose(fp);
-    parse_trace_config_file("test_invalid_actions.txt");
+    parse_config_file("test_invalid_actions.txt");
 
-    unsigned long events_after = domain_default_trace_config[omp_idx].events;
+    unsigned long events_after = domain_trace_config[omp_idx].events;
     if (events_after == events_before) {
       printf(
-          "[PASS] T9a: [REMOVE OpenMP.default] ignored (events unchanged)\n");
+          "[PASS] T9a: [REMOVE OpenMP.tracing] ignored (events unchanged)\n");
     } else {
       printf(
-          "[FAIL] T9a: [REMOVE OpenMP.default] modified events: %lx -> %lx\n",
+          "[FAIL] T9a: [REMOVE OpenMP.tracing] modified events: %lx -> %lx\n",
           events_before, events_after);
     }
 
@@ -1272,12 +1274,12 @@ void test_actions_and_features() {
     fprintf(fp, "[Lexgion(0xBB0001)]\n");
     fprintf(fp, "    max_num_traces = 55\n");
     fclose(fp);
-    parse_trace_config_file("test_invalid_actions.txt");
+    parse_config_file("test_invalid_actions.txt");
 
     fp = fopen("test_invalid_actions.txt", "w");
     fprintf(fp, "[RESET Lexgion(0xBB0001)]\n");
     fclose(fp);
-    parse_trace_config_file("test_invalid_actions.txt");
+    parse_config_file("test_invalid_actions.txt");
 
     // Check that the Lexgion config was NOT reset (still has max=55)
     int found = 0;
@@ -1306,20 +1308,20 @@ void test_actions_and_features() {
   printf("\n  -- Test 10: Snapshot inheritance --\n");
   {
     FILE *fp = fopen("test_snapshot.txt", "w");
-    // Set OpenMP.default with specific events
-    fprintf(fp, "[RESET OpenMP.default]\n"); // Restore install defaults
-    // Create Lexgion that inherits OpenMP.default
-    fprintf(fp, "[Lexgion(0xCC0001)]: OpenMP.default\n");
+    // Set OpenMP.tracing with specific events
+    fprintf(fp, "[RESET OpenMP.tracing]\n"); // Restore install defaults
+    // Create Lexgion that inherits OpenMP.tracing
+    fprintf(fp, "[Lexgion(0xCC0001)]: OpenMP.tracing\n");
     fprintf(fp, "    max_num_traces = 10\n");
-    // NOW modify OpenMP.default (turn off an event)
-    fprintf(fp, "[OpenMP.default]\n");
+    // NOW modify OpenMP.tracing (turn off an event)
+    fprintf(fp, "[OpenMP.tracing]\n");
     fprintf(fp, "    omp_thread_begin = off\n");
     fprintf(fp, "    omp_thread_end = off\n");
     // Create ANOTHER Lexgion after the change
-    fprintf(fp, "[Lexgion(0xCC0002)]: OpenMP.default\n");
+    fprintf(fp, "[Lexgion(0xCC0002)]: OpenMP.tracing\n");
     fprintf(fp, "    max_num_traces = 20\n");
     fclose(fp);
-    parse_trace_config_file("test_snapshot.txt");
+    parse_config_file("test_snapshot.txt");
 
     unsigned long events_0xCC0001 = 0, events_0xCC0002 = 0;
     for (int i = 0; i < num_lexgion_trace_configs; i++) {
@@ -1369,59 +1371,59 @@ void test_domain_mode_punit() {
   }
 
   // --- TG1: trace_mode = OFF ---
-  printf("\n  -- TG1: [OpenMP.default] trace_mode = OFF --\n");
+  printf("\n  -- TG1: [OpenMP.tracing] trace_mode = OFF --\n");
   {
     // Reset to TRACING first
-    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
+    domain_trace_config[omp_idx].mode = PINSIGHT_TRACE_MODE_TRACING;
 
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[OpenMP.default]\n");
+    fprintf(fp, "[OpenMP.tracing]\n");
     fprintf(fp, "    trace_mode = OFF\n");
     fclose(fp);
-    parse_trace_config_file("test_global.txt");
+    parse_config_file("test_global.txt");
 
-    if (domain_default_trace_config[omp_idx].mode == PINSIGHT_DOMAIN_OFF) {
+    if (domain_trace_config[omp_idx].mode == PINSIGHT_TRACE_MODE_OFF) {
       printf("[PASS] TG1: trace_mode=OFF correctly set mode to "
-             "PINSIGHT_DOMAIN_OFF (%d)\n",
-             domain_default_trace_config[omp_idx].mode);
+             "PINSIGHT_TRACE_MODE_OFF (%d)\n",
+             domain_trace_config[omp_idx].mode);
     } else {
       printf("[FAIL] TG1: mode=%d (expected %d/OFF)\n",
-             domain_default_trace_config[omp_idx].mode, PINSIGHT_DOMAIN_OFF);
+             domain_trace_config[omp_idx].mode, PINSIGHT_TRACE_MODE_OFF);
     }
     unlink("test_global.txt");
   }
 
   // --- TG2: trace_mode = MONITORING ---
-  printf("\n  -- TG2: [OpenMP.default] trace_mode = MONITORING --\n");
+  printf("\n  -- TG2: [OpenMP.tracing] trace_mode = MONITORING --\n");
   {
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[OpenMP.default]\n");
+    fprintf(fp, "[OpenMP.tracing]\n");
     fprintf(fp, "    trace_mode = MONITORING\n");
     fclose(fp);
-    parse_trace_config_file("test_global.txt");
+    parse_config_file("test_global.txt");
 
-    if (domain_default_trace_config[omp_idx].mode ==
-        PINSIGHT_DOMAIN_MONITORING) {
+    if (domain_trace_config[omp_idx].mode ==
+        PINSIGHT_TRACE_MODE_MONITORING) {
       printf("[PASS] TG2: trace_mode=MONITORING correctly set mode to "
-             "PINSIGHT_DOMAIN_MONITORING (%d)\n",
-             domain_default_trace_config[omp_idx].mode);
+             "PINSIGHT_TRACE_MODE_MONITORING (%d)\n",
+             domain_trace_config[omp_idx].mode);
     } else {
       printf("[FAIL] TG2: mode=%d (expected %d/MONITORING)\n",
-             domain_default_trace_config[omp_idx].mode,
-             PINSIGHT_DOMAIN_MONITORING);
+             domain_trace_config[omp_idx].mode,
+             PINSIGHT_TRACE_MODE_MONITORING);
     }
     unlink("test_global.txt");
   }
 
   // --- TG3: punit range in .default ---
-  printf("\n  -- TG3: [OpenMP.default] punit range --\n");
+  printf("\n  -- TG3: [OpenMP.tracing] punit range --\n");
   {
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[OpenMP.default]\n");
+    fprintf(fp, "[OpenMP.tracing]\n");
     fprintf(fp, "    trace_mode = TRACING\n");
     fprintf(fp, "    OpenMP.thread = (0-7)\n");
     fclose(fp);
-    parse_trace_config_file("test_global.txt");
+    parse_config_file("test_global.txt");
 
     // Find thread punit kind
     int thread_idx = -1;
@@ -1442,37 +1444,37 @@ void test_domain_mode_punit() {
       printf("[FAIL] TG3: thread punit kind not found\n");
     }
 
-    if (domain_default_trace_config[omp_idx].mode == PINSIGHT_DOMAIN_TRACING) {
+    if (domain_trace_config[omp_idx].mode == PINSIGHT_TRACE_MODE_TRACING) {
       printf("[PASS] TG3: trace_mode=TRACING correctly set alongside punit "
              "range\n");
     } else {
       printf("[FAIL] TG3: mode=%d (expected TRACING)\n",
-             domain_default_trace_config[omp_idx].mode);
+             domain_trace_config[omp_idx].mode);
     }
     unlink("test_global.txt");
   }
 
   // --- TG4: RESET Domain.default ---
-  printf("\n  -- TG4: [RESET OpenMP.default] --\n");
+  printf("\n  -- TG4: [RESET OpenMP.tracing] --\n");
   {
     // First set mode to OFF
-    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_OFF;
+    domain_trace_config[omp_idx].mode = PINSIGHT_TRACE_MODE_OFF;
 
     FILE *fp = fopen("test_global.txt", "w");
-    fprintf(fp, "[RESET OpenMP.default]\n");
+    fprintf(fp, "[RESET OpenMP.tracing]\n");
     fclose(fp);
-    parse_trace_config_file("test_global.txt");
+    parse_config_file("test_global.txt");
 
     // Should revert to starting_mode
-    pinsight_domain_mode_t expected =
+    domain_trace_mode_t expected =
         domain_info_table[omp_idx].starting_mode;
 
-    if (domain_default_trace_config[omp_idx].mode == expected) {
+    if (domain_trace_config[omp_idx].mode == expected) {
       printf("[PASS] TG4: RESET restored mode to install default (%d)\n",
              expected);
     } else {
       printf("[FAIL] TG4: mode=%d (expected %d)\n",
-             domain_default_trace_config[omp_idx].mode, expected);
+             domain_trace_config[omp_idx].mode, expected);
     }
     unlink("test_global.txt");
   }
@@ -1506,13 +1508,13 @@ void test_window_end_action() {
     // Reset end_action
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
-    parse_trace_config_file("test_tma.txt");
+    parse_config_file("test_tma.txt");
 
     // Shorthand sets end_action for all registered domains
     int all_monitoring = 1;
     for (int i = 0; i < num_domain; i++) {
       if (lexgion_default_trace_config->end_action.mode[i] !=
-          PINSIGHT_DOMAIN_MONITORING) {
+          PINSIGHT_TRACE_MODE_MONITORING) {
         all_monitoring = 0;
         break;
       }
@@ -1544,12 +1546,12 @@ void test_window_end_action() {
     fclose(fp);
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
-    parse_trace_config_file("test_tma.txt");
+    parse_config_file("test_tma.txt");
 
     if (lexgion_default_trace_config->end_action.mode[omp_idx] ==
-            PINSIGHT_DOMAIN_OFF &&
+            PINSIGHT_TRACE_MODE_OFF &&
         lexgion_default_trace_config->end_action.mode[mpi_idx] ==
-            PINSIGHT_DOMAIN_NONE) {
+            PINSIGHT_TRACE_MODE_NONE) {
       printf("[PASS] TMA2: OpenMP:OFF parsed (mode[%d]=OFF, "
              "mode[%d]=NONE)\n",
              omp_idx, mpi_idx);
@@ -1570,12 +1572,12 @@ void test_window_end_action() {
     fclose(fp);
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
-    parse_trace_config_file("test_tma.txt");
+    parse_config_file("test_tma.txt");
 
     if (lexgion_default_trace_config->end_action.mode[omp_idx] ==
-            PINSIGHT_DOMAIN_MONITORING &&
+            PINSIGHT_TRACE_MODE_MONITORING &&
         lexgion_default_trace_config->end_action.mode[mpi_idx] ==
-            PINSIGHT_DOMAIN_OFF) {
+            PINSIGHT_TRACE_MODE_OFF) {
       printf("[PASS] TMA3: mode[OpenMP]=MONITORING, "
              "mode[MPI]=OFF\n");
     } else {
@@ -1594,7 +1596,7 @@ void test_window_end_action() {
     fprintf(fp, "    max_num_traces = 50\n");
     fprintf(fp, "    window_end_action = OFF\n");
     fclose(fp);
-    parse_trace_config_file("test_tma.txt");
+    parse_config_file("test_tma.txt");
 
     // Find the address config
     int found = 0;
@@ -1604,7 +1606,7 @@ void test_window_end_action() {
         // Shorthand OFF sets mode for all registered domains
         int all_off = 1;
         for (int d = 0; d < num_domain; d++) {
-          if (lc->end_action.mode[d] != PINSIGHT_DOMAIN_OFF) {
+          if (lc->end_action.mode[d] != PINSIGHT_TRACE_MODE_OFF) {
             all_off = 0;
             break;
           }
@@ -1649,33 +1651,33 @@ void test_window_end_action_runtime() {
   printf("\n  -- TMA5: pinsight_fire_window_end() changes domain mode --\n");
   {
     // Reset state
-    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[omp_idx].mode_change_fired = 0;
+    domain_trace_config[omp_idx].mode = PINSIGHT_TRACE_MODE_TRACING;
+    domain_trace_config[omp_idx].mode_change_fired = 0;
     mode_change_requested = 0;
 
     // Create a trace config with explicit trigger: OpenMP -> MONITORING
     lexgion_trace_config_t tc = {0};
-    tc.end_action.mode[omp_idx] = PINSIGHT_DOMAIN_MONITORING;
+    tc.end_action.mode[omp_idx] = PINSIGHT_TRACE_MODE_MONITORING;
 
     // Fire the trigger
     pinsight_fire_window_end(&tc);
 
     // Check 1: domain mode changed
-    if (domain_default_trace_config[omp_idx].mode ==
-        PINSIGHT_DOMAIN_MONITORING) {
+    if (domain_trace_config[omp_idx].mode ==
+        PINSIGHT_TRACE_MODE_MONITORING) {
       printf("[PASS] TMA5: OpenMP mode switched from TRACING to MONITORING\n");
     } else {
       printf("[FAIL] TMA5: OpenMP mode = %d (expected MONITORING=%d)\n",
-             domain_default_trace_config[omp_idx].mode,
-             PINSIGHT_DOMAIN_MONITORING);
+             domain_trace_config[omp_idx].mode,
+             PINSIGHT_TRACE_MODE_MONITORING);
     }
 
     // Check 2: mode_change_fired flag set
-    if (domain_default_trace_config[omp_idx].mode_change_fired == 1) {
+    if (domain_trace_config[omp_idx].mode_change_fired == 1) {
       printf("[PASS] TMA5: mode_change_fired flag is set\n");
     } else {
       printf("[FAIL] TMA5: mode_change_fired = %d (expected 1)\n",
-             domain_default_trace_config[omp_idx].mode_change_fired);
+             domain_trace_config[omp_idx].mode_change_fired);
     }
 
     // Check 3: mode_change_requested flag set (deferred re-registration)
@@ -1695,20 +1697,20 @@ void test_window_end_action_runtime() {
 
     // Try to trigger OpenMP -> OFF (should be blocked by mode_change_fired)
     lexgion_trace_config_t tc = {0};
-    tc.end_action.mode[omp_idx] = PINSIGHT_DOMAIN_OFF;
+    tc.end_action.mode[omp_idx] = PINSIGHT_TRACE_MODE_OFF;
 
     pinsight_fire_window_end(&tc);
 
     // Mode should NOT have changed (still MONITORING)
-    if (domain_default_trace_config[omp_idx].mode ==
-        PINSIGHT_DOMAIN_MONITORING) {
+    if (domain_trace_config[omp_idx].mode ==
+        PINSIGHT_TRACE_MODE_MONITORING) {
       printf("[PASS] TMA6: mode_change_fired blocked re-trigger "
              "(mode still MONITORING)\n");
     } else {
       printf("[FAIL] TMA6: mode = %d (expected MONITORING=%d, should not have "
              "changed)\n",
-             domain_default_trace_config[omp_idx].mode,
-             PINSIGHT_DOMAIN_MONITORING);
+             domain_trace_config[omp_idx].mode,
+             PINSIGHT_TRACE_MODE_MONITORING);
     }
   }
 
@@ -1716,29 +1718,29 @@ void test_window_end_action_runtime() {
   printf("\n  -- TMA7: end_action triggers multiple domains --\n");
   {
     // Reset both domains
-    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[omp_idx].mode_change_fired = 0;
-    domain_default_trace_config[mpi_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[mpi_idx].mode_change_fired = 0;
+    domain_trace_config[omp_idx].mode = PINSIGHT_TRACE_MODE_TRACING;
+    domain_trace_config[omp_idx].mode_change_fired = 0;
+    domain_trace_config[mpi_idx].mode = PINSIGHT_TRACE_MODE_TRACING;
+    domain_trace_config[mpi_idx].mode_change_fired = 0;
     mode_change_requested = 0;
 
     // Create a config with end_action set for both domains
     lexgion_trace_config_t tc = {0};
-    tc.end_action.mode[omp_idx] = PINSIGHT_DOMAIN_OFF;
-    tc.end_action.mode[mpi_idx] = PINSIGHT_DOMAIN_OFF;
+    tc.end_action.mode[omp_idx] = PINSIGHT_TRACE_MODE_OFF;
+    tc.end_action.mode[mpi_idx] = PINSIGHT_TRACE_MODE_OFF;
 
     pinsight_fire_window_end(&tc);
 
     // Both domains should switch to OFF
     int pass = 1;
-    if (domain_default_trace_config[omp_idx].mode != PINSIGHT_DOMAIN_OFF) {
+    if (domain_trace_config[omp_idx].mode != PINSIGHT_TRACE_MODE_OFF) {
       printf("[FAIL] TMA7: OpenMP mode = %d (expected OFF=%d)\n",
-             domain_default_trace_config[omp_idx].mode, PINSIGHT_DOMAIN_OFF);
+             domain_trace_config[omp_idx].mode, PINSIGHT_TRACE_MODE_OFF);
       pass = 0;
     }
-    if (domain_default_trace_config[mpi_idx].mode != PINSIGHT_DOMAIN_OFF) {
+    if (domain_trace_config[mpi_idx].mode != PINSIGHT_TRACE_MODE_OFF) {
       printf("[FAIL] TMA7: MPI mode = %d (expected OFF=%d)\n",
-             domain_default_trace_config[mpi_idx].mode, PINSIGHT_DOMAIN_OFF);
+             domain_trace_config[mpi_idx].mode, PINSIGHT_TRACE_MODE_OFF);
       pass = 0;
     }
     if (pass) {
@@ -1747,10 +1749,10 @@ void test_window_end_action_runtime() {
     }
 
     // Restore modes for subsequent tests
-    domain_default_trace_config[omp_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[omp_idx].mode_change_fired = 0;
-    domain_default_trace_config[mpi_idx].mode = PINSIGHT_DOMAIN_TRACING;
-    domain_default_trace_config[mpi_idx].mode_change_fired = 0;
+    domain_trace_config[omp_idx].mode = PINSIGHT_TRACE_MODE_TRACING;
+    domain_trace_config[omp_idx].mode_change_fired = 0;
+    domain_trace_config[mpi_idx].mode = PINSIGHT_TRACE_MODE_TRACING;
+    domain_trace_config[mpi_idx].mode_change_fired = 0;
   }
 }
 
@@ -1771,16 +1773,16 @@ void test_window_end_action_env() {
 
   // --- TMA8: Env var multi-domain: OpenMP:MONITORING,MPI:OFF ---
   printf(
-      "\n  -- TMA8: PINSIGHT_TRACE_WINDOW=0:50:1:0:OpenMP:MONITORING,MPI:OFF --\n");
+      "\n  -- TMA8: PINSIGHT_WINDOW=0:50:1:0:OpenMP:MONITORING,MPI:OFF --\n");
   {
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
     lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
 
     /* New 5-field grammar: start:max:rate:window_timeout:end_action */
-    setenv("PINSIGHT_TRACE_WINDOW", "0:50:1:0:OpenMP:MONITORING,MPI:OFF", 1);
-    setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_WINDOW");
+    setenv("PINSIGHT_WINDOW", "0:50:1:0:OpenMP:MONITORING,MPI:OFF", 1);
+    setup_config_env();
+    unsetenv("PINSIGHT_WINDOW");
 
     if (lexgion_default_trace_config->max_num_traces == 50) {
       printf("[PASS] TMA8: max_num_traces=50\n");
@@ -1790,9 +1792,9 @@ void test_window_end_action_env() {
     }
 
     if (lexgion_default_trace_config->end_action.mode[omp_idx] ==
-            PINSIGHT_DOMAIN_MONITORING &&
+            PINSIGHT_TRACE_MODE_MONITORING &&
         lexgion_default_trace_config->end_action.mode[mpi_idx] ==
-            PINSIGHT_DOMAIN_OFF) {
+            PINSIGHT_TRACE_MODE_OFF) {
       printf("[PASS] TMA8: mode[OpenMP]=MONITORING, "
              "mode[MPI]=OFF\n");
     } else {
@@ -1829,7 +1831,7 @@ void test_introspect_config() {
     fclose(fp);
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
-    parse_trace_config_file("test_introspect.txt");
+    parse_config_file("test_introspect.txt");
 
     window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
@@ -1850,9 +1852,9 @@ void test_introspect_config() {
     }
     // All domains should resume to TRACING
     for (int i = 0; i < num_domain; i++) {
-      if (ma->mode[i] != PINSIGHT_DOMAIN_TRACING) {
+      if (ma->mode[i] != PINSIGHT_TRACE_MODE_TRACING) {
         printf("[FAIL] TMA9: mode[%d]=%d (expected TRACING=%d)\n", i,
-               ma->mode[i], PINSIGHT_DOMAIN_TRACING);
+               ma->mode[i], PINSIGHT_TRACE_MODE_TRACING);
         pass = 0;
         break;
       }
@@ -1870,7 +1872,7 @@ void test_introspect_config() {
     fclose(fp);
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
-    parse_trace_config_file("test_introspect.txt");
+    parse_config_file("test_introspect.txt");
 
     window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
@@ -1891,9 +1893,9 @@ void test_introspect_config() {
     }
     // No explicit resume mode: all domains remain NONE (consumer applies default)
     for (int i = 0; i < MAX_NUM_DOMAINS; i++) {
-      if (ma->mode[i] != PINSIGHT_DOMAIN_NONE) {
+      if (ma->mode[i] != PINSIGHT_TRACE_MODE_NONE) {
         printf("[FAIL] TMA10: mode[%d]=%d (expected NONE=%d)\n", i,
-               ma->mode[i], PINSIGHT_DOMAIN_NONE);
+               ma->mode[i], PINSIGHT_TRACE_MODE_NONE);
         pass = 0;
         break;
       }
@@ -1912,7 +1914,7 @@ void test_introspect_config() {
     fclose(fp);
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
-    parse_trace_config_file("test_introspect.txt");
+    parse_config_file("test_introspect.txt");
 
     window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
@@ -1928,9 +1930,9 @@ void test_introspect_config() {
       pass = 0;
     }
     // No explicit resume mode: NONE (consumer applies default)
-    if (ma->mode[0] != PINSIGHT_DOMAIN_NONE) {
+    if (ma->mode[0] != PINSIGHT_TRACE_MODE_NONE) {
       printf("[FAIL] TMA11: resume mode=%d (expected NONE=%d)\n",
-             ma->mode[0], PINSIGHT_DOMAIN_NONE);
+             ma->mode[0], PINSIGHT_TRACE_MODE_NONE);
       pass = 0;
     }
     if (pass)
@@ -1938,15 +1940,15 @@ void test_introspect_config() {
   }
 
   // --- TMA12: INTROSPECT via env var (new 5-field grammar) ---
-  printf("\n  -- TMA12: PINSIGHT_TRACE_WINDOW=0:100:10:0:INTROSPECT:60:analyze.sh:TRACING --\n");
+  printf("\n  -- TMA12: PINSIGHT_WINDOW=0:100:10:0:INTROSPECT:60:analyze.sh:TRACING --\n");
   {
     memset(&lexgion_default_trace_config->end_action, 0,
            sizeof(lexgion_default_trace_config->end_action));
 
-    setenv("PINSIGHT_TRACE_WINDOW",
+    setenv("PINSIGHT_WINDOW",
            "0:100:10:0:INTROSPECT:60:analyze.sh:TRACING", 1);
-    setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_WINDOW");
+    setup_config_env();
+    unsetenv("PINSIGHT_WINDOW");
 
     window_end_action_t *ma = &lexgion_default_trace_config->end_action;
     int pass = 1;
@@ -1970,7 +1972,7 @@ void test_introspect_config() {
              ma->introspect_script);
       pass = 0;
     }
-    if (ma->mode[0] != PINSIGHT_DOMAIN_TRACING) {
+    if (ma->mode[0] != PINSIGHT_TRACE_MODE_TRACING) {
       printf("[FAIL] TMA12: resume mode=%d (expected TRACING)\n",
              ma->mode[0]);
       pass = 0;
@@ -1992,7 +1994,7 @@ void test_introspect_config() {
             sizeof(lexgion_default_trace_config->end_action.introspect_script) - 1);
     for (int i = 0; i < num_domain; i++)
       lexgion_default_trace_config->end_action.mode[i] =
-          PINSIGHT_DOMAIN_TRACING;
+          PINSIGHT_TRACE_MODE_TRACING;
 
     // Print to capture output (uses public API which prints all lexgion configs)
     printf("  [Expected output to contain: window_end_action = INTROSPECT:45:test_script.sh:TRACING]\n");
@@ -2019,7 +2021,7 @@ void test_knob_config() {
   fprintf(fp, "    experiment_name = baseline_run\n");
   fclose(fp);
 
-  parse_trace_config_file("knob_test.txt");
+  parse_config_file("knob_test.txt");
 
   // Verify int knobs
   if (pinsight_get_knob_int("compute_threads") == 8) {
@@ -2077,7 +2079,7 @@ void test_knob_config() {
   fprintf(fp, "    experiment_name = tuned_run\n");
   fclose(fp);
 
-  parse_trace_config_file("knob_test.txt");
+  parse_config_file("knob_test.txt");
 
   if (pinsight_get_knob_int("compute_threads") == 4 &&
       pinsight_get_knob_int("reduce_threads") == 1) {
@@ -2185,7 +2187,7 @@ void test_python_config() {
       printf("[FAIL] PY1c: punit 'thread' not found or range too small\n");
 
     /* pysysmon_py_start ON by default; pysysmon_import OFF */
-    unsigned long def_ev = domain_default_trace_config[py_idx].events;
+    unsigned long def_ev = domain_trace_config[py_idx].events;
     if (id_py_start >= 0 && ((def_ev >> id_py_start) & 1))
       printf("[PASS] PY1d: pysysmon_py_start is ON by default\n");
     else
@@ -2197,46 +2199,46 @@ void test_python_config() {
   }
 
   /* ------------------------------------------------------------------ */
-  /* PY2: [Python.default] trace_mode                                   */
+  /* PY2: [Python.tracing] trace_mode                                   */
   /* ------------------------------------------------------------------ */
-  printf("\n  -- PY2: [Python.default] trace_mode = MONITORING --\n");
+  printf("\n  -- PY2: [Python.tracing] trace_mode = MONITORING --\n");
   {
-    pinsight_domain_mode_t saved = domain_default_trace_config[py_idx].mode;
+    domain_trace_mode_t saved = domain_trace_config[py_idx].mode;
     FILE *fp = fopen("test_py.txt", "w");
-    fprintf(fp, "[Python.default]\n    trace_mode = MONITORING\n");
+    fprintf(fp, "[Python.tracing]\n    trace_mode = MONITORING\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
-    if (domain_default_trace_config[py_idx].mode == PINSIGHT_DOMAIN_MONITORING)
-      printf("[PASS] PY2: Python.default trace_mode=MONITORING\n");
+    parse_config_file("test_py.txt");
+    if (domain_trace_config[py_idx].mode == PINSIGHT_TRACE_MODE_MONITORING)
+      printf("[PASS] PY2: Python.tracing trace_mode=MONITORING\n");
     else
       printf("[FAIL] PY2: mode=%d (expected MONITORING=%d)\n",
-             domain_default_trace_config[py_idx].mode, PINSIGHT_DOMAIN_MONITORING);
-    domain_default_trace_config[py_idx].mode = saved;
+             domain_trace_config[py_idx].mode, PINSIGHT_TRACE_MODE_MONITORING);
+    domain_trace_config[py_idx].mode = saved;
     remove("test_py.txt");
   }
 
   /* ------------------------------------------------------------------ */
-  /* PY3: [Python.default] event disable                                */
+  /* PY3: [Python.tracing] event disable                                */
   /* ------------------------------------------------------------------ */
-  printf("\n  -- PY3: [Python.default] pysysmon_py_start = off --\n");
+  printf("\n  -- PY3: [Python.tracing] pysysmon_py_start = off --\n");
   {
     int id_py_start = -1;
     for (int k = 0; k < py->num_events; k++)
       if (strcmp(py->event_table[k].name, "pysysmon_py_start") == 0)
         { id_py_start = k; break; }
 
-    unsigned long saved_ev = domain_default_trace_config[py_idx].events;
+    unsigned long saved_ev = domain_trace_config[py_idx].events;
     FILE *fp = fopen("test_py.txt", "w");
-    fprintf(fp, "[Python.default]\n    pysysmon_py_start = off\n");
+    fprintf(fp, "[Python.tracing]\n    pysysmon_py_start = off\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
-    unsigned long new_ev = domain_default_trace_config[py_idx].events;
+    unsigned long new_ev = domain_trace_config[py_idx].events;
     if (id_py_start >= 0 && !((new_ev >> id_py_start) & 1))
-      printf("[PASS] PY3: pysysmon_py_start disabled via Python.default\n");
+      printf("[PASS] PY3: pysysmon_py_start disabled via Python.tracing\n");
     else
       printf("[FAIL] PY3: id=%d events=0x%lx (bit should be 0)\n", id_py_start, new_ev);
-    domain_default_trace_config[py_idx].events = saved_ev;
+    domain_trace_config[py_idx].events = saved_ev;
     remove("test_py.txt");
   }
 
@@ -2248,7 +2250,7 @@ void test_python_config() {
     FILE *fp = fopen("test_py.txt", "w");
     fprintf(fp, "[Python.thread(0-3)]\n    pysysmon_py_start = on\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     punit_trace_config_t *pc = domain_punit_trace_config[py_idx];
     if (pc) {
@@ -2284,7 +2286,7 @@ void test_python_config() {
     fprintf(fp, "    max_num_traces = 50\n");
     fprintf(fp, "    tracing_rate = 5\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("compute", py_idx, NULL);
     if (lc) {
@@ -2322,7 +2324,7 @@ void test_python_config() {
     fprintf(fp, "[Lexgion(Python:MyClass.compute)]\n");
     fprintf(fp, "    max_num_traces = 100\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("MyClass.compute", py_idx, NULL);
     if (lc && lc->max_num_traces == 100)
@@ -2343,7 +2345,7 @@ void test_python_config() {
     fprintf(fp, "[Lexgion(Python:main.<locals>.do_work)]\n");
     fprintf(fp, "    max_num_traces = 20\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc =
         find_named_lexgion_config("main.<locals>.do_work", py_idx, NULL);
@@ -2365,7 +2367,7 @@ void test_python_config() {
     fprintf(fp, "[Lexgion(Python:solver.py:compute)]\n");
     fprintf(fp, "    max_num_traces = 30\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("compute", py_idx, "solver.py");
     if (lc) {
@@ -2395,7 +2397,7 @@ void test_python_config() {
     fprintf(fp, "[Lexgion(compute)]\n");
     fprintf(fp, "    max_num_traces = 200\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     /* domain-agnostic entries have domain_index == -1 */
     lexgion_trace_config_t *lc = find_named_lexgion_config("compute", -1, NULL);
@@ -2426,7 +2428,7 @@ void test_python_config() {
     fprintf(fp, "    max_num_traces = 77\n");
     fprintf(fp, "    tracing_rate = 3\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lfoo = find_named_lexgion_config("foo", py_idx, NULL);
     lexgion_trace_config_t *lbar = find_named_lexgion_config("bar", py_idx, NULL);
@@ -2459,15 +2461,15 @@ void test_python_config() {
     fprintf(fp, "    max_num_traces = 10\n");
     fprintf(fp, "    window_end_action = Python:MONITORING\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("hotloop", py_idx, NULL);
     if (lc) {
-      if (lc->end_action.mode[py_idx] == PINSIGHT_DOMAIN_MONITORING)
+      if (lc->end_action.mode[py_idx] == PINSIGHT_TRACE_MODE_MONITORING)
         printf("[PASS] PY11: window_end_action Python:MONITORING stored\n");
       else
         printf("[FAIL] PY11: end_action.mode[py]=%d (expected MONITORING=%d)\n",
-               lc->end_action.mode[py_idx], PINSIGHT_DOMAIN_MONITORING);
+               lc->end_action.mode[py_idx], PINSIGHT_TRACE_MODE_MONITORING);
     } else {
       printf("[FAIL] PY11: 'hotloop' named entry not found\n");
     }
@@ -2486,7 +2488,7 @@ void test_python_config() {
     fprintf(fp, "    max_num_traces = 5\n");
     fprintf(fp, "    window_end_action = INTROSPECT:30:analyze.sh:Python:MONITORING\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("expensive", py_idx, NULL);
     if (lc) {
@@ -2499,7 +2501,7 @@ void test_python_config() {
       if (strcmp(ma->introspect_script, "analyze.sh") != 0)
         { printf("[FAIL] PY12: script='%s' (expected 'analyze.sh')\n",
                  ma->introspect_script); pass = 0; }
-      if (ma->mode[py_idx] != PINSIGHT_DOMAIN_MONITORING)
+      if (ma->mode[py_idx] != PINSIGHT_TRACE_MODE_MONITORING)
         { printf("[FAIL] PY12: resume mode[py]=%d (expected MONITORING)\n",
                  ma->mode[py_idx]); pass = 0; }
       if (pass)
@@ -2520,7 +2522,7 @@ void test_python_config() {
     FILE *fp = fopen("test_py.txt", "w");
     fprintf(fp, "[Lexgion(Python:reload_func)]\n    max_num_traces = 15\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     /* Simulate SIGUSR1 reload: mark all named entries removed */
     for (int i = 0; i < num_lexgion_trace_configs; i++)
@@ -2528,7 +2530,7 @@ void test_python_config() {
         lexgion_trace_config[i].removed = 1;
 
     /* Re-parse the same config — entry should be found and restored */
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *lc = find_named_lexgion_config("reload_func", py_idx, NULL);
     if (lc && !lc->removed)
@@ -2550,7 +2552,7 @@ void test_python_config() {
     FILE *fp = fopen("test_py_init.txt", "w");
     fprintf(fp, "[Lexgion(Python:noisyFunc)]\n    max_num_traces = 5\n");
     fclose(fp);
-    parse_trace_config_file("test_py_init.txt");
+    parse_config_file("test_py_init.txt");
 
     /* Simulate reload: mark named entries removed */
     for (int i = 0; i < num_lexgion_trace_configs; i++)
@@ -2561,7 +2563,7 @@ void test_python_config() {
     fp = fopen("test_py_reload.txt", "w");
     fprintf(fp, "[REMOVE Lexgion(Python:noisyFunc)]\n");
     fclose(fp);
-    parse_trace_config_file("test_py_reload.txt");
+    parse_config_file("test_py_reload.txt");
 
     /* Entry should still be marked removed (not recreated) */
     lexgion_trace_config_t *lc = NULL;
@@ -2593,7 +2595,7 @@ void test_python_config() {
     fprintf(fp, "    max_num_traces = 99\n");
     fprintf(fp, "    tracing_rate = 7\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *dlg = &lexgion_domain_default_trace_config[py_idx];
     if (dlg->max_num_traces == 99)
@@ -2614,16 +2616,16 @@ void test_python_config() {
   /* ------------------------------------------------------------------ */
   printf("\n  -- PY16: PINSIGHT_TRACE_PYTHON=MONITORING env var --\n");
   {
-    pinsight_domain_mode_t saved = domain_default_trace_config[py_idx].mode;
+    domain_trace_mode_t saved = domain_trace_config[py_idx].mode;
     setenv("PINSIGHT_TRACE_PYTHON", "MONITORING", 1);
-    setup_trace_config_env();
+    setup_config_env();
     unsetenv("PINSIGHT_TRACE_PYTHON");
-    if (domain_default_trace_config[py_idx].mode == PINSIGHT_DOMAIN_MONITORING)
+    if (domain_trace_config[py_idx].mode == PINSIGHT_TRACE_MODE_MONITORING)
       printf("[PASS] PY16: PINSIGHT_TRACE_PYTHON=MONITORING applied\n");
     else
       printf("[FAIL] PY16: mode=%d (expected MONITORING=%d)\n",
-             domain_default_trace_config[py_idx].mode, PINSIGHT_DOMAIN_MONITORING);
-    domain_default_trace_config[py_idx].mode = saved;
+             domain_trace_config[py_idx].mode, PINSIGHT_TRACE_MODE_MONITORING);
+    domain_trace_config[py_idx].mode = saved;
   }
 
   /* ------------------------------------------------------------------ */
@@ -2636,7 +2638,7 @@ void test_python_config() {
     fprintf(fp, "[Lexgion(Python:solver)]\n    max_num_traces = 40\n");
     fprintf(fp, "[Lexgion(0x4010bd)]\n    max_num_traces = 88\n");
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     lexgion_trace_config_t *named = find_named_lexgion_config("solver", py_idx, NULL);
     lexgion_trace_config_t *addr  = NULL;
@@ -2672,7 +2674,7 @@ void test_python_config() {
     fprintf(fp, "[Lexgion(Python:compute)]\n    max_num_traces = 50\n");
     fprintf(fp, "[Lexgion(Python:compute)]\n    max_num_traces = 75\n"); /* override */
     fclose(fp);
-    parse_trace_config_file("test_py.txt");
+    parse_config_file("test_py.txt");
 
     /* Should be exactly one entry named "compute" for Python */
     int count = 0;
@@ -2712,7 +2714,7 @@ void test_window_timeout() {
     fprintf(fp, "[Lexgion.default]\n    max_num_traces = 50\n    window_timeout = 30\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
-    parse_trace_config_file("test_wt.txt");
+    parse_config_file("test_wt.txt");
     printf(ma->window_timeout_sec == 30 ? "[PASS] WT1: window_timeout_sec=30\n"
            : "[FAIL] WT1: window_timeout_sec=%d (expected 30)\n",
            ma->window_timeout_sec);
@@ -2726,9 +2728,9 @@ void test_window_timeout() {
                 "    window_end_action = MONITORING\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
-    parse_trace_config_file("test_wt.txt");
+    parse_config_file("test_wt.txt");
     int ok = (ma->window_timeout_sec == 25) &&
-             (ma->mode[0] == PINSIGHT_DOMAIN_MONITORING);
+             (ma->mode[0] == PINSIGHT_TRACE_MODE_MONITORING);
     printf(ok ? "[PASS] WT2: window_timeout_sec=25 survived window_end_action overwrite\n"
               : "[FAIL] WT2: window_timeout_sec=%d (expected 25), mode[0]=%d\n",
            ma->window_timeout_sec, ma->mode[0]);
@@ -2741,7 +2743,7 @@ void test_window_timeout() {
     fprintf(fp, "[Lexgion.default]\n    window_end_trigger = all\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
-    parse_trace_config_file("test_wt.txt");
+    parse_config_file("test_wt.txt");
     printf(ma->trigger == TRIGGER_ALL ? "[PASS] WT3: trigger=TRIGGER_ALL\n"
            : "[FAIL] WT3: trigger=%d (expected TRIGGER_ALL=%d)\n",
            ma->trigger, TRIGGER_ALL);
@@ -2754,36 +2756,36 @@ void test_window_timeout() {
     fprintf(fp, "[Lexgion.default]\n    window_end_trigger = anchor\n");
     fclose(fp);
     memset(ma, 0, sizeof(*ma));
-    parse_trace_config_file("test_wt.txt");
+    parse_config_file("test_wt.txt");
     printf(ma->trigger == TRIGGER_FIRST ? "[PASS] WT4: anchor rejected, trigger=TRIGGER_FIRST\n"
            : "[FAIL] WT4: trigger=%d (expected TRIGGER_FIRST=%d)\n",
            ma->trigger, TRIGGER_FIRST);
   }
 
-  // --- WT5: env PINSIGHT_TRACE_WINDOW with 4th field + end_action ---
-  printf("\n  -- WT5: PINSIGHT_TRACE_WINDOW=0:50:1:30:MONITORING --\n");
+  // --- WT5: env PINSIGHT_WINDOW with 4th field + end_action ---
+  printf("\n  -- WT5: PINSIGHT_WINDOW=0:50:1:30:MONITORING --\n");
   {
     memset(ma, 0, sizeof(*ma));
     lexgion_default_trace_config->max_num_traces = (unsigned int)-1;
-    setenv("PINSIGHT_TRACE_WINDOW", "0:50:1:30:MONITORING", 1);
-    setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_WINDOW");
+    setenv("PINSIGHT_WINDOW", "0:50:1:30:MONITORING", 1);
+    setup_config_env();
+    unsetenv("PINSIGHT_WINDOW");
     int ok = (lexgion_default_trace_config->max_num_traces == 50) &&
              (ma->window_timeout_sec == 30) &&
-             (ma->mode[0] == PINSIGHT_DOMAIN_MONITORING);
+             (ma->mode[0] == PINSIGHT_TRACE_MODE_MONITORING);
     printf(ok ? "[PASS] WT5: max=50, window_timeout=30, end_action=MONITORING\n"
               : "[FAIL] WT5: max=%d window=%d mode[0]=%d\n",
            lexgion_default_trace_config->max_num_traces,
            ma->window_timeout_sec, ma->mode[0]);
   }
 
-  // --- WT6: deprecated alias PINSIGHT_TRACE_RATE still works (same grammar) ---
-  printf("\n  -- WT6: deprecated PINSIGHT_TRACE_RATE=0:50:1:15:MONITORING --\n");
+  // --- WT6: short-form PINSIGHT_WINDOW grammar (start:max:rate:timeout) ---
+  printf("\n  -- WT6: short-form PINSIGHT_WINDOW=0:50:1:15:MONITORING --\n");
   {
     memset(ma, 0, sizeof(*ma));
-    setenv("PINSIGHT_TRACE_RATE", "0:50:1:15:MONITORING", 1);
-    setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_RATE");
+    setenv("PINSIGHT_WINDOW", "0:50:1:15:MONITORING", 1);
+    setup_config_env();
+    unsetenv("PINSIGHT_WINDOW");
     printf(ma->window_timeout_sec == 15
                ? "[PASS] WT6: alias parsed window_timeout=15 (with deprecation warning)\n"
                : "[FAIL] WT6: window_timeout_sec=%d (expected 15)\n",
@@ -2791,12 +2793,12 @@ void test_window_timeout() {
   }
 
   // --- WT7: legacy 3-field value -> window stays 0, no crash ---
-  printf("\n  -- WT7: legacy PINSIGHT_TRACE_WINDOW=10:100:5 (3 fields) --\n");
+  printf("\n  -- WT7: legacy PINSIGHT_WINDOW=10:100:5 (3 fields) --\n");
   {
     memset(ma, 0, sizeof(*ma));
-    setenv("PINSIGHT_TRACE_WINDOW", "10:100:5", 1);
-    setup_trace_config_env();
-    unsetenv("PINSIGHT_TRACE_WINDOW");
+    setenv("PINSIGHT_WINDOW", "10:100:5", 1);
+    setup_config_env();
+    unsetenv("PINSIGHT_WINDOW");
     int ok = (lexgion_default_trace_config->max_num_traces == 100) &&
              (ma->window_timeout_sec == 0);
     printf(ok ? "[PASS] WT7: 3-field value parses, window_timeout defaults to 0\n"
@@ -2812,7 +2814,7 @@ int main() {
   // ... (This part was in original file, assuming it's still there)
 
   // Call env override manually to ensure consistent state if needed
-  // setenv("PINSIGHT_TRACE_CONFIG_FILE", "param.conf", 1);
+  // setenv("PINSIGHT_CONFIG_FILE", "param.conf", 1);
 
   setup_and_test_env();
   test_parsing();

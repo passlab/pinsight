@@ -1,4 +1,4 @@
-[MPI.default]
+[MPI.tracing]
     trace_mode = TRACING
     MPI.rank = (0, 127)
 

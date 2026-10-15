@@ -341,14 +341,14 @@ static inline uint64_t cuda_mono_ms(void) {
 /* Live per-rank collect decision:
  *   (trace_mode == TRACING) AND (device_activity selects this rank NOW). */
 static int cuda_should_collect_now(void) {
-  if (domain_default_trace_config[CUDA_domain_index].mode !=
-      PINSIGHT_DOMAIN_TRACING)
+  if (domain_trace_config[CUDA_domain_index].mode !=
+      PINSIGHT_TRACE_MODE_TRACING)
     return 0;
   int idx = cuda_nodepolicy_idx();
   if (idx < 0)
     return 0;
   pinsight_nodepolicy_val_t v =
-      domain_default_trace_config[CUDA_domain_index].nodepolicy[idx];
+      domain_trace_config[CUDA_domain_index].nodepolicy[idx];
   switch (v.policy) {
   case PINSIGHT_NODEPOLICY_OFF:
     return 0;
@@ -384,14 +384,14 @@ static int cuda_should_collect_now(void) {
 int pinsight_control_cuda_rotate_period_ms(void) {
   if (cuda_permanently_off)
     return 0;
-  if (domain_default_trace_config[CUDA_domain_index].mode !=
-      PINSIGHT_DOMAIN_TRACING)
+  if (domain_trace_config[CUDA_domain_index].mode !=
+      PINSIGHT_TRACE_MODE_TRACING)
     return 0;
   int idx = cuda_nodepolicy_idx();
   if (idx < 0)
     return 0;
   pinsight_nodepolicy_val_t v =
-      domain_default_trace_config[CUDA_domain_index].nodepolicy[idx];
+      domain_trace_config[CUDA_domain_index].nodepolicy[idx];
   pinsight_nodepolicy_t m = cuda_method_pinned ? cuda_pinned_method : v.policy;
   if (m != PINSIGHT_NODEPOLICY_ROTATE_PER_NODE)
     return 0;
@@ -514,8 +514,8 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
    * 2. Domain mode check — OFF → skip everything
    *    Reads volatile field — control thread updates it.
    * ---------------------------------------------------------- */
-  if (!PINSIGHT_DOMAIN_ACTIVE(
-          domain_default_trace_config[CUDA_domain_index].mode))
+  if (!DOMAIN_TRACE_ACTIVE(
+          domain_trace_config[CUDA_domain_index].mode))
     return;
 
   /* 3. Only runtime API domain */
@@ -579,11 +579,11 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
       /* Name resolution: cbInfo->symbolName is the kernel name (e.g. "vectorAdd").
        * CUPTI-owned, stable for the session lifetime — zero allocation. */
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = cbInfo->symbolName;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       /* MONITOR mode: skip config resolution + rate decision.
@@ -662,11 +662,11 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
 
       /* Name resolution: use CUDA event name from domain_info_table for
        * non-kernel API calls (e.g. "CUDA_cudaMemcpy"). Zero allocation. */
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = domain_info_table[CUDA_domain_index].event_table[event_id].name;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -717,11 +717,11 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
       lexgion_t *lgp = record->lgp;
 
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = domain_info_table[CUDA_domain_index].event_table[event_id].name;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -777,12 +777,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
       lexgion_t *lgp = record->lgp;
 
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = domain_info_table[CUDA_domain_index]
                         .event_table[CUDA_EVENT_MALLOC].name;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -828,12 +828,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
       lexgion_t *lgp = record->lgp;
 
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = domain_info_table[CUDA_domain_index]
                         .event_table[CUDA_EVENT_FREE].name;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -877,12 +877,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
       lexgion_t *lgp = record->lgp;
 
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = domain_info_table[CUDA_domain_index]
                         .event_table[CUDA_EVENT_DEVICE_SYNCHRONIZE].name;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -933,12 +933,12 @@ void CUPTIAPI CUPTI_callback_lttng(void *userdata, CUpti_CallbackDomain domain,
         return;
       lexgion_t *lgp = record->lgp;
 
-      if (lgp->name_resolved_gen != trace_config_change_counter) {
+      if (lgp->name_resolved_gen != config_change_counter) {
         lgp->name = domain_info_table[CUDA_domain_index]
                         .event_table[CUDA_EVENT_STREAM_SYNCHRONIZE].name;
         lgp->filename_hint = NULL;
-        lgp->name_resolved_gen = trace_config_change_counter;
-        lgp->trace_config_change_counter = (unsigned int)-1;
+        lgp->name_resolved_gen = config_change_counter;
+        lgp->config_change_counter = (unsigned int)-1;
       }
 
       if (PINSIGHT_SHOULD_TRACE(CUDA_domain_index)) {
@@ -1129,17 +1129,17 @@ static int cuda_permanently_off = 0; /* Once set, never apply again */
  * subscribe entirely if starting OFF (no overhead).
  * Sets last_mode = starting mode so apply_mode never sees NONE. */
 static void pinsight_cuda_init(void) {
-  pinsight_domain_mode_t mode =
-      domain_default_trace_config[CUDA_domain_index].mode;
+  domain_trace_mode_t mode =
+      domain_trace_config[CUDA_domain_index].mode;
 
   /* Parse CUDA_VISIBLE_DEVICES once, before any callback can fire,
    * so cuda_physical_devId() is race-free (read-only afterwards). */
   cuda_parse_visible_devices();
 
-  if (mode == PINSIGHT_DOMAIN_OFF) {
+  if (mode == PINSIGHT_TRACE_MODE_OFF) {
     cuda_permanently_off = 1;
     fprintf(stderr, "PInsight: CUDA domain starting OFF — not subscribing\n");
-    domain_default_trace_config[CUDA_domain_index].last_mode = mode;
+    domain_trace_config[CUDA_domain_index].last_mode = mode;
     return;
   }
 
@@ -1148,11 +1148,11 @@ static void pinsight_cuda_init(void) {
 
   /* Clock calibration is deferred to the first callback (cuptiGetTimestamp and
    * the LTTng provider are not reliably ready at constructor time). */
-  if (PINSIGHT_DOMAIN_ACTIVE(mode))
+  if (DOMAIN_TRACE_ACTIVE(mode))
     cupti_set_all_callbacks(1);
   /* STANDBY: subscriber live, individual callbacks off */
 
-  domain_default_trace_config[CUDA_domain_index].last_mode = mode;
+  domain_trace_config[CUDA_domain_index].last_mode = mode;
 }
 
 /* Called by the control thread for runtime mode transitions.
@@ -1163,10 +1163,10 @@ void pinsight_control_cuda_apply_mode(void) {
   if (cuda_permanently_off)
     return;
 
-  pinsight_domain_mode_t mode =
-      domain_default_trace_config[CUDA_domain_index].mode;
-  pinsight_domain_mode_t last =
-      domain_default_trace_config[CUDA_domain_index].last_mode;
+  domain_trace_mode_t mode =
+      domain_trace_config[CUDA_domain_index].mode;
+  domain_trace_mode_t last =
+      domain_trace_config[CUDA_domain_index].last_mode;
 
   if (mode == last)
     return;
@@ -1177,17 +1177,17 @@ void pinsight_control_cuda_apply_mode(void) {
    * selected collector). */
   pinsight_control_cuda_apply_collect_state();
 
-  if (mode == PINSIGHT_DOMAIN_OFF) {
-    if (PINSIGHT_DOMAIN_ACTIVE(last))
+  if (mode == PINSIGHT_TRACE_MODE_OFF) {
+    if (DOMAIN_TRACE_ACTIVE(last))
       cuptiActivityFlushAll(1);
     cuptiUnsubscribe(subscriber);
     cuda_permanently_off = 1;
     cuda_activity_emit = 0;
     fprintf(stderr, "PInsight: CUDA domain permanently OFF\n");
-  } else if (mode == PINSIGHT_DOMAIN_STANDBY) {
-    if (PINSIGHT_DOMAIN_ACTIVE(last))
+  } else if (mode == PINSIGHT_TRACE_MODE_STANDBY) {
+    if (DOMAIN_TRACE_ACTIVE(last))
       cupti_set_all_callbacks(0);
-  } else if (!PINSIGHT_DOMAIN_ACTIVE(last)) {
+  } else if (!DOMAIN_TRACE_ACTIVE(last)) {
     /* STANDBY → MONITORING/TRACING: enable the host API callbacks. */
     cupti_set_all_callbacks(1);
   }

@@ -44,6 +44,8 @@ set(SOURCE_FILES
         src/trace_config.c
         src/trace_config_parse.c
         src/trace_config.h
+        src/pinsight_sampler.c
+        src/pinsight_sampler.h
         src/trace_domain_dsl.h
         src/trace_domain_loader.h
         src/trace_domain_loader.c
@@ -214,7 +216,7 @@ if (PINSIGHT_PYTHON)
     # No Python.h dependency — compiled into libpinsight.so so the symbols
     # are present when the constructor calls register_Python_trace_domain().
     target_sources(pinsight PRIVATE src/pysysmon_globals.c src/trace_domain_Python.h)
-    Python3_add_library(_pinsight_python MODULE src/pysysmon_callback.c)
+    Python3_add_library(_pinsight_python MODULE src/pysysmon_callback.c src/pysysmon_sampler.c)
     target_include_directories(_pinsight_python PRIVATE
         ${CMAKE_CURRENT_BINARY_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src)

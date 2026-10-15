@@ -172,8 +172,8 @@ int MPI_get_rank(void) {
   pinsight_check_pause(); /* cooperative pause for introspection */            \
   /* OFF/STANDBY killswitch: lgp = NULL signals epilogue to skip entirely */   \
   lexgion_t *lgp = NULL;                                                       \
-  if (PINSIGHT_DOMAIN_ACTIVE(                                                  \
-          domain_default_trace_config[MPI_domain_index].mode)) {               \
+  if (DOMAIN_TRACE_ACTIVE(                                                  \
+          domain_trace_config[MPI_domain_index].mode)) {               \
     mpi_codeptr = __builtin_return_address(0);                                 \
     lexgion_record_t *_record =                                                \
         lexgion_begin(MPI_LEXGION, MPI_FUNC##_LEXGION, mpi_codeptr);           \
@@ -182,12 +182,12 @@ int MPI_get_rank(void) {
     /* Name resolution for named lexgion config matching. Runs once per        \
      * unique call site per reload cycle. MPI event names are static strings   \
      * in domain_info_table — zero allocation. */                              \
-    if (lgp && lgp->name_resolved_gen != trace_config_change_counter) {       \
+    if (lgp && lgp->name_resolved_gen != config_change_counter) {       \
       lgp->name = domain_info_table[MPI_domain_index]                         \
                       .event_table[lgp->type].name;                           \
       lgp->filename_hint = NULL;                                               \
-      lgp->name_resolved_gen = trace_config_change_counter;                   \
-      lgp->trace_config_change_counter = (unsigned int)-1;                    \
+      lgp->name_resolved_gen = config_change_counter;                   \
+      lgp->config_change_counter = (unsigned int)-1;                    \
     }                                                                          \
     /* Rate decision and LTTng only in TRACING mode */                         \
     if (PINSIGHT_SHOULD_TRACE(MPI_domain_index)) {                             \

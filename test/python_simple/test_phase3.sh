@@ -102,14 +102,14 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 COUNT=$(session_stop_and_count "hot_loop")
 check "3.1a max_num_traces=10 for hot_loop ($N calls)" "$COUNT" 10 eq
 
 # ── also verify the suppressed functions emitted 0 events ──
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 SUPPRESSED=$(lttng stop >/dev/null 2>&1; \
     lttng view 2>/dev/null | grep "function_begin" | \
@@ -126,7 +126,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 COUNT=$(session_stop_and_count "hot_loop")
 check "3.1c trace_starts_at=5 + max_num_traces=10 → 10 traces" "$COUNT" 10 eq
@@ -145,7 +145,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 COUNT=$(session_stop_and_count "sampled_work")
 check "3.2a tracing_rate=5, $N calls → ~20 traces" "$COUNT" "18:22" range
@@ -157,7 +157,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 COUNT=$(session_stop_and_count "sampled_work")
 check "3.2b tracing_rate=10, $N calls → ~10 traces" "$COUNT" "8:12" range
@@ -170,7 +170,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 COUNT=$(session_stop_and_count "hot_loop")
 check "3.2c tracing_rate=1 (every call), $N calls → $N traces" "$COUNT" $N eq
@@ -185,7 +185,7 @@ echo ""
 # After the trigger, hot_loop (run second) should get 0 traces.
 # Use a dedicated script that runs once_then_stop first, then hot_loop.
 cat > /tmp/pinsight_trace_config.txt <<'EOF'
-[Python.default]
+[Python.tracing]
     trace_mode = TRACING
 
 [Lexgion(Python:once_then_stop)]
@@ -211,7 +211,7 @@ for i in range(N):
 PYEOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd /tmp/test_3_3ab.py $N
 lttng stop >/dev/null 2>&1
 # once_then_stop should have exactly 20 traces
@@ -228,7 +228,7 @@ check "3.3b hot_loop emits 0 traces (domain already MONITORING by the time it ru
 # ── 3.3c: window_end_action = Python:STANDBY ──
 # Verify that after the trigger, the domain is in STANDBY (still counting but not tracing)
 cat > /tmp/pinsight_trace_config.txt <<'EOF'
-[Python.default]
+[Python.tracing]
     trace_mode = TRACING
 
 [Lexgion(Python:once_then_stop)]
@@ -237,7 +237,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 STOP_COUNT=$(session_stop_and_count "once_then_stop")
 check "3.3c window_end_action=STANDBY: exactly 15 traces then silence" "$STOP_COUNT" 15 eq
@@ -250,7 +250,7 @@ cat > /tmp/pinsight_trace_config.txt <<'EOF'
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 lttng stop >/dev/null 2>&1
 HOT=$(lttng view 2>/dev/null | grep "function_begin" | grep -c '"hot_loop"' || true)
@@ -277,7 +277,7 @@ EOF
 chmod +x /tmp/introspect_script.sh
 
 cat > /tmp/pinsight_trace_config.txt <<EOF
-[Python.default]
+[Python.tracing]
     trace_mode = TRACING
 
 [Lexgion(Python:hot_loop)]
@@ -286,7 +286,7 @@ cat > /tmp/pinsight_trace_config.txt <<EOF
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config.txt \
     run_cmd "$SCRIPT_DIR/test_rate_control.py" $N
 HOT=$(session_stop_and_count "hot_loop")
 
@@ -345,7 +345,7 @@ for i in range(N):
 EOF
 
 session_start
-PINSIGHT_TRACE_CONFIG_FILE=/tmp/pinsight_trace_config_v1.txt \
+PINSIGHT_CONFIG_FILE=/tmp/pinsight_trace_config_v1.txt \
     run_cmd /tmp/test_sigusr1.py
 HOT=$(session_stop_and_count "hot_loop")
 # First batch: 5 traces. After reload, trace_counter resets → up to 10 more.
